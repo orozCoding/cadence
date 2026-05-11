@@ -51,6 +51,16 @@ struct CadenceTask: Identifiable, Codable, Equatable {
             errors.append("Day deadline cannot be in the past.")
         }
 
+        let currentWeekStart = Date().startOfWeek(weekStartsOn: weekStartsOn)
+        if let w = weekStart, w < currentWeekStart {
+            errors.append("Week deadline cannot be in the past.")
+        }
+
+        let currentMonthStart = Date().startOfMonth()
+        if let m = monthStart, m < currentMonthStart {
+            errors.append("Month deadline cannot be in the past.")
+        }
+
         // Adjacent-level checks
         if let d = day, let w = weekStart {
             if w < d.startOfWeek(weekStartsOn: weekStartsOn) {

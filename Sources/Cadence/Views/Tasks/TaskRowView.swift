@@ -9,7 +9,15 @@ struct TaskRowView: View {
 
     private var accessibilityLabel: String {
         var parts = [task.title]
-        if let day = task.dayDeadline { parts.append("due \(day.dayLabel())") }
+        if let day = task.dayDeadline {
+            parts.append("due \(day.dayLabel())")
+        } else if let week = task.weekStart {
+            parts.append("due \(week.weekLabel())")
+        } else if let month = task.monthStart {
+            parts.append("due \(month.monthLabel())")
+        } else if let year = task.yearDeadline {
+            parts.append("due \(year)")
+        }
         if task.isDone { parts.append("completed") }
         return parts.joined(separator: ", ")
     }
@@ -60,10 +68,14 @@ struct TaskRowView: View {
 
     @ViewBuilder
     private var deadlineBadges: some View {
-        HStack(spacing: 4) {
-            if let day = task.dayDeadline {
-                DeadlineBadge(label: day.dayLabel(), color: AppTheme.accentLight)
-            }
+        if let day = task.dayDeadline {
+            DeadlineBadge(label: day.dayLabel(), color: AppTheme.accentLight)
+        } else if let week = task.weekStart {
+            DeadlineBadge(label: week.weekLabel(), color: AppTheme.accentLight)
+        } else if let month = task.monthStart {
+            DeadlineBadge(label: month.monthLabel(), color: AppTheme.accentLight)
+        } else if let year = task.yearDeadline {
+            DeadlineBadge(label: String(year), color: AppTheme.accentLight)
         }
     }
 }

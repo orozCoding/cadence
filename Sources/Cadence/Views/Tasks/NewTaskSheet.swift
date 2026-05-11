@@ -103,7 +103,9 @@ struct NewTaskSheet: View {
                             icon: "calendar", label: "Week",
                             isEnabled: $enableWeek
                         ) {
-                            DatePicker("Week deadline", selection: $weekDate, displayedComponents: .date)
+                            DatePicker("Week deadline", selection: $weekDate,
+                                       in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
+                                       displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
                         }
@@ -114,7 +116,9 @@ struct NewTaskSheet: View {
                             icon: "calendar.badge.clock", label: "Month",
                             isEnabled: $enableMonth
                         ) {
-                            DatePicker("Month deadline", selection: $monthDate, displayedComponents: .date)
+                            DatePicker("Month deadline", selection: $monthDate,
+                                       in: Date().startOfMonth()...,
+                                       displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
                         }
