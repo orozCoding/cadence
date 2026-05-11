@@ -24,6 +24,7 @@
 		B000004E /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002E /* TaskRowView.swift */; };
 		B000004F /* PomodoroTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002F /* PomodoroTimer.swift */; };
 		B0000050 /* TimerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000030 /* TimerPanelView.swift */; };
+		B0000051 /* View+Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000031 /* View+Cursor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 		B000002E /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
 		B000002F /* PomodoroTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTimer.swift; sourceTree = "<group>"; };
 		B0000030 /* TimerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPanelView.swift; sourceTree = "<group>"; };
+		B0000031 /* View+Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Cursor.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				B0000021 /* Date+Extensions.swift */,
+				B0000031 /* View+Cursor.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -248,6 +251,7 @@
 				B000004E /* TaskRowView.swift in Sources */,
 				B000004F /* PomodoroTimer.swift in Sources */,
 				B0000050 /* TimerPanelView.swift in Sources */,
+				B0000051 /* View+Cursor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
