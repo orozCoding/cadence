@@ -18,12 +18,10 @@ struct ContentView: View {
     @State private var showNewTask = false
 
     var body: some View {
-        HStack(spacing: 0) {
+        HSplitView {
             SidebarView(selection: $selection)
-                .frame(width: AppTheme.sidebarWidth)
+                .frame(minWidth: 180, idealWidth: AppTheme.sidebarWidth, maxWidth: 300)
                 .background(AppTheme.sidebarBackground)
-
-            Divider().background(AppTheme.divider)
 
             ZStack {
                 AppTheme.contentBackground.ignoresSafeArea()
@@ -72,12 +70,10 @@ struct ContentView: View {
                 }
                 .animation(.easeInOut(duration: 0.18), value: selection)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider().background(AppTheme.divider)
+            .frame(minWidth: 320)
 
             TimerPanelView()
-                .frame(width: AppTheme.timerPanelWidth)
+                .frame(minWidth: 200, idealWidth: AppTheme.timerPanelWidth, maxWidth: 340)
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)

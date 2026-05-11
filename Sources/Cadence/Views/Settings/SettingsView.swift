@@ -5,7 +5,14 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: "Settings", showNewTask: .constant(false))
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
             Divider().background(AppTheme.divider)
 
             Form {

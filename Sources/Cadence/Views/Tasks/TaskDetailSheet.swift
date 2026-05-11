@@ -15,16 +15,24 @@ struct TaskDetailSheet: View {
         _editedBody = State(initialValue: task.body)
     }
 
+    private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
+    private var canSave: Bool { !trimmedTitle.isEmpty }
+
+    // Live version of the task from the store (reflects any isDone toggles).
+    private var currentTask: CadenceTask {
+        store.tasks.first(where: { $0.id == task.id }) ?? task
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
                 Button(action: { store.toggle(task) }) {
                     HStack(spacing: 6) {
-                        Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+                        Image(systemName: currentTask.isDone ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 20))
-                            .foregroundStyle(task.isDone ? AppTheme.accent : AppTheme.textTertiary)
-                        Text(task.isDone ? "Mark as To Do" : "Mark as Done")
+                            .foregroundStyle(currentTask.isDone ? AppTheme.accent : AppTheme.textTertiary)
+                        Text(currentTask.isDone ? "Mark as To Do" : "Mark as Done")
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -34,8 +42,8 @@ struct TaskDetailSheet: View {
                 Spacer()
 
                 Button(action: {
-                    var updated = task
-                    updated.title = editedTitle
+                    var updated = currentTask
+                    updated.title = trimmedTitle
                     updated.body = editedBody
                     store.update(updated)
                     dismiss()
@@ -45,9 +53,10 @@ struct TaskDetailSheet: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.accent))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(canSave ? AppTheme.accent : AppTheme.textTertiary))
                 }
                 .buttonStyle(.plain)
+                .disabled(!canSave)
 
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")

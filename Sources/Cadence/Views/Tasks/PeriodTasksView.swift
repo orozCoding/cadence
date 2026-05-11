@@ -6,12 +6,14 @@ enum TaskPeriod: Equatable, Hashable {
     case month(Date)
     case year(Int)
 
-    var title: String {
+    var title: String { titleFor(weekStartsOn: .monday) }
+
+    func titleFor(weekStartsOn: Weekday) -> String {
         switch self {
         case .day(let d):
             return d.isSameDay(as: Date()) ? "Today" : d.dayLabel()
         case .week(let s):
-            return s.weekLabel()
+            return s.weekLabel(weekStartsOn: weekStartsOn)
         case .month(let s):
             return s.monthLabel()
         case .year(let y):
@@ -50,7 +52,7 @@ struct PeriodTasksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: period.title, showNewTask: $showNewTask)
+            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn), showNewTask: $showNewTask)
             Divider().background(AppTheme.divider)
 
             ScrollView {
@@ -88,7 +90,7 @@ struct PeriodTasksView: View {
                     }
 
                     if allTasks.isEmpty {
-                        EmptyStateView(message: "No tasks for \(period.title).\nClick + to add one.")
+                        EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn)).\nClick + to add one.")
                     }
                 }
                 .padding(.vertical, 12)
