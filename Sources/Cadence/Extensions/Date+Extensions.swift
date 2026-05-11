@@ -55,11 +55,13 @@ extension Date {
         var cal = Calendar.current
         cal.firstWeekday = weekStartsOn.calendarValue
         guard let end = cal.date(byAdding: .day, value: 6, to: start) else { return "" }
-        let fmt = DateFormatter()
-        fmt.dateFormat = "MMM d"
+        let startFmt = DateFormatter()
+        startFmt.dateFormat = "MMM d"
         let endFmt = DateFormatter()
-        endFmt.dateFormat = "d, yyyy"
-        return "\(fmt.string(from: start)) – \(endFmt.string(from: end))"
+        // Include month name if week crosses a month boundary
+        let crossesMonth = cal.component(.month, from: start) != cal.component(.month, from: end)
+        endFmt.dateFormat = crossesMonth ? "MMM d, yyyy" : "d, yyyy"
+        return "\(startFmt.string(from: start)) – \(endFmt.string(from: end))"
     }
 
     func monthLabel() -> String {

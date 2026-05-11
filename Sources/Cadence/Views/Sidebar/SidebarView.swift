@@ -36,61 +36,65 @@ struct SidebarView: View {
                     }
                     .padding(.top, 8)
 
-                    // Days
-                    SidebarSection(label: "Days", isExpanded: $daysExpanded) {
-                        ForEach(store.distinctDays(), id: \.self) { day in
-                            SidebarRow(
-                                label: day.isSameDay(as: Date()) ? "Today" : day.dayLabel(),
-                                icon: "sun.max",
-                                isSelected: selection == .day(day)
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    selection = .day(day)
+                    // Days — only rendered when tasks have day deadlines
+                    let days = store.distinctDays()
+                    if !days.isEmpty {
+                        SidebarSection(label: "Days", isExpanded: $daysExpanded) {
+                            ForEach(days, id: \.self) { day in
+                                SidebarRow(
+                                    label: day.isSameDay(as: Date()) ? "Today" : day.dayLabel(),
+                                    icon: "sun.max",
+                                    isSelected: selection == .day(day)
+                                ) {
+                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) }
                                 }
                             }
                         }
                     }
 
-                    // Weeks
-                    SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
-                        ForEach(store.distinctWeeks(weekStartsOn: settings.weekStartsOn), id: \.self) { weekStart in
-                            SidebarRow(
-                                label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn),
-                                icon: "calendar",
-                                isSelected: selection == .week(weekStart)
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    selection = .week(weekStart)
+                    // Weeks — only rendered when tasks have week deadlines
+                    let weeks = store.distinctWeeks(weekStartsOn: settings.weekStartsOn)
+                    if !weeks.isEmpty {
+                        SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
+                            ForEach(weeks, id: \.self) { weekStart in
+                                SidebarRow(
+                                    label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn),
+                                    icon: "calendar",
+                                    isSelected: selection == .week(weekStart)
+                                ) {
+                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) }
                                 }
                             }
                         }
                     }
 
-                    // Months
-                    SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
-                        ForEach(store.distinctMonths(), id: \.self) { monthStart in
-                            SidebarRow(
-                                label: monthStart.monthLabel(),
-                                icon: "calendar.badge.clock",
-                                isSelected: selection == .month(monthStart)
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    selection = .month(monthStart)
+                    // Months — only rendered when tasks have month deadlines
+                    let months = store.distinctMonths()
+                    if !months.isEmpty {
+                        SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
+                            ForEach(months, id: \.self) { monthStart in
+                                SidebarRow(
+                                    label: monthStart.monthLabel(),
+                                    icon: "calendar.badge.clock",
+                                    isSelected: selection == .month(monthStart)
+                                ) {
+                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) }
                                 }
                             }
                         }
                     }
 
-                    // Years
-                    SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
-                        ForEach(store.distinctYears(), id: \.self) { year in
-                            SidebarRow(
-                                label: String(year),
-                                icon: "archivebox",
-                                isSelected: selection == .year(year)
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    selection = .year(year)
+                    // Years — only rendered when tasks have year deadlines
+                    let years = store.distinctYears()
+                    if !years.isEmpty {
+                        SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
+                            ForEach(years, id: \.self) { year in
+                                SidebarRow(
+                                    label: String(year),
+                                    icon: "archivebox",
+                                    isSelected: selection == .year(year)
+                                ) {
+                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) }
                                 }
                             }
                         }
