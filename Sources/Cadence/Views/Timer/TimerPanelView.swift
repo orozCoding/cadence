@@ -201,11 +201,13 @@ struct FocusStatRow: View {
     let seconds: Int
 
     private var formatted: String {
+        if seconds <= 0 { return "—" }
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
+        let s = seconds % 60
         if h > 0 { return "\(h)h \(m)m" }
         if m > 0 { return "\(m)m" }
-        return "—"
+        return "\(s)s"
     }
 
     var body: some View {

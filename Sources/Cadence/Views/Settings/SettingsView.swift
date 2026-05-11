@@ -41,6 +41,8 @@ struct SettingsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .pointerCursor()
+                                .accessibilityLabel(day.label)
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
                         .background(RoundedRectangle(cornerRadius: 7).fill(AppTheme.divider))
