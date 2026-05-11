@@ -2,6 +2,7 @@
 /.build
 /Packages
 xcuserdata/
-*.xcodeproj
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 DerivedData/
 .swiftpm/
