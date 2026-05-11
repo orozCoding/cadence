@@ -19,6 +19,7 @@ struct CadenceApp: App {
         Settings {
             SettingsView()
                 .environmentObject(settings)
+                .preferredColorScheme(.light)
         }
     }
 }

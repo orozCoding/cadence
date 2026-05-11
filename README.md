@@ -14,9 +14,9 @@ A focused macOS productivity app combining a hierarchical to-do list with a Pomo
 
 1. **Open the project in Xcode**
    ```
-   open /Users/angelorozco/OrozCoding/repositories/cadence
+   open /path/to/cadence
    ```
-   Or: open Finder → navigate to the `cadence` folder → double-click `Package.swift`
+   Or: open Finder → navigate to where you cloned `cadence` → double-click `Package.swift`
 
 2. **Wait for Xcode to resolve the package** (first launch only — takes ~10 seconds)
 

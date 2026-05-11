@@ -92,8 +92,9 @@ struct NewTaskSheet: View {
                             icon: "sun.max", label: "Day",
                             isEnabled: $enableDay
                         ) {
-                            DatePicker("", selection: $dayDate, in: Date()..., displayedComponents: .date)
+                            DatePicker("Day deadline", selection: $dayDate, in: Date()..., displayedComponents: .date)
                                 .labelsHidden()
+                                .accessibilityLabel("Day deadline")
                                 .onChange(of: dayDate) { cascadeFromDay() }
                         }
 
