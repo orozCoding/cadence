@@ -111,6 +111,8 @@ final class TaskStore: ObservableObject {
         }
 
         // One malformed record would hide all valid tasks. Attempt per-item recovery.
+        // Always back up the original blob first so no data is silently lost.
+        UserDefaults.standard.set(data, forKey: backupKey)
         if let rawItems = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
             let decoder = JSONDecoder()
             let recovered = rawItems.compactMap { item -> CadenceTask? in
@@ -122,9 +124,5 @@ final class TaskStore: ObservableObject {
                 return
             }
         }
-
-        // Completely unreadable — back up corrupt bytes for debugging.
-        // The next explicit save() (triggered by a user mutation) writes clean data.
-        UserDefaults.standard.set(data, forKey: backupKey)
     }
 }

@@ -40,7 +40,8 @@ final class FolderStore: ObservableObject {
         // This keeps tasks in custom folders reachable even after a decode failure.
         let knownIDs = Set(loaded.map { $0.id })
         for orphanID in Set(TaskStore.shared.tasks.map { $0.folderId }).subtracting(knownIDs) {
-            loaded.append(Folder(id: orphanID, name: "Recovered"))
+            let shortID = orphanID.uuidString.prefix(8).uppercased()
+            loaded.append(Folder(id: orphanID, name: "Recovered (\(shortID))"))
         }
 
         folders = loaded
