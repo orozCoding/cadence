@@ -23,54 +23,51 @@ struct ContentView: View {
                 .frame(minWidth: 180, idealWidth: AppTheme.sidebarWidth, maxWidth: 300)
                 .background(AppTheme.sidebarBackground)
 
-            ZStack {
-                AppTheme.contentBackground.ignoresSafeArea()
-
-                Group {
-                    switch selection {
-                    case .all, .none:
-                        AllTasksView(selectedTask: $selectedTask, showNewTask: $showNewTask)
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
-                    case .day(let date):
-                        PeriodTasksView(
-                            period: .day(date),
-                            selectedTask: $selectedTask,
-                            showNewTask: $showNewTask
-                        )
-                        .id("day-\(date)")
+            Group {
+                switch selection {
+                case .all, .none:
+                    AllTasksView(selectedTask: $selectedTask, showNewTask: $showNewTask)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
-                    case .week(let start):
-                        PeriodTasksView(
-                            period: .week(start),
-                            selectedTask: $selectedTask,
-                            showNewTask: $showNewTask
-                        )
-                        .id("week-\(start)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                    case .month(let start):
-                        PeriodTasksView(
-                            period: .month(start),
-                            selectedTask: $selectedTask,
-                            showNewTask: $showNewTask
-                        )
-                        .id("month-\(start)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                    case .year(let y):
-                        PeriodTasksView(
-                            period: .year(y),
-                            selectedTask: $selectedTask,
-                            showNewTask: $showNewTask
-                        )
-                        .id("year-\(y)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                    case .settings:
-                        SettingsView()
-                            .transition(.opacity)
-                    }
+                case .day(let date):
+                    PeriodTasksView(
+                        period: .day(date),
+                        selectedTask: $selectedTask,
+                        showNewTask: $showNewTask
+                    )
+                    .id("day-\(date)")
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                case .week(let start):
+                    PeriodTasksView(
+                        period: .week(start),
+                        selectedTask: $selectedTask,
+                        showNewTask: $showNewTask
+                    )
+                    .id("week-\(start)")
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                case .month(let start):
+                    PeriodTasksView(
+                        period: .month(start),
+                        selectedTask: $selectedTask,
+                        showNewTask: $showNewTask
+                    )
+                    .id("month-\(start)")
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                case .year(let y):
+                    PeriodTasksView(
+                        period: .year(y),
+                        selectedTask: $selectedTask,
+                        showNewTask: $showNewTask
+                    )
+                    .id("year-\(y)")
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                case .settings:
+                    SettingsView()
+                        .transition(.opacity)
                 }
-                .animation(.easeInOut(duration: 0.18), value: selection)
             }
+            .animation(.easeInOut(duration: 0.18), value: selection)
             .frame(minWidth: 320)
+            .background(AppTheme.contentBackground)
 
             TimerPanelView()
                 .frame(minWidth: 200, idealWidth: AppTheme.timerPanelWidth, maxWidth: 340)
