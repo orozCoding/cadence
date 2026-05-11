@@ -8,19 +8,20 @@ enum AllTasksSort: String, CaseIterable {
 }
 
 struct AllTasksView: View {
+    let onTaskTap: (CadenceTask) -> Void
+    let onNewTask: () -> Void
+
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var folderStore: FolderStore
-    @Binding var selectedTask: CadenceTask?
-    @Binding var showNewTask: Bool
 
     @State private var sortBy: AllTasksSort = .createdAt
 
     private var sortKey: (CadenceTask, CadenceTask) -> Bool {
         switch sortBy {
-        case .createdAt:    return { $0.createdAt < $1.createdAt }
-        case .dayDeadline:  return { ($0.dayDeadline ?? .distantFuture) < ($1.dayDeadline ?? .distantFuture) }
-        case .weekDeadline: return { ($0.weekStart ?? .distantFuture) < ($1.weekStart ?? .distantFuture) }
+        case .createdAt:     return { $0.createdAt < $1.createdAt }
+        case .dayDeadline:   return { ($0.dayDeadline ?? .distantFuture) < ($1.dayDeadline ?? .distantFuture) }
+        case .weekDeadline:  return { ($0.weekStart ?? .distantFuture) < ($1.weekStart ?? .distantFuture) }
         case .monthDeadline: return { ($0.monthStart ?? .distantFuture) < ($1.monthStart ?? .distantFuture) }
         }
     }
@@ -38,7 +39,7 @@ struct AllTasksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: "All Tasks", showNewTask: $showNewTask) {
+            TasksHeader(title: "All Tasks", onNewTask: onNewTask) {
                 Picker("Sort", selection: $sortBy) {
                     ForEach(AllTasksSort.allCases, id: \.self) { s in
                         Text(s.rawValue).tag(s)
@@ -69,7 +70,7 @@ struct AllTasksView: View {
 
                             TaskRowView(
                                 task: task,
-                                onTap: { withAnimation { selectedTask = task } },
+                                onTap: { onTaskTap(task) },
                                 onToggle: { store.toggle(task) }
                             )
                             .padding(.horizontal, 16)

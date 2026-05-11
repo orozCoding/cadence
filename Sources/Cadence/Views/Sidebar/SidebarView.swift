@@ -159,7 +159,7 @@ private struct FolderSwitcher: View {
             Button("Add New Folder…") { showAddFolder = true }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "folder.fill")
+                Image(systemName: "folder")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.accent)
                 Text(folderStore.activeFolder.name)

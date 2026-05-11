@@ -9,6 +9,9 @@ private let presets: [(label: String, minutes: Int)] = [
 
 struct TimerPanelView: View {
     @StateObject private var timer = PomodoroTimer()
+    @ObservedObject private var focusStore = FocusTimeStore.shared
+    @EnvironmentObject var settings: AppSettings
+
     @State private var customMinutes = ""
     @State private var showCustom = false
     @State private var selectedPreset: Int? = 25
@@ -142,6 +145,24 @@ struct TimerPanelView: View {
             }
             .padding(.vertical, 12)
 
+            Divider().background(AppTheme.divider)
+
+            // Focus time stats
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Focus Time")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .padding(.horizontal, 16)
+
+                VStack(spacing: 4) {
+                    FocusStatRow(label: "Today", seconds: focusStore.todaySeconds())
+                    FocusStatRow(label: "This week", seconds: focusStore.weekSeconds(weekStartsOn: settings.weekStartsOn))
+                    FocusStatRow(label: "This month", seconds: focusStore.monthSeconds())
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.vertical, 12)
+
             Spacer()
         }
         .animation(.easeInOut(duration: 0.15), value: showCustom)
@@ -172,5 +193,30 @@ struct PresetButton: View {
         }
         .buttonStyle(.plain)
         .pointerCursor()
+    }
+}
+
+struct FocusStatRow: View {
+    let label: String
+    let seconds: Int
+
+    private var formatted: String {
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        if m > 0 { return "\(m)m" }
+        return "—"
+    }
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+            Text(formatted)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(seconds > 0 ? AppTheme.textPrimary : AppTheme.textTertiary)
+        }
     }
 }

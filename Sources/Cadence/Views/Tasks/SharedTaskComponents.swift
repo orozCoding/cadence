@@ -2,12 +2,12 @@ import SwiftUI
 
 struct TasksHeader<Trailing: View>: View {
     let title: String
-    @Binding var showNewTask: Bool
+    let onNewTask: () -> Void
     @ViewBuilder var trailing: () -> Trailing
 
-    init(title: String, showNewTask: Binding<Bool>, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
+    init(title: String, onNewTask: @escaping () -> Void, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
         self.title = title
-        self._showNewTask = showNewTask
+        self.onNewTask = onNewTask
         self.trailing = trailing
     }
 
@@ -21,7 +21,7 @@ struct TasksHeader<Trailing: View>: View {
 
             trailing()
 
-            Button(action: { showNewTask = true }) {
+            Button(action: onNewTask) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
@@ -37,12 +37,6 @@ struct TasksHeader<Trailing: View>: View {
     }
 }
 
-// Overload for no trailing
-extension TasksHeader where Trailing == EmptyView {
-    init(title: String, showNewTask: Binding<Bool>) {
-        self.init(title: title, showNewTask: showNewTask, trailing: { EmptyView() })
-    }
-}
 
 struct SectionHeader: View {
     let label: String

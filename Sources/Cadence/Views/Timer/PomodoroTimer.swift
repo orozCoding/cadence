@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Combine
 
 @MainActor
@@ -50,10 +51,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func tick() {
+        FocusTimeStore.shared.addSecond()
         remaining = max(0, remaining - 1)
         if remaining == 0 {
             pause()
             isFinished = true
+            NSSound(named: .init("Glass"))?.play()
         }
     }
 }

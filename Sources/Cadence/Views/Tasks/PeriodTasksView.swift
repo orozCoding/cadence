@@ -20,8 +20,8 @@ enum TaskPeriod: Equatable, Hashable {
 
 struct PeriodTasksView: View {
     let period: TaskPeriod
-    @Binding var selectedTask: CadenceTask?
-    @Binding var showNewTask: Bool
+    let onTaskTap: (CadenceTask) -> Void
+    let onNewTask: () -> Void
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
@@ -46,7 +46,7 @@ struct PeriodTasksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn), showNewTask: $showNewTask)
+            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn), onNewTask: onNewTask)
             Divider().background(AppTheme.divider)
 
             if allTasks.isEmpty {
@@ -68,7 +68,7 @@ struct PeriodTasksView: View {
 
                             TaskRowView(
                                 task: task,
-                                onTap: { withAnimation { selectedTask = task } },
+                                onTap: { onTaskTap(task) },
                                 onToggle: { store.toggle(task) }
                             )
                             .padding(.horizontal, 16)
