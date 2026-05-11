@@ -24,10 +24,11 @@ struct NewTaskSheet: View {
 
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
+    @State private var userHasInteracted = false
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
     private var hasDraft: Bool {
-        !title.isEmpty || !body_.isEmpty || enableDay || enableWeek || enableMonth || enableYear
+        userHasInteracted && (!title.isEmpty || !body_.isEmpty || enableDay || enableWeek || enableMonth || enableYear)
     }
 
     var body: some View {
@@ -65,6 +66,7 @@ struct NewTaskSheet: View {
                             .font(.system(size: 15))
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+                            .onChange(of: title) { userHasInteracted = true }
                     }
 
                     // Description
@@ -85,6 +87,7 @@ struct NewTaskSheet: View {
                                 .frame(minHeight: 80)
                                 .scrollContentBackground(.hidden)
                                 .padding(6)
+                                .onChange(of: body_) { userHasInteracted = true }
                         }
                         .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
                     }
@@ -96,12 +99,12 @@ struct NewTaskSheet: View {
                             .foregroundStyle(AppTheme.textTertiary)
 
                         DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                            DatePicker("Day deadline", selection: $dayDate, in: Date()..., displayedComponents: .date)
+                            DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
                                 .labelsHidden()
                                 .accessibilityLabel("Day deadline")
                                 .onChange(of: dayDate) { cascadeFromDay() }
                         }
-                        .onChange(of: enableDay) { cascadeAll() }
+                        .onChange(of: enableDay) { userHasInteracted = true; cascadeAll() }
 
                         DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
                             DatePicker("Week deadline", selection: $weekDate,
@@ -110,7 +113,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
                         }
-                        .onChange(of: enableWeek) { cascadeAll() }
+                        .onChange(of: enableWeek) { userHasInteracted = true; cascadeAll() }
 
                         DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
                             DatePicker("Month deadline", selection: $monthDate,
@@ -119,7 +122,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
                         }
-                        .onChange(of: enableMonth) { cascadeAll() }
+                        .onChange(of: enableMonth) { userHasInteracted = true; cascadeAll() }
 
                         DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
                             Picker("Year deadline", selection: $yearValue) {
@@ -131,7 +134,7 @@ struct NewTaskSheet: View {
                             .accessibilityLabel("Year deadline")
                             .frame(width: 90)
                         }
-                        .onChange(of: enableYear) { cascadeAll() }
+                        .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
                     }
 
                     // Validation errors
