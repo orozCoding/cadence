@@ -5,6 +5,7 @@ struct TaskRowView: View {
     let onTap: () -> Void
     let onToggle: () -> Void
 
+    @EnvironmentObject var settings: AppSettings
     @State private var isHovered = false
 
     private var accessibilityLabel: String {
@@ -12,7 +13,7 @@ struct TaskRowView: View {
         if let day = task.dayDeadline {
             parts.append("due \(day.dayLabel())")
         } else if let week = task.weekStart {
-            parts.append("due \(week.weekLabel())")
+            parts.append("due \(week.weekLabel(weekStartsOn: settings.weekStartsOn))")
         } else if let month = task.monthStart {
             parts.append("due \(month.monthLabel())")
         } else if let year = task.yearDeadline {
@@ -71,7 +72,7 @@ struct TaskRowView: View {
         if let day = task.dayDeadline {
             DeadlineBadge(label: day.dayLabel(), color: AppTheme.accentLight)
         } else if let week = task.weekStart {
-            DeadlineBadge(label: week.weekLabel(), color: AppTheme.accentLight)
+            DeadlineBadge(label: week.weekLabel(weekStartsOn: settings.weekStartsOn), color: AppTheme.accentLight)
         } else if let month = task.monthStart {
             DeadlineBadge(label: month.monthLabel(), color: AppTheme.accentLight)
         } else if let year = task.yearDeadline {
