@@ -201,15 +201,23 @@ struct NewTaskSheet: View {
     }
 
     private func prefill() {
+        let now = Date()
+        let currentYear = Calendar.current.component(.year, from: now)
         switch prefillSelection {
         case .day(let d):
-            enableDay = true; dayDate = d
+            enableDay = true
+            dayDate = d < now.startOfDay() ? now : d
         case .week(let s):
-            enableWeek = true; weekDate = s
+            enableWeek = true
+            let minWeek = now.startOfWeek(weekStartsOn: settings.weekStartsOn)
+            weekDate = s < minWeek ? minWeek : s
         case .month(let s):
-            enableMonth = true; monthDate = s
+            enableMonth = true
+            let minMonth = now.startOfMonth()
+            monthDate = s < minMonth ? minMonth : s
         case .year(let y):
-            enableYear = true; yearValue = y
+            enableYear = true
+            yearValue = y < currentYear ? currentYear : y
         default: break
         }
     }

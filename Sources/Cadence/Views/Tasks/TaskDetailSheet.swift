@@ -68,7 +68,7 @@ struct TaskDetailSheet: View {
                 .pointerCursor()
                 .disabled(!canSave)
 
-                Button(action: onDismiss) {
+                Button(action: tryDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.textTertiary)
