@@ -38,6 +38,7 @@ struct TaskDetailSheet: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
 
                 Spacer()
 
@@ -56,6 +57,7 @@ struct TaskDetailSheet: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(canSave ? AppTheme.accent : AppTheme.textTertiary))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .disabled(!canSave)
 
                 Button(action: { dismiss() }) {
@@ -66,6 +68,7 @@ struct TaskDetailSheet: View {
                         .background(Circle().fill(AppTheme.divider))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)

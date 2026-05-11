@@ -29,6 +29,7 @@ struct TasksHeader<Trailing: View>: View {
                     .background(Circle().fill(AppTheme.accent))
             }
             .buttonStyle(.plain)
+            .pointerCursor()
             .help("New Task")
         }
         .padding(.horizontal, 20)

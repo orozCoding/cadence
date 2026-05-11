@@ -151,6 +151,7 @@ struct SidebarSection<Content: View>: View {
                 .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
+            .pointerCursor()
 
             if isExpanded {
                 content()
@@ -191,5 +192,6 @@ struct SidebarRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .pointerCursor()
     }
 }

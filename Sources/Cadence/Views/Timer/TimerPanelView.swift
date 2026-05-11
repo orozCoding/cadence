@@ -72,6 +72,7 @@ struct TimerPanelView: View {
                         .background(Circle().fill(AppTheme.divider))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
 
                 Button(action: timer.toggle) {
                     Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
@@ -81,6 +82,7 @@ struct TimerPanelView: View {
                         .background(Circle().fill(AppTheme.accent))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
             }
 
@@ -132,6 +134,7 @@ struct TimerPanelView: View {
                             .buttonStyle(.plain)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
+                            .pointerCursor()
                     }
                     .padding(.horizontal, 16)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -168,5 +171,6 @@ struct PresetButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .pointerCursor()
     }
 }

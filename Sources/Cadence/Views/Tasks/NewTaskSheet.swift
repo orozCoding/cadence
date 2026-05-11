@@ -39,6 +39,7 @@ struct NewTaskSheet: View {
                         .background(Circle().fill(AppTheme.divider))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -172,6 +173,7 @@ struct NewTaskSheet: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
+                    .pointerCursor()
 
                 Button(action: save) {
                     Text("Add Task")
@@ -182,6 +184,7 @@ struct NewTaskSheet: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(canSave ? AppTheme.accent : AppTheme.textTertiary))
                 }
                 .buttonStyle(.plain)
+                .pointerCursor()
                 .disabled(!canSave)
             }
             .padding(.horizontal, 24)

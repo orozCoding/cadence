@@ -25,19 +25,23 @@ struct TaskRowView: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // Toggle button
             Button(action: onToggle) {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
                     .foregroundStyle(task.isDone ? AppTheme.accent : AppTheme.textTertiary)
-                    .animation(.easeInOut(duration: 0.15), value: task.isDone)
+                    .animation(.easeInOut(duration: 0.2), value: task.isDone)
             }
             .buttonStyle(.plain)
+            .pointerCursor()
 
+            // Title + body
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(task.isDone ? AppTheme.doneText : AppTheme.textPrimary)
-                    .strikethrough(task.isDone, color: AppTheme.doneText)
+                    .font(.system(size: 13, weight: task.isDone ? .regular : .medium))
+                    .foregroundStyle(task.isDone ? AppTheme.textTertiary : AppTheme.textPrimary)
+                    .strikethrough(task.isDone, color: AppTheme.textTertiary)
+                    .animation(.easeInOut(duration: 0.2), value: task.isDone)
 
                 if !task.body.isEmpty {
                     Text(task.body)
@@ -57,9 +61,12 @@ struct TaskRowView: View {
             RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
                 .fill(isHovered ? AppTheme.hoveredItem : AppTheme.cardBackground)
         )
+        // Fade the whole row when done
+        .opacity(task.isDone ? 0.5 : 1.0)
+        .animation(.easeInOut(duration: 0.25), value: task.isDone)
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .pointerCursor()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
@@ -70,13 +77,13 @@ struct TaskRowView: View {
     @ViewBuilder
     private var deadlineBadges: some View {
         if let day = task.dayDeadline {
-            DeadlineBadge(label: day.dayLabel(), color: AppTheme.accentLight)
+            DeadlineBadge(label: day.dayLabel(), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let week = task.weekStart {
-            DeadlineBadge(label: week.weekLabel(weekStartsOn: settings.weekStartsOn), color: AppTheme.accentLight)
+            DeadlineBadge(label: week.weekLabel(weekStartsOn: settings.weekStartsOn), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let month = task.monthStart {
-            DeadlineBadge(label: month.monthLabel(), color: AppTheme.accentLight)
+            DeadlineBadge(label: month.monthLabel(), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let year = task.yearDeadline {
-            DeadlineBadge(label: String(year), color: AppTheme.accentLight)
+            DeadlineBadge(label: String(year), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         }
     }
 }
