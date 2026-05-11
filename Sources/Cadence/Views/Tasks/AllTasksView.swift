@@ -10,6 +10,7 @@ enum AllTasksSort: String, CaseIterable {
 struct AllTasksView: View {
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var folderStore: FolderStore
     @Binding var selectedTask: CadenceTask?
     @Binding var showNewTask: Bool
 
@@ -20,20 +21,20 @@ struct AllTasksView: View {
         case .createdAt:    return { $0.createdAt < $1.createdAt }
         case .dayDeadline:  return { ($0.dayDeadline ?? .distantFuture) < ($1.dayDeadline ?? .distantFuture) }
         case .weekDeadline: return { ($0.weekStart ?? .distantFuture) < ($1.weekStart ?? .distantFuture) }
-        case .monthDeadline:return { ($0.monthStart ?? .distantFuture) < ($1.monthStart ?? .distantFuture) }
+        case .monthDeadline: return { ($0.monthStart ?? .distantFuture) < ($1.monthStart ?? .distantFuture) }
         }
     }
 
-    // Single sorted array: pending first, then done.
-    // One ForEach so SwiftUI tracks identity across the todo→done move.
     private var ordered: [CadenceTask] {
-        let p = store.tasks.filter { !$0.isDone }.sorted(by: sortKey)
-        let d = store.tasks.filter {  $0.isDone }.sorted(by: sortKey)
+        let fid = folderStore.activeFolder.id
+        let p = store.tasks.filter { !$0.isDone && $0.folderId == fid }.sorted(by: sortKey)
+        let d = store.tasks.filter {  $0.isDone && $0.folderId == fid }.sorted(by: sortKey)
         return p + d
     }
 
-    private var pendingCount: Int { ordered.filter { !$0.isDone }.count }
-    private var doneCount: Int    { ordered.filter {  $0.isDone }.count }
+    private var folderTaskCount: Int { store.tasks.filter { $0.folderId == folderStore.activeFolder.id }.count }
+    private var pendingCount: Int    { ordered.filter { !$0.isDone }.count }
+    private var doneCount: Int       { ordered.count - pendingCount }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,8 +50,8 @@ struct AllTasksView: View {
 
             Divider().background(AppTheme.divider)
 
-            if store.tasks.isEmpty {
-                EmptyStateView(message: "No tasks yet.\nClick + to add your first task.")
+            if folderTaskCount == 0 {
+                EmptyStateView(message: "No tasks in \(folderStore.activeFolder.name).\nClick + to add your first task.")
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -60,7 +61,6 @@ struct AllTasksView: View {
                         }
 
                         ForEach(ordered) { task in
-                            // Insert the "Done" section header before the first done task.
                             if task.id == ordered.first(where: { $0.isDone })?.id {
                                 SectionHeader(label: "Done", count: doneCount)
                                     .padding(.top, pendingCount > 0 ? 8 : 0)

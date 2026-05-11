@@ -25,23 +25,24 @@ struct PeriodTasksView: View {
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var folderStore: FolderStore
 
     private var allTasks: [CadenceTask] {
+        let fid = folderStore.activeFolder.id
         switch period {
-        case .day(let d):   return store.tasks(forDay: d)
-        case .week(let s):  return store.tasks(forWeek: s, weekStartsOn: settings.weekStartsOn)
-        case .month(let s): return store.tasks(forMonth: s)
-        case .year(let y):  return store.tasks(forYear: y)
+        case .day(let d):   return store.tasks(forDay: d, folderId: fid)
+        case .week(let s):  return store.tasks(forWeek: s, weekStartsOn: settings.weekStartsOn, folderId: fid)
+        case .month(let s): return store.tasks(forMonth: s, folderId: fid)
+        case .year(let y):  return store.tasks(forYear: y, folderId: fid)
         }
     }
 
-    // Single sorted array: pending first, then done.
     private var ordered: [CadenceTask] {
         allTasks.filter { !$0.isDone } + allTasks.filter { $0.isDone }
     }
 
     private var pendingCount: Int { ordered.filter { !$0.isDone }.count }
-    private var doneCount: Int    { ordered.filter {  $0.isDone }.count }
+    private var doneCount: Int    { ordered.count - pendingCount }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,7 +60,6 @@ struct PeriodTasksView: View {
                         }
 
                         ForEach(ordered) { task in
-                            // Insert the "Done" section header before the first done task.
                             if task.id == ordered.first(where: { $0.isDone })?.id {
                                 SectionHeader(label: "Done", count: doneCount)
                                     .padding(.top, pendingCount > 0 ? 8 : 0)

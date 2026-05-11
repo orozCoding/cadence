@@ -35,52 +35,57 @@ final class TaskStore: ObservableObject {
         tasks[idx].isDone.toggle()
     }
 
-    // MARK: - Filtered views
+    func deleteAll(inFolder folderId: UUID) {
+        tasks.removeAll { $0.folderId == folderId }
+    }
 
-    func tasks(forDay date: Date) -> [CadenceTask] {
+    // MARK: - Filtered views (folder-scoped)
+
+    func tasks(forDay date: Date, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
-            guard let d = task.dayDeadline else { return false }
-            return d.isSameDay(as: date)
+            task.folderId == folderId &&
+            task.dayDeadline.map { $0.isSameDay(as: date) } == true
         }
     }
 
-    func tasks(forWeek weekStart: Date, weekStartsOn: Weekday) -> [CadenceTask] {
+    func tasks(forWeek weekStart: Date, weekStartsOn: Weekday, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
-            guard let w = task.weekStart else { return false }
-            return w.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn)
+            task.folderId == folderId &&
+            task.weekStart.map { $0.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn) } == true
         }
     }
 
-    func tasks(forMonth monthStart: Date) -> [CadenceTask] {
+    func tasks(forMonth monthStart: Date, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
-            guard let m = task.monthStart else { return false }
-            return m.isSameMonth(as: monthStart)
+            task.folderId == folderId &&
+            task.monthStart.map { $0.isSameMonth(as: monthStart) } == true
         }
     }
 
-    func tasks(forYear year: Int) -> [CadenceTask] {
-        tasks.filter { $0.yearDeadline == year }
+    func tasks(forYear year: Int, folderId: UUID) -> [CadenceTask] {
+        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }
     }
 
-    // MARK: - Distinct period keys
+    // MARK: - Distinct period keys (folder-scoped)
 
-    func distinctDays() -> [Date] {
-        let days = tasks.compactMap { $0.dayDeadline?.startOfDay() }
+    func distinctDays(folderId: UUID) -> [Date] {
+        let days = tasks.filter { $0.folderId == folderId }.compactMap { $0.dayDeadline?.startOfDay() }
         return Array(Set(days)).sorted()
     }
 
-    func distinctWeeks(weekStartsOn: Weekday) -> [Date] {
-        let weeks = tasks.compactMap { $0.weekStart?.startOfWeek(weekStartsOn: weekStartsOn) }
+    func distinctWeeks(weekStartsOn: Weekday, folderId: UUID) -> [Date] {
+        let weeks = tasks.filter { $0.folderId == folderId }
+            .compactMap { $0.weekStart?.startOfWeek(weekStartsOn: weekStartsOn) }
         return Array(Set(weeks)).sorted()
     }
 
-    func distinctMonths() -> [Date] {
-        let months = tasks.compactMap { $0.monthStart?.startOfMonth() }
+    func distinctMonths(folderId: UUID) -> [Date] {
+        let months = tasks.filter { $0.folderId == folderId }.compactMap { $0.monthStart?.startOfMonth() }
         return Array(Set(months)).sorted()
     }
 
-    func distinctYears() -> [Int] {
-        let years = tasks.compactMap { $0.yearDeadline }
+    func distinctYears(folderId: UUID) -> [Int] {
+        let years = tasks.filter { $0.folderId == folderId }.compactMap { $0.yearDeadline }
         return Array(Set(years)).sorted()
     }
 

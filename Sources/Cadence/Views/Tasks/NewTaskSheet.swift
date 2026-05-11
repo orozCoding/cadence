@@ -2,9 +2,11 @@ import SwiftUI
 
 struct NewTaskSheet: View {
     let prefillSelection: NavSelection?
+    let onDismiss: () -> Void
+
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var folderStore: FolderStore
 
     @State private var title = ""
     @State private var body_ = ""
@@ -31,7 +33,7 @@ struct NewTaskSheet: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Button(action: { dismiss() }) {
+                Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.textTertiary)
@@ -88,22 +90,14 @@ struct NewTaskSheet: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(AppTheme.textTertiary)
 
-                        // Day
-                        DeadlineToggleRow(
-                            icon: "sun.max", label: "Day",
-                            isEnabled: $enableDay
-                        ) {
+                        DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
                             DatePicker("Day deadline", selection: $dayDate, in: Date()..., displayedComponents: .date)
                                 .labelsHidden()
                                 .accessibilityLabel("Day deadline")
                                 .onChange(of: dayDate) { cascadeFromDay() }
                         }
 
-                        // Week
-                        DeadlineToggleRow(
-                            icon: "calendar", label: "Week",
-                            isEnabled: $enableWeek
-                        ) {
+                        DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
                             DatePicker("Week deadline", selection: $weekDate,
                                        in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
                                        displayedComponents: .date)
@@ -112,11 +106,7 @@ struct NewTaskSheet: View {
                         }
                         .onChange(of: enableWeek) { cascadeAll() }
 
-                        // Month
-                        DeadlineToggleRow(
-                            icon: "calendar.badge.clock", label: "Month",
-                            isEnabled: $enableMonth
-                        ) {
+                        DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
                             DatePicker("Month deadline", selection: $monthDate,
                                        in: Date().startOfMonth()...,
                                        displayedComponents: .date)
@@ -125,11 +115,7 @@ struct NewTaskSheet: View {
                         }
                         .onChange(of: enableMonth) { cascadeAll() }
 
-                        // Year
-                        DeadlineToggleRow(
-                            icon: "archivebox", label: "Year",
-                            isEnabled: $enableYear
-                        ) {
+                        DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
                             Picker("Year deadline", selection: $yearValue) {
                                 ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
                                     Text(String(y)).tag(y)
@@ -168,7 +154,7 @@ struct NewTaskSheet: View {
             // Footer
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onDismiss() }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 14)
@@ -211,19 +197,14 @@ struct NewTaskSheet: View {
         }
     }
 
-    // Single cascade: propagates constraints bottom-up using only active levels,
-    // so skipping an intermediate toggle (e.g. Day + Month, no Week) still works.
     private func cascadeAll() {
         let cal = Calendar.current
 
-        // Day → Week
         if enableDay && enableWeek {
             let dayWeek = dayDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             if weekDate < dayWeek { weekDate = dayWeek }
         }
 
-        // Finest active level below Month → Month
-        // Use normalized week start (not raw picker date) to avoid cross-month artifacts.
         if enableMonth {
             let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             let reference: Date? = enableWeek ? normalizedWeek : (enableDay ? dayDate : nil)
@@ -233,8 +214,6 @@ struct NewTaskSheet: View {
             }
         }
 
-        // Finest active level below Year → Year
-        // Use normalized week start for the same reason.
         if enableYear {
             let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             let refYear: Int
@@ -251,8 +230,8 @@ struct NewTaskSheet: View {
         }
     }
 
-    private func cascadeFromDay() { cascadeAll() }
-    private func cascadeFromWeek() { cascadeAll() }
+    private func cascadeFromDay()   { cascadeAll() }
+    private func cascadeFromWeek()  { cascadeAll() }
     private func cascadeFromMonth() { cascadeAll() }
 
     private func save() {
@@ -267,6 +246,7 @@ struct NewTaskSheet: View {
         guard errors.isEmpty else { return }
 
         let task = CadenceTask(
+            folderId: folderStore.activeFolder.id,
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
             dayDeadline: enableDay ? dayDate.noonLocal() : nil,
@@ -275,7 +255,7 @@ struct NewTaskSheet: View {
             yearDeadline: enableYear ? yearValue : nil
         )
         store.add(task)
-        dismiss()
+        onDismiss()
     }
 }
 

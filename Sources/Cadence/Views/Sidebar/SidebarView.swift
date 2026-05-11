@@ -4,11 +4,13 @@ struct SidebarView: View {
     @Binding var selection: NavSelection?
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var folderStore: FolderStore
 
     @State private var daysExpanded = true
     @State private var weeksExpanded = true
     @State private var monthsExpanded = true
     @State private var yearsExpanded = true
+    @State private var showAddFolder = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,18 +28,16 @@ struct SidebarView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    let fid = folderStore.activeFolder.id
+
                     // All
-                    SidebarRow(
-                        label: "All Tasks",
-                        icon: "square.grid.2x2",
-                        isSelected: selection == .all
-                    ) {
+                    SidebarRow(label: "All Tasks", icon: "square.grid.2x2", isSelected: selection == .all) {
                         withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
                     }
                     .padding(.top, 8)
 
-                    // Days — only rendered when tasks have day deadlines
-                    let days = store.distinctDays()
+                    // Days
+                    let days = store.distinctDays(folderId: fid)
                     if !days.isEmpty {
                         SidebarSection(label: "Days", isExpanded: $daysExpanded) {
                             ForEach(days, id: \.self) { day in
@@ -52,8 +52,8 @@ struct SidebarView: View {
                         }
                     }
 
-                    // Weeks — only rendered when tasks have week deadlines
-                    let weeks = store.distinctWeeks(weekStartsOn: settings.weekStartsOn)
+                    // Weeks
+                    let weeks = store.distinctWeeks(weekStartsOn: settings.weekStartsOn, folderId: fid)
                     if !weeks.isEmpty {
                         SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
                             ForEach(weeks, id: \.self) { weekStart in
@@ -68,8 +68,8 @@ struct SidebarView: View {
                         }
                     }
 
-                    // Months — only rendered when tasks have month deadlines
-                    let months = store.distinctMonths()
+                    // Months
+                    let months = store.distinctMonths(folderId: fid)
                     if !months.isEmpty {
                         SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
                             ForEach(months, id: \.self) { monthStart in
@@ -84,8 +84,8 @@ struct SidebarView: View {
                         }
                     }
 
-                    // Years — only rendered when tasks have year deadlines
-                    let years = store.distinctYears()
+                    // Years
+                    let years = store.distinctYears(folderId: fid)
                     if !years.isEmpty {
                         SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
                             ForEach(years, id: \.self) { year in
@@ -108,23 +108,127 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
 
+            // Folder switcher
+            FolderSwitcher(showAddFolder: $showAddFolder)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .popover(isPresented: $showAddFolder, arrowEdge: .top) {
+                    AddFolderPopover(isPresented: $showAddFolder)
+                        .environmentObject(folderStore)
+                }
+
+            Divider().background(AppTheme.divider)
+
             // Settings at bottom
-            SidebarRow(
-                label: "Settings",
-                icon: "gear",
-                isSelected: selection == .settings
-            ) {
+            SidebarRow(label: "Settings", icon: "gear", isSelected: selection == .settings) {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .settings }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
         }
         .onChange(of: settings.weekStartsOn) { _, newValue in
-            // Re-normalize the selected week-start date so the row stays highlighted.
             if case .week(let date) = selection {
                 selection = .week(date.startOfWeek(weekStartsOn: newValue))
             }
         }
+    }
+}
+
+// MARK: - Folder Switcher
+
+private struct FolderSwitcher: View {
+    @EnvironmentObject var folderStore: FolderStore
+    @Binding var showAddFolder: Bool
+
+    var body: some View {
+        Menu {
+            ForEach(folderStore.folders) { folder in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        folderStore.setActive(folder)
+                    }
+                } label: {
+                    if folder.id == folderStore.activeFolder.id {
+                        Label(folder.name, systemImage: "checkmark")
+                    } else {
+                        Text(folder.name)
+                    }
+                }
+            }
+            Divider()
+            Button("Add New Folder…") { showAddFolder = true }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.accent)
+                Text(folderStore.activeFolder.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: AppTheme.cornerRadius).fill(AppTheme.hoveredItem))
+        }
+        .menuStyle(.borderlessButton)
+        .pointerCursor()
+    }
+}
+
+// MARK: - Add Folder Popover
+
+private struct AddFolderPopover: View {
+    @Binding var isPresented: Bool
+    @EnvironmentObject var folderStore: FolderStore
+    @State private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New Folder")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            TextField("Folder name", text: $name)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+                .onSubmit { createFolder() }
+
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Cancel") { isPresented = false }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .pointerCursor()
+
+                Button("Add") { createFolder() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(name.trimmingCharacters(in: .whitespaces).isEmpty ? AppTheme.textTertiary : AppTheme.accent)
+                    )
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .pointerCursor()
+            }
+        }
+        .padding(16)
+        .frame(width: 220)
+    }
+
+    private func createFolder() {
+        folderStore.add(name: name)
+        isPresented = false
     }
 }
 

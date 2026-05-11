@@ -2,6 +2,7 @@ import Foundation
 
 struct CadenceTask: Identifiable, Codable, Equatable {
     let id: UUID
+    var folderId: UUID
     var title: String
     var body: String
     var isDone: Bool
@@ -15,6 +16,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
 
     init(
         id: UUID = UUID(),
+        folderId: UUID = .generalFolderID,
         title: String,
         body: String = "",
         isDone: Bool = false,
@@ -25,6 +27,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         yearDeadline: Int? = nil
     ) {
         self.id = id
+        self.folderId = folderId
         self.title = title
         self.body = body
         self.isDone = isDone
@@ -33,6 +36,26 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         self.weekStart = weekStart
         self.monthStart = monthStart
         self.yearDeadline = yearDeadline
+    }
+
+    // Custom decoder: existing tasks without folderId default to General
+    private enum CodingKeys: String, CodingKey {
+        case id, folderId, title, body, isDone, createdAt
+        case dayDeadline, weekStart, monthStart, yearDeadline
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id          = try c.decode(UUID.self, forKey: .id)
+        folderId    = try c.decodeIfPresent(UUID.self, forKey: .folderId) ?? .generalFolderID
+        title       = try c.decode(String.self, forKey: .title)
+        body        = try c.decode(String.self, forKey: .body)
+        isDone      = try c.decode(Bool.self, forKey: .isDone)
+        createdAt   = try c.decode(Date.self, forKey: .createdAt)
+        dayDeadline = try c.decodeIfPresent(Date.self, forKey: .dayDeadline)
+        weekStart   = try c.decodeIfPresent(Date.self, forKey: .weekStart)
+        monthStart  = try c.decodeIfPresent(Date.self, forKey: .monthStart)
+        yearDeadline = try c.decodeIfPresent(Int.self, forKey: .yearDeadline)
     }
 
     // MARK: - Validation

@@ -2,15 +2,17 @@ import SwiftUI
 
 struct TaskDetailSheet: View {
     let task: CadenceTask
+    let onDismiss: () -> Void
+
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
-    @Environment(\.dismiss) private var dismiss
 
     @State private var editedTitle: String
     @State private var editedBody: String
 
-    init(task: CadenceTask) {
+    init(task: CadenceTask, onDismiss: @escaping () -> Void) {
         self.task = task
+        self.onDismiss = onDismiss
         _editedTitle = State(initialValue: task.title)
         _editedBody = State(initialValue: task.body)
     }
@@ -47,7 +49,7 @@ struct TaskDetailSheet: View {
                     updated.title = trimmedTitle
                     updated.body = editedBody
                     store.update(updated)
-                    dismiss()
+                    onDismiss()
                 }) {
                     Text("Save")
                         .font(.system(size: 13, weight: .semibold))
@@ -60,7 +62,7 @@ struct TaskDetailSheet: View {
                 .pointerCursor()
                 .disabled(!canSave)
 
-                Button(action: { dismiss() }) {
+                Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.textTertiary)
@@ -77,13 +79,11 @@ struct TaskDetailSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Title
                     TextField("Task title", text: $editedTitle)
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .textFieldStyle(.plain)
 
-                    // Body
                     TextEditor(text: $editedBody)
                         .font(.system(size: 14))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -93,7 +93,6 @@ struct TaskDetailSheet: View {
 
                     Divider().background(AppTheme.divider)
 
-                    // Deadline info
                     DeadlineInfoSection(task: task, settings: settings)
                 }
                 .padding(24)
