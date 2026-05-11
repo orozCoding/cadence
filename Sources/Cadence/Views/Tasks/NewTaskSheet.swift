@@ -220,8 +220,10 @@ struct NewTaskSheet: View {
         }
 
         // Finest active level below Month → Month
+        // Use normalized week start (not raw picker date) to avoid cross-month artifacts.
         if enableMonth {
-            let reference: Date? = enableWeek ? weekDate : (enableDay ? dayDate : nil)
+            let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
+            let reference: Date? = enableWeek ? normalizedWeek : (enableDay ? dayDate : nil)
             if let ref = reference {
                 let refMonth = ref.startOfMonth()
                 if monthDate < refMonth { monthDate = refMonth }
@@ -229,12 +231,14 @@ struct NewTaskSheet: View {
         }
 
         // Finest active level below Year → Year
+        // Use normalized week start for the same reason.
         if enableYear {
+            let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             let refYear: Int
             if enableMonth {
                 refYear = cal.component(.year, from: monthDate)
             } else if enableWeek {
-                refYear = cal.component(.year, from: weekDate)
+                refYear = cal.component(.year, from: normalizedWeek)
             } else if enableDay {
                 refYear = cal.component(.year, from: dayDate)
             } else {
