@@ -26,7 +26,9 @@ struct NewTaskSheet: View {
     @State private var showDiscardAlert = false
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var hasDraft: Bool { !title.isEmpty || !body_.isEmpty }
+    private var hasDraft: Bool {
+        !title.isEmpty || !body_.isEmpty || enableDay || enableWeek || enableMonth || enableYear
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

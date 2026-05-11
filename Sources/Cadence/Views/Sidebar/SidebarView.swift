@@ -227,7 +227,9 @@ private struct AddFolderPopover: View {
     }
 
     private func createFolder() {
-        folderStore.add(name: name)
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        folderStore.add(name: trimmed)
         isPresented = false
     }
 }
