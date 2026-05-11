@@ -35,6 +35,14 @@ final class FolderStore: ObservableObject {
         if !loaded.contains(where: { $0.id == .generalFolderID }) {
             loaded.insert(Folder(id: .generalFolderID, name: "General"), at: 0)
         }
+
+        // Recover stub folders for any folderId referenced by tasks but missing from the list.
+        // This keeps tasks in custom folders reachable even after a decode failure.
+        let knownIDs = Set(loaded.map { $0.id })
+        for orphanID in Set(TaskStore.shared.tasks.map { $0.folderId }).subtracting(knownIDs) {
+            loaded.append(Folder(id: orphanID, name: "Recovered"))
+        }
+
         folders = loaded
 
         // Restore previously active folder

@@ -105,7 +105,11 @@ final class TaskStore: ObservableObject {
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
         guard let saved = try? JSONDecoder().decode([CadenceTask].self, from: data) else {
-            // Back up corrupt bytes so they can be inspected; do not overwrite with empty.
+            // Preserve corrupt bytes in a separate key so they're recoverable for debugging.
+            // cadence_tasks_backup persists indefinitely in UserDefaults — it is only
+            // overwritten if load() encounters a decode failure again on a future launch.
+            // The next explicit save() (triggered by a user mutation) will write clean data
+            // to cadence_tasks, which is the intended recovery path.
             UserDefaults.standard.set(data, forKey: backupKey)
             return
         }

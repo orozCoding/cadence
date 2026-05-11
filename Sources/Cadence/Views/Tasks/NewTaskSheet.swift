@@ -101,6 +101,7 @@ struct NewTaskSheet: View {
                                 .accessibilityLabel("Day deadline")
                                 .onChange(of: dayDate) { cascadeFromDay() }
                         }
+                        .onChange(of: enableDay) { cascadeAll() }
 
                         DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
                             DatePicker("Week deadline", selection: $weekDate,
