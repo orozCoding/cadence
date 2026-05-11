@@ -107,7 +107,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
                         }
-                        .onChange(of: enableWeek) { _, on in if on { cascadeFromDay() } }
+                        .onChange(of: enableWeek) { _, on in if on { cascadeAll() } }
 
                         // Month
                         DeadlineToggleRow(
@@ -118,7 +118,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
                         }
-                        .onChange(of: enableMonth) { _, on in if on { cascadeFromWeek() } }
+                        .onChange(of: enableMonth) { _, on in if on { cascadeAll() } }
 
                         // Year
                         DeadlineToggleRow(
@@ -134,7 +134,7 @@ struct NewTaskSheet: View {
                             .accessibilityLabel("Year deadline")
                             .frame(width: 90)
                         }
-                        .onChange(of: enableYear) { _, on in if on { cascadeFromMonth() } }
+                        .onChange(of: enableYear) { _, on in if on { cascadeAll() } }
                     }
 
                     // Validation errors
@@ -204,29 +204,45 @@ struct NewTaskSheet: View {
         }
     }
 
-    private func cascadeFromDay() {
-        // If week is enabled, ensure it's not before the day's week
-        if enableWeek {
+    // Single cascade: propagates constraints bottom-up using only active levels,
+    // so skipping an intermediate toggle (e.g. Day + Month, no Week) still works.
+    private func cascadeAll() {
+        let cal = Calendar.current
+
+        // Day → Week
+        if enableDay && enableWeek {
             let dayWeek = dayDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             if weekDate < dayWeek { weekDate = dayWeek }
         }
-        cascadeFromWeek()
-    }
 
-    private func cascadeFromWeek() {
+        // Finest active level below Month → Month
         if enableMonth {
-            let weekMonth = weekDate.startOfMonth()
-            if monthDate < weekMonth { monthDate = weekMonth }
+            let reference: Date? = enableWeek ? weekDate : (enableDay ? dayDate : nil)
+            if let ref = reference {
+                let refMonth = ref.startOfMonth()
+                if monthDate < refMonth { monthDate = refMonth }
+            }
         }
-        cascadeFromMonth()
+
+        // Finest active level below Year → Year
+        if enableYear {
+            let refYear: Int
+            if enableMonth {
+                refYear = cal.component(.year, from: monthDate)
+            } else if enableWeek {
+                refYear = cal.component(.year, from: weekDate)
+            } else if enableDay {
+                refYear = cal.component(.year, from: dayDate)
+            } else {
+                refYear = cal.component(.year, from: Date())
+            }
+            if yearValue < refYear { yearValue = refYear }
+        }
     }
 
-    private func cascadeFromMonth() {
-        if enableYear {
-            let monthYear = Calendar.current.component(.year, from: monthDate)
-            if yearValue < monthYear { yearValue = monthYear }
-        }
-    }
+    private func cascadeFromDay() { cascadeAll() }
+    private func cascadeFromWeek() { cascadeAll() }
+    private func cascadeFromMonth() { cascadeAll() }
 
     private func save() {
         let errors = CadenceTask.validate(

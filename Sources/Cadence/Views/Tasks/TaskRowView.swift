@@ -7,6 +7,13 @@ struct TaskRowView: View {
 
     @State private var isHovered = false
 
+    private var accessibilityLabel: String {
+        var parts = [task.title]
+        if let day = task.dayDeadline { parts.append("due \(day.dayLabel())") }
+        if task.isDone { parts.append("completed") }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onToggle) {
@@ -45,7 +52,7 @@ struct TaskRowView: View {
         .onTapGesture(perform: onTap)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(task.title)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
         .accessibilityAction(.default, onTap)
         .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)

@@ -145,7 +145,7 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        guard let mins = Int(customMinutes), mins > 0 else { return }
+        guard let mins = Int(customMinutes), mins > 0, mins <= 999 else { return }
         timer.set(minutes: mins)
     }
 }
