@@ -109,7 +109,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
                         }
-                        .onChange(of: enableWeek) { _, on in if on { cascadeAll() } }
+                        .onChange(of: enableWeek) { cascadeAll() }
 
                         // Month
                         DeadlineToggleRow(
@@ -122,7 +122,7 @@ struct NewTaskSheet: View {
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
                         }
-                        .onChange(of: enableMonth) { _, on in if on { cascadeAll() } }
+                        .onChange(of: enableMonth) { cascadeAll() }
 
                         // Year
                         DeadlineToggleRow(
@@ -138,7 +138,7 @@ struct NewTaskSheet: View {
                             .accessibilityLabel("Year deadline")
                             .frame(width: 90)
                         }
-                        .onChange(of: enableYear) { _, on in if on { cascadeAll() } }
+                        .onChange(of: enableYear) { cascadeAll() }
                     }
 
                     // Validation errors
