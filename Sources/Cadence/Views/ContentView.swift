@@ -23,6 +23,10 @@ struct ContentView: View {
     @State private var selection: NavSelection? = .all
     @State private var centerContent: CenterContent = .list
 
+    // Folder-switch discard guard
+    @State private var showFolderDiscardAlert = false
+    @State private var folderRevertID: UUID? = nil
+
     var body: some View {
         HSplitView {
             SidebarView(selection: $selection)
@@ -64,8 +68,34 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        .onChange(of: folderStore.activeFolder.id) { _, _ in
-            withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+        // Settings navigation is a full context switch — show the list behind it first
+        .onChange(of: selection) { _, newSel in
+            if case .settings = newSel {
+                withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list }
+            }
+        }
+        // Folder switch: guard against silent edit loss
+        .onChange(of: folderStore.activeFolder.id) { oldID, _ in
+            if centerContent != .list {
+                folderRevertID = oldID
+                showFolderDiscardAlert = true
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+            }
+        }
+        .confirmationDialog("Switch Folder?", isPresented: $showFolderDiscardAlert, titleVisibility: .visible) {
+            Button("Discard & Switch", role: .destructive) {
+                withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+            }
+            Button("Keep Editing", role: .cancel) {
+                if let revertID = folderRevertID,
+                   let folder = folderStore.folders.first(where: { $0.id == revertID }) {
+                    folderStore.setActive(folder)
+                }
+                folderRevertID = nil
+            }
+        } message: {
+            Text("Unsaved changes will be lost.")
         }
     }
 
