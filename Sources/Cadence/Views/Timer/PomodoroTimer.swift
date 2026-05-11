@@ -50,9 +50,8 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func tick() {
-        if remaining > 0 {
-            remaining -= 1
-        } else {
+        remaining = max(0, remaining - 1)
+        if remaining == 0 {
             pause()
             isFinished = true
         }

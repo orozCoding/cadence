@@ -115,6 +115,12 @@ struct SidebarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
         }
+        .onChange(of: settings.weekStartsOn) { _, newValue in
+            // Re-normalize the selected week-start date so the row stays highlighted.
+            if case .week(let date) = selection {
+                selection = .week(date.startOfWeek(weekStartsOn: newValue))
+            }
+        }
     }
 }
 

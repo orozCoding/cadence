@@ -51,24 +51,37 @@ struct CadenceTask: Identifiable, Codable, Equatable {
             errors.append("Day deadline cannot be in the past.")
         }
 
+        // Adjacent-level checks
         if let d = day, let w = weekStart {
-            let taskWeek = d.startOfWeek(weekStartsOn: weekStartsOn)
-            if w < taskWeek {
+            if w < d.startOfWeek(weekStartsOn: weekStartsOn) {
                 errors.append("Week deadline must contain or follow the day deadline.")
             }
         }
-
         if let w = weekStart, let m = monthStart {
-            let weekMonth = w.startOfMonth()
-            if m < weekMonth {
+            if m < w.startOfMonth() {
                 errors.append("Month deadline must contain or follow the week deadline.")
             }
         }
-
         if let m = monthStart, let y = year {
-            let monthYear = Calendar.current.component(.year, from: m)
-            if y < monthYear {
+            if y < Calendar.current.component(.year, from: m) {
                 errors.append("Year deadline must match or follow the month deadline's year.")
+            }
+        }
+
+        // Non-adjacent checks when intermediate levels are skipped
+        if let d = day, weekStart == nil, let m = monthStart {
+            if m < d.startOfMonth() {
+                errors.append("Month deadline must contain or follow the day deadline.")
+            }
+        }
+        if let d = day, weekStart == nil, monthStart == nil, let y = year {
+            if y < Calendar.current.component(.year, from: d) {
+                errors.append("Year deadline must match or follow the day deadline's year.")
+            }
+        }
+        if let w = weekStart, monthStart == nil, let y = year {
+            if y < Calendar.current.component(.year, from: w) {
+                errors.append("Year deadline must match or follow the week deadline's year.")
             }
         }
 
