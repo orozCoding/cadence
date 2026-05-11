@@ -3,22 +3,28 @@ import SwiftUI
 struct TaskDetailSheet: View {
     let task: CadenceTask
     let onDismiss: () -> Void
+    @Binding var backdropTap: Bool
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
 
     @State private var editedTitle: String
     @State private var editedBody: String
+    @State private var showDiscardAlert = false
 
-    init(task: CadenceTask, onDismiss: @escaping () -> Void) {
+    init(task: CadenceTask, onDismiss: @escaping () -> Void, backdropTap: Binding<Bool>) {
         self.task = task
         self.onDismiss = onDismiss
+        self._backdropTap = backdropTap
         _editedTitle = State(initialValue: task.title)
         _editedBody = State(initialValue: task.body)
     }
 
     private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
     private var canSave: Bool { !trimmedTitle.isEmpty }
+    private var hasUnsavedChanges: Bool {
+        trimmedTitle != task.title || editedBody != task.body
+    }
 
     // Live version of the task from the store (reflects any isDone toggles).
     private var currentTask: CadenceTask {
@@ -100,6 +106,17 @@ struct TaskDetailSheet: View {
         }
         .frame(width: 540, height: 460)
         .background(AppTheme.contentBackground)
+        .onChange(of: backdropTap) { _, tapped in
+            if tapped { backdropTap = false; tryDismiss() }
+        }
+        .confirmationDialog("Discard unsaved changes?", isPresented: $showDiscardAlert, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { onDismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        }
+    }
+
+    private func tryDismiss() {
+        if hasUnsavedChanges { showDiscardAlert = true } else { onDismiss() }
     }
 }
 

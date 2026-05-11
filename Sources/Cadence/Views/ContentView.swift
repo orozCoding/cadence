@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var selectedTask: CadenceTask? = nil
     @State private var showNewTask = false
     @State private var newTaskBackdropTap = false
+    @State private var detailBackdropTap = false
 
     var body: some View {
         HSplitView {
@@ -81,10 +82,14 @@ struct ContentView: View {
         }
         .overlay {
             if let task = selectedTask {
-                modalOverlay(onDismiss: { selectedTask = nil }) {
-                    TaskDetailSheet(task: task, onDismiss: { selectedTask = nil })
-                        .environmentObject(store)
-                        .environmentObject(settings)
+                modalOverlay(onDismiss: { detailBackdropTap = true }) {
+                    TaskDetailSheet(
+                        task: task,
+                        onDismiss: { selectedTask = nil },
+                        backdropTap: $detailBackdropTap
+                    )
+                    .environmentObject(store)
+                    .environmentObject(settings)
                 }
             }
         }
