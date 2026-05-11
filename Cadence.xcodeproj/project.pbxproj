@@ -1,0 +1,448 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B0000040 /* CadenceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000020 /* CadenceApp.swift */; };
+		B0000041 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000021 /* Date+Extensions.swift */; };
+		B0000042 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000022 /* AppSettings.swift */; };
+		B0000043 /* Task.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000023 /* Task.swift */; };
+		B0000044 /* TaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000024 /* TaskStore.swift */; };
+		B0000045 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000025 /* AppTheme.swift */; };
+		B0000046 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000026 /* ContentView.swift */; };
+		B0000047 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000027 /* SettingsView.swift */; };
+		B0000048 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000028 /* SidebarView.swift */; };
+		B0000049 /* AllTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000029 /* AllTasksView.swift */; };
+		B000004A /* NewTaskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002A /* NewTaskSheet.swift */; };
+		B000004B /* PeriodTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002B /* PeriodTasksView.swift */; };
+		B000004C /* SharedTaskComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002C /* SharedTaskComponents.swift */; };
+		B000004D /* TaskDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002D /* TaskDetailSheet.swift */; };
+		B000004E /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002E /* TaskRowView.swift */; };
+		B000004F /* PomodoroTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002F /* PomodoroTimer.swift */; };
+		B0000050 /* TimerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000030 /* TimerPanelView.swift */; };
+		B0000051 /* View+Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000031 /* View+Cursor.swift */; };
+		B0000052 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000032 /* Folder.swift */; };
+		B0000053 /* FolderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000033 /* FolderStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B000000E /* Cadence.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cadence.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0000020 /* CadenceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CadenceApp.swift; sourceTree = "<group>"; };
+		B0000021 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
+		B0000022 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		B0000023 /* Task.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Task.swift; sourceTree = "<group>"; };
+		B0000024 /* TaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskStore.swift; sourceTree = "<group>"; };
+		B0000025 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		B0000026 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B0000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B0000028 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		B0000029 /* AllTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllTasksView.swift; sourceTree = "<group>"; };
+		B000002A /* NewTaskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewTaskSheet.swift; sourceTree = "<group>"; };
+		B000002B /* PeriodTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeriodTasksView.swift; sourceTree = "<group>"; };
+		B000002C /* SharedTaskComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTaskComponents.swift; sourceTree = "<group>"; };
+		B000002D /* TaskDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailSheet.swift; sourceTree = "<group>"; };
+		B000002E /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
+		B000002F /* PomodoroTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTimer.swift; sourceTree = "<group>"; };
+		B0000030 /* TimerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPanelView.swift; sourceTree = "<group>"; };
+		B0000031 /* View+Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Cursor.swift"; sourceTree = "<group>"; };
+		B0000032 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
+		B0000033 /* FolderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B000000C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B0000005 /* = */ = {
+			isa = PBXGroup;
+			children = (
+				B0000010 /* Cadence */,
+				B0000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B0000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B000000E /* Cadence.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B0000010 /* Cadence */ = {
+			isa = PBXGroup;
+			children = (
+				B0000020 /* CadenceApp.swift */,
+				B0000011 /* Extensions */,
+				B0000012 /* Models */,
+				B0000013 /* Theme */,
+				B0000014 /* Views */,
+			);
+			name = Cadence;
+			path = Sources/Cadence;
+			sourceTree = "<group>";
+		};
+		B0000011 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				B0000021 /* Date+Extensions.swift */,
+				B0000031 /* View+Cursor.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		B0000012 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B0000022 /* AppSettings.swift */,
+				B0000032 /* Folder.swift */,
+				B0000033 /* FolderStore.swift */,
+				B0000023 /* Task.swift */,
+				B0000024 /* TaskStore.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B0000013 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				B0000025 /* AppTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		B0000014 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B0000026 /* ContentView.swift */,
+				B0000015 /* Settings */,
+				B0000016 /* Sidebar */,
+				B0000017 /* Tasks */,
+				B0000018 /* Timer */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B0000015 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B0000027 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		B0000016 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				B0000028 /* SidebarView.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		B0000017 /* Tasks */ = {
+			isa = PBXGroup;
+			children = (
+				B0000029 /* AllTasksView.swift */,
+				B000002A /* NewTaskSheet.swift */,
+				B000002B /* PeriodTasksView.swift */,
+				B000002C /* SharedTaskComponents.swift */,
+				B000002D /* TaskDetailSheet.swift */,
+				B000002E /* TaskRowView.swift */,
+			);
+			path = Tasks;
+			sourceTree = "<group>";
+		};
+		B0000018 /* Timer */ = {
+			isa = PBXGroup;
+			children = (
+				B000002F /* PomodoroTimer.swift */,
+				B0000030 /* TimerPanelView.swift */,
+			);
+			path = Timer;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B0000007 /* Cadence */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0000008 /* Build configuration list for PBXNativeTarget "Cadence" */;
+			buildPhases = (
+				B000000B /* Sources */,
+				B000000C /* Frameworks */,
+				B000000D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Cadence;
+			productName = Cadence;
+			productReference = B000000E /* Cadence.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B0000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					B0000007 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = B0000002 /* Build configuration list for PBXProject "Cadence" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B0000005;
+			productRefGroup = B0000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B0000007 /* Cadence */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B000000D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B000000B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0000040 /* CadenceApp.swift in Sources */,
+				B0000041 /* Date+Extensions.swift in Sources */,
+				B0000042 /* AppSettings.swift in Sources */,
+				B0000043 /* Task.swift in Sources */,
+				B0000044 /* TaskStore.swift in Sources */,
+				B0000045 /* AppTheme.swift in Sources */,
+				B0000046 /* ContentView.swift in Sources */,
+				B0000047 /* SettingsView.swift in Sources */,
+				B0000048 /* SidebarView.swift in Sources */,
+				B0000049 /* AllTasksView.swift in Sources */,
+				B000004A /* NewTaskSheet.swift in Sources */,
+				B000004B /* PeriodTasksView.swift in Sources */,
+				B000004C /* SharedTaskComponents.swift in Sources */,
+				B000004D /* TaskDetailSheet.swift in Sources */,
+				B000004E /* TaskRowView.swift in Sources */,
+				B000004F /* PomodoroTimer.swift in Sources */,
+				B0000050 /* TimerPanelView.swift in Sources */,
+				B0000051 /* View+Cursor.swift in Sources */,
+				B0000052 /* Folder.swift in Sources */,
+				B0000053 /* FolderStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B0000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B0000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		B0000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableDescription = "Focus through your day with Cadence";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.orozcoding.cadence";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableDescription = "Focus through your day with Cadence";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.orozcoding.cadence";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B0000002 /* Build configuration list for PBXProject "Cadence" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0000003 /* Debug */,
+				B0000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0000008 /* Build configuration list for PBXNativeTarget "Cadence" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0000009 /* Debug */,
+				B000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = B0000001 /* Project object */;
+}
