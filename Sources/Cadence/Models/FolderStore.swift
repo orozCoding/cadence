@@ -8,14 +8,27 @@ final class FolderStore: ObservableObject {
     @Published var folders: [Folder] = []
     @Published var activeFolder: Folder
 
-    private let foldersKey = "cadence_folders"
+    private let foldersKey       = "cadence_folders"
+    private let backupKey        = "cadence_folders_backup"
     private let activeFolderIDKey = "cadence_active_folder_id"
+
+    // False if folder data existed but couldn't be decoded.
+    // Prevents a successful save from overwriting potentially-recoverable corrupt data
+    // before the user explicitly modifies the folder list.
+    private var dataIsReadable = true
 
     private init() {
         var loaded: [Folder] = []
-        if let data = UserDefaults.standard.data(forKey: "cadence_folders"),
-           let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
-            loaded = decoded
+
+        if let data = UserDefaults.standard.data(forKey: "cadence_folders") {
+            if let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
+                loaded = decoded
+            } else {
+                // Corrupt data — back it up and start with defaults, but mark as unreadable
+                // so we don't immediately overwrite custom folder references still in TaskStore.
+                UserDefaults.standard.set(data, forKey: backupKey)
+                dataIsReadable = false
+            }
         }
 
         // Always ensure the General folder exists at index 0
@@ -25,7 +38,7 @@ final class FolderStore: ObservableObject {
         folders = loaded
 
         // Restore previously active folder
-        if let idStr = UserDefaults.standard.string(forKey: "cadence_active_folder_id"),
+        if let idStr = UserDefaults.standard.string(forKey: activeFolderIDKey),
            let uuid = UUID(uuidString: idStr),
            let match = loaded.first(where: { $0.id == uuid }) {
             activeFolder = match
@@ -39,6 +52,7 @@ final class FolderStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
         let folder = Folder(name: trimmed)
         folders.append(folder)
+        dataIsReadable = true  // User explicitly modified — safe to persist
         saveFolders()
         setActive(folder)
     }
@@ -57,10 +71,12 @@ final class FolderStore: ObservableObject {
         if activeFolder.id == folder.id {
             setActive(folders.first ?? Folder(id: .generalFolderID, name: "General"))
         }
+        dataIsReadable = true
         saveFolders()
     }
 
     private func saveFolders() {
+        guard dataIsReadable else { return }  // Don't overwrite potentially-recoverable corrupt data
         guard let data = try? JSONEncoder().encode(folders) else { return }
         UserDefaults.standard.set(data, forKey: foldersKey)
     }

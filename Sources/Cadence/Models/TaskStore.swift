@@ -5,11 +5,12 @@ import Combine
 final class TaskStore: ObservableObject {
     static let shared = TaskStore()
 
-    @Published var tasks: [CadenceTask] = [] {
-        didSet { save() }
-    }
+    // No didSet save — load() assigns directly without triggering a save.
+    // All mutating methods call save() explicitly.
+    @Published var tasks: [CadenceTask] = []
 
     private let storageKey = "cadence_tasks"
+    private let backupKey  = "cadence_tasks_backup"
 
     private init() {
         load()
@@ -19,24 +20,29 @@ final class TaskStore: ObservableObject {
 
     func add(_ task: CadenceTask) {
         tasks.append(task)
+        save()
     }
 
     func update(_ task: CadenceTask) {
         guard let idx = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[idx] = task
+        save()
     }
 
     func delete(_ task: CadenceTask) {
         tasks.removeAll { $0.id == task.id }
+        save()
     }
 
     func toggle(_ task: CadenceTask) {
         guard let idx = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[idx].isDone.toggle()
+        save()
     }
 
     func deleteAll(inFolder folderId: UUID) {
         tasks.removeAll { $0.folderId == folderId }
+        save()
     }
 
     // MARK: - Filtered views (folder-scoped)
@@ -97,9 +103,12 @@ final class TaskStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let saved = try? JSONDecoder().decode([CadenceTask].self, from: data)
-        else { return }
-        tasks = saved
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
+        guard let saved = try? JSONDecoder().decode([CadenceTask].self, from: data) else {
+            // Back up corrupt bytes so they can be inspected; do not overwrite with empty.
+            UserDefaults.standard.set(data, forKey: backupKey)
+            return
+        }
+        tasks = saved  // Direct assignment — no didSet, no auto-save
     }
 }
