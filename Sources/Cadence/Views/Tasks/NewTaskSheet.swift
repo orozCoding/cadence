@@ -102,7 +102,7 @@ struct NewTaskSheet: View {
                             DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
                                 .labelsHidden()
                                 .accessibilityLabel("Day deadline")
-                                .onChange(of: dayDate) { cascadeFromDay() }
+                                .onChange(of: dayDate) { userHasInteracted = true; cascadeFromDay() }
                         }
                         .onChange(of: enableDay) { userHasInteracted = true; cascadeAll() }
 
@@ -111,7 +111,7 @@ struct NewTaskSheet: View {
                                        in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
                                        displayedComponents: .date)
                                 .labelsHidden()
-                                .onChange(of: weekDate) { cascadeFromWeek() }
+                                .onChange(of: weekDate) { userHasInteracted = true; cascadeFromWeek() }
                         }
                         .onChange(of: enableWeek) { userHasInteracted = true; cascadeAll() }
 
@@ -120,7 +120,7 @@ struct NewTaskSheet: View {
                                        in: Date().startOfMonth()...,
                                        displayedComponents: .date)
                                 .labelsHidden()
-                                .onChange(of: monthDate) { cascadeFromMonth() }
+                                .onChange(of: monthDate) { userHasInteracted = true; cascadeFromMonth() }
                         }
                         .onChange(of: enableMonth) { userHasInteracted = true; cascadeAll() }
 
@@ -133,6 +133,7 @@ struct NewTaskSheet: View {
                             .labelsHidden()
                             .accessibilityLabel("Year deadline")
                             .frame(width: 90)
+                            .onChange(of: yearValue) { userHasInteracted = true }
                         }
                         .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
                     }

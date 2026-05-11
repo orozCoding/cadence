@@ -104,15 +104,27 @@ final class TaskStore: ObservableObject {
 
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
-        guard let saved = try? JSONDecoder().decode([CadenceTask].self, from: data) else {
-            // Preserve corrupt bytes in a separate key so they're recoverable for debugging.
-            // cadence_tasks_backup persists indefinitely in UserDefaults — it is only
-            // overwritten if load() encounters a decode failure again on a future launch.
-            // The next explicit save() (triggered by a user mutation) will write clean data
-            // to cadence_tasks, which is the intended recovery path.
-            UserDefaults.standard.set(data, forKey: backupKey)
+
+        if let saved = try? JSONDecoder().decode([CadenceTask].self, from: data) {
+            tasks = saved  // Direct assignment — no didSet, no auto-save
             return
         }
-        tasks = saved  // Direct assignment — no didSet, no auto-save
+
+        // One malformed record would hide all valid tasks. Attempt per-item recovery.
+        if let rawItems = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            let decoder = JSONDecoder()
+            let recovered = rawItems.compactMap { item -> CadenceTask? in
+                guard let itemData = try? JSONSerialization.data(withJSONObject: item) else { return nil }
+                return try? decoder.decode(CadenceTask.self, from: itemData)
+            }
+            if !recovered.isEmpty {
+                tasks = recovered
+                return
+            }
+        }
+
+        // Completely unreadable — back up corrupt bytes for debugging.
+        // The next explicit save() (triggered by a user mutation) writes clean data.
+        UserDefaults.standard.set(data, forKey: backupKey)
     }
 }

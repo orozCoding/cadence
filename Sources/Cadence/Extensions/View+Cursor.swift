@@ -4,7 +4,7 @@ import AppKit
 extension View {
     func pointerCursor() -> some View {
         self.onHover { hovering in
-            hovering ? NSCursor.pointingHand.push() : NSCursor.pop()
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
     }
 }
