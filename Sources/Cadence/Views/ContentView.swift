@@ -64,9 +64,6 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        .onChange(of: selection) { _, _ in
-            withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list }
-        }
         .onChange(of: folderStore.activeFolder.id) { _, _ in
             withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
         }

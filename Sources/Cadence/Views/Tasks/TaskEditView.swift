@@ -147,7 +147,9 @@ struct TaskEditView: View {
                             .foregroundStyle(AppTheme.textTertiary)
 
                         DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                            DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
+                            // Allow keeping an existing overdue date; new picks are bounded to today.
+                            let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
+                            DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
                                 .labelsHidden()
                                 .accessibilityLabel("Day deadline")
                                 .onChange(of: dayDate) { cascadeFromDay() }
@@ -155,8 +157,9 @@ struct TaskEditView: View {
                         .onChange(of: enableDay) { cascadeAll() }
 
                         DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
+                            let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
                             DatePicker("Week deadline", selection: $weekDate,
-                                       in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
+                                       in: weekMin...,
                                        displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
@@ -164,8 +167,9 @@ struct TaskEditView: View {
                         .onChange(of: enableWeek) { cascadeAll() }
 
                         DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
+                            let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
                             DatePicker("Month deadline", selection: $monthDate,
-                                       in: Date().startOfMonth()...,
+                                       in: monthMin...,
                                        displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
@@ -173,8 +177,9 @@ struct TaskEditView: View {
                         .onChange(of: enableMonth) { cascadeAll() }
 
                         DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
+                            let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
                             Picker("Year deadline", selection: $yearValue) {
-                                ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
+                                ForEach(yearMin...(yearMin + 10), id: \.self) { y in
                                     Text(String(y)).tag(y)
                                 }
                             }
@@ -248,11 +253,18 @@ struct TaskEditView: View {
     private func cascadeFromMonth() { cascadeAll() }
 
     private func save() {
+        let newDay   = enableDay   ? dayDate.noonLocal() : nil
+        let newWeek  = enableWeek  ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil
+        let newMonth = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
+        let newYear  = enableYear  ? yearValue : nil
+
+        // Skip the "not in past" check for deadlines that are unchanged from the original
+        // so that overdue tasks remain editable without forced rescheduling.
         let errors = CadenceTask.validate(
-            day: enableDay ? dayDate.noonLocal() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
-            year: enableYear ? yearValue : nil,
+            day:        newDay   == task.dayDeadline ? nil : newDay,
+            weekStart:  newWeek  == task.weekStart   ? nil : newWeek,
+            monthStart: newMonth == task.monthStart  ? nil : newMonth,
+            year:       newYear  == task.yearDeadline ? nil : newYear,
             weekStartsOn: settings.weekStartsOn
         )
         validationErrors = errors
@@ -261,10 +273,10 @@ struct TaskEditView: View {
         var updated = currentTask
         updated.title = trimmedTitle
         updated.body = editedBody
-        updated.dayDeadline  = enableDay   ? dayDate.noonLocal() : nil
-        updated.weekStart    = enableWeek  ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil
-        updated.monthStart   = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
-        updated.yearDeadline = enableYear  ? yearValue : nil
+        updated.dayDeadline  = newDay
+        updated.weekStart    = newWeek
+        updated.monthStart   = newMonth
+        updated.yearDeadline = newYear
         store.update(updated)
         onBack()
     }
