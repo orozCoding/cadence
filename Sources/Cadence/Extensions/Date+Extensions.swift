@@ -5,6 +5,12 @@ extension Date {
         calendar.startOfDay(for: self)
     }
 
+    // Store calendar deadlines at noon local time so timezone changes up to ±12h
+    // won't shift the stored date into an adjacent calendar day when reloaded.
+    func noonLocal(calendar: Calendar = .current) -> Date {
+        calendar.date(bySettingHour: 12, minute: 0, second: 0, of: self) ?? self
+    }
+
     func startOfWeek(weekStartsOn: Weekday = .monday, calendar: Calendar = .current) -> Date {
         var cal = calendar
         cal.firstWeekday = weekStartsOn.calendarValue

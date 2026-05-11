@@ -44,6 +44,11 @@ struct TaskRowView: View {
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(task.title)
+        .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
+        .accessibilityAction(.default, onTap)
+        .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)
     }
 
     @ViewBuilder

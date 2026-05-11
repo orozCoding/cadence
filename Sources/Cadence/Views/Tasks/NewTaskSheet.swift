@@ -102,34 +102,38 @@ struct NewTaskSheet: View {
                             icon: "calendar", label: "Week",
                             isEnabled: $enableWeek
                         ) {
-                            DatePicker("", selection: $weekDate, displayedComponents: .date)
+                            DatePicker("Week deadline", selection: $weekDate, displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: weekDate) { cascadeFromWeek() }
                         }
+                        .onChange(of: enableWeek) { _, on in if on { cascadeFromDay() } }
 
                         // Month
                         DeadlineToggleRow(
                             icon: "calendar.badge.clock", label: "Month",
                             isEnabled: $enableMonth
                         ) {
-                            DatePicker("", selection: $monthDate, displayedComponents: .date)
+                            DatePicker("Month deadline", selection: $monthDate, displayedComponents: .date)
                                 .labelsHidden()
                                 .onChange(of: monthDate) { cascadeFromMonth() }
                         }
+                        .onChange(of: enableMonth) { _, on in if on { cascadeFromWeek() } }
 
                         // Year
                         DeadlineToggleRow(
                             icon: "archivebox", label: "Year",
                             isEnabled: $enableYear
                         ) {
-                            Picker("", selection: $yearValue) {
+                            Picker("Year deadline", selection: $yearValue) {
                                 ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
                                     Text(String(y)).tag(y)
                                 }
                             }
                             .labelsHidden()
+                            .accessibilityLabel("Year deadline")
                             .frame(width: 90)
                         }
+                        .onChange(of: enableYear) { _, on in if on { cascadeFromMonth() } }
                     }
 
                     // Validation errors
@@ -225,8 +229,8 @@ struct NewTaskSheet: View {
 
     private func save() {
         let errors = CadenceTask.validate(
-            day: enableDay ? dayDate.startOfDay() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn) : nil,
+            day: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth() : nil,
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
@@ -237,9 +241,9 @@ struct NewTaskSheet: View {
         let task = CadenceTask(
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
-            dayDeadline: enableDay ? dayDate.startOfDay() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn) : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
+            dayDeadline: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             yearDeadline: enableYear ? yearValue : nil
         )
         store.add(task)
@@ -257,8 +261,9 @@ struct DeadlineToggleRow<Content: View>: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Toggle("", isOn: $isEnabled)
+            Toggle(label, isOn: $isEnabled)
                 .labelsHidden()
+                .accessibilityLabel("\(label) deadline")
                 .toggleStyle(.switch)
                 .controlSize(.small)
 
