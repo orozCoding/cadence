@@ -258,15 +258,17 @@ struct TaskEditView: View {
         let newMonth = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
         let newYear  = enableYear  ? yearValue : nil
 
-        // Skip the "not in past" check for deadlines that are unchanged from the original
-        // so that overdue tasks remain editable without forced rescheduling.
-        let errors = CadenceTask.validate(
-            day:        newDay   == task.dayDeadline ? nil : newDay,
-            weekStart:  newWeek  == task.weekStart   ? nil : newWeek,
-            monthStart: newMonth == task.monthStart  ? nil : newMonth,
-            year:       newYear  == task.yearDeadline ? nil : newYear,
+        // Run full validation (including cross-level ordering) with actual values,
+        // then strip past-date errors for deadline values unchanged from the original
+        // so overdue tasks remain editable without forced rescheduling.
+        var errors = CadenceTask.validate(
+            day: newDay, weekStart: newWeek, monthStart: newMonth, year: newYear,
             weekStartsOn: settings.weekStartsOn
         )
+        if newDay   == task.dayDeadline   { errors.removeAll { $0 == "Day deadline cannot be in the past." } }
+        if newWeek  == task.weekStart     { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
+        if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
+        if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
         validationErrors = errors
         guard errors.isEmpty else { return }
 
