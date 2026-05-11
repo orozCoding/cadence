@@ -15,31 +15,28 @@ struct AllTasksView: View {
 
     @State private var sortBy: AllTasksSort = .createdAt
 
-    private var pending: [CadenceTask] {
-        store.tasks.filter { !$0.isDone }.sorted(by: sortKey)
-    }
-    private var done: [CadenceTask] {
-        store.tasks.filter { $0.isDone }.sorted(by: sortKey)
-    }
-
     private var sortKey: (CadenceTask, CadenceTask) -> Bool {
         switch sortBy {
-        case .createdAt: return { $0.createdAt < $1.createdAt }
-        case .dayDeadline: return {
-            ($0.dayDeadline ?? .distantFuture) < ($1.dayDeadline ?? .distantFuture)
-        }
-        case .weekDeadline: return {
-            ($0.weekStart ?? .distantFuture) < ($1.weekStart ?? .distantFuture)
-        }
-        case .monthDeadline: return {
-            ($0.monthStart ?? .distantFuture) < ($1.monthStart ?? .distantFuture)
-        }
+        case .createdAt:    return { $0.createdAt < $1.createdAt }
+        case .dayDeadline:  return { ($0.dayDeadline ?? .distantFuture) < ($1.dayDeadline ?? .distantFuture) }
+        case .weekDeadline: return { ($0.weekStart ?? .distantFuture) < ($1.weekStart ?? .distantFuture) }
+        case .monthDeadline:return { ($0.monthStart ?? .distantFuture) < ($1.monthStart ?? .distantFuture) }
         }
     }
+
+    // Single sorted array: pending first, then done.
+    // One ForEach so SwiftUI tracks identity across the todo→done move.
+    private var ordered: [CadenceTask] {
+        let p = store.tasks.filter { !$0.isDone }.sorted(by: sortKey)
+        let d = store.tasks.filter {  $0.isDone }.sorted(by: sortKey)
+        return p + d
+    }
+
+    private var pendingCount: Int { ordered.filter { !$0.isDone }.count }
+    private var doneCount: Int    { ordered.filter {  $0.isDone }.count }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             TasksHeader(title: "All Tasks", showNewTask: $showNewTask) {
                 Picker("Sort", selection: $sortBy) {
                     ForEach(AllTasksSort.allCases, id: \.self) { s in
@@ -52,45 +49,37 @@ struct AllTasksView: View {
 
             Divider().background(AppTheme.divider)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
-                    if !pending.isEmpty {
-                        Section {
-                            ForEach(pending) { task in
-                                TaskRowView(
-                                    task: task,
-                                    onTap: { withAnimation { selectedTask = task } },
-                                    onToggle: { store.toggle(task) }
-                                )
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 2)
+            if store.tasks.isEmpty {
+                EmptyStateView(message: "No tasks yet.\nClick + to add your first task.")
+                    .frame(maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if pendingCount > 0 {
+                            SectionHeader(label: "To Do", count: pendingCount)
+                        }
+
+                        ForEach(ordered) { task in
+                            // Insert the "Done" section header before the first done task.
+                            if task.id == ordered.first(where: { $0.isDone })?.id {
+                                SectionHeader(label: "Done", count: doneCount)
+                                    .padding(.top, pendingCount > 0 ? 8 : 0)
+                                    .transition(.opacity)
                             }
-                        } header: {
-                            SectionHeader(label: "To Do", count: pending.count)
+
+                            TaskRowView(
+                                task: task,
+                                onTap: { withAnimation { selectedTask = task } },
+                                onToggle: { store.toggle(task) }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 2)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-
-                    if !done.isEmpty {
-                        Section {
-                            ForEach(done) { task in
-                                TaskRowView(
-                                    task: task,
-                                    onTap: { withAnimation { selectedTask = task } },
-                                    onToggle: { store.toggle(task) }
-                                )
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 2)
-                            }
-                        } header: {
-                            SectionHeader(label: "Done", count: done.count)
-                        }
-                    }
-
-                    if store.tasks.isEmpty {
-                        EmptyStateView(message: "No tasks yet.\nClick + to add your first task.")
-                    }
+                    .padding(.vertical, 12)
+                    .animation(.easeInOut(duration: 0.28), value: ordered.map(\.id))
                 }
-                .padding(.vertical, 12)
             }
         }
     }
