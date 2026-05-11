@@ -3,6 +3,7 @@ import SwiftUI
 struct NewTaskSheet: View {
     let prefillSelection: NavSelection?
     let onDismiss: () -> Void
+    @Binding var backdropTap: Bool
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
@@ -22,8 +23,10 @@ struct NewTaskSheet: View {
     @State private var yearValue = Calendar.current.component(.year, from: Date())
 
     @State private var validationErrors: [String] = []
+    @State private var showDiscardAlert = false
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var hasDraft: Bool { !title.isEmpty || !body_.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,7 +36,7 @@ struct NewTaskSheet: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Button(action: onDismiss) {
+                Button(action: tryDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.textTertiary)
@@ -154,7 +157,7 @@ struct NewTaskSheet: View {
             // Footer
             HStack {
                 Spacer()
-                Button("Cancel") { onDismiss() }
+                Button("Cancel") { tryDismiss() }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 14)
@@ -179,9 +182,20 @@ struct NewTaskSheet: View {
         .frame(width: 480)
         .background(AppTheme.contentBackground)
         .onAppear { prefill() }
+        .onChange(of: backdropTap) { _, tapped in
+            if tapped { backdropTap = false; tryDismiss() }
+        }
+        .confirmationDialog("Discard this draft?", isPresented: $showDiscardAlert, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { onDismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        }
     }
 
     // MARK: - Logic
+
+    private func tryDismiss() {
+        if hasDraft { showDiscardAlert = true } else { onDismiss() }
+    }
 
     private func prefill() {
         switch prefillSelection {

@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var selection: NavSelection? = .all
     @State private var selectedTask: CadenceTask? = nil
     @State private var showNewTask = false
+    @State private var newTaskBackdropTap = false
 
     var body: some View {
         HSplitView {
@@ -66,11 +67,15 @@ struct ContentView: View {
         // Overlay modals — background tap dismisses (same as X button)
         .overlay {
             if showNewTask {
-                modalOverlay(onDismiss: { showNewTask = false }) {
-                    NewTaskSheet(prefillSelection: selection, onDismiss: { showNewTask = false })
-                        .environmentObject(store)
-                        .environmentObject(settings)
-                        .environmentObject(folderStore)
+                modalOverlay(onDismiss: { newTaskBackdropTap = true }) {
+                    NewTaskSheet(
+                        prefillSelection: selection,
+                        onDismiss: { showNewTask = false },
+                        backdropTap: $newTaskBackdropTap
+                    )
+                    .environmentObject(store)
+                    .environmentObject(settings)
+                    .environmentObject(folderStore)
                 }
             }
         }
@@ -92,13 +97,18 @@ struct ContentView: View {
         ZStack {
             Color.black.opacity(0.28)
                 .ignoresSafeArea()
+                .contentShape(Rectangle())
                 .onTapGesture { onDismiss() }
 
             content()
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .shadow(color: .black.opacity(0.18), radius: 30, y: 10)
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .accessibilityAddTraits(.isModal)
         }
+        // Block all non-tap interaction with views behind the overlay
+        .allowsHitTesting(true)
+        .accessibilityAddTraits(.isModal)
         .transition(.opacity)
     }
 }

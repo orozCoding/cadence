@@ -51,6 +51,8 @@ final class FolderStore: ObservableObject {
 
     func delete(_ folder: Folder) {
         guard folder.id != .generalFolderID else { return }
+        // Cascade-delete tasks so they don't become permanently unreachable
+        TaskStore.shared.deleteAll(inFolder: folder.id)
         folders.removeAll { $0.id == folder.id }
         if activeFolder.id == folder.id {
             setActive(folders.first ?? Folder(id: .generalFolderID, name: "General"))
