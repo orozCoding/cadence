@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SidebarView: View {
     @Binding var selection: NavSelection?
@@ -15,7 +16,11 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // App title
-            HStack {
+            HStack(spacing: 8) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
                 Text("Cadence")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
