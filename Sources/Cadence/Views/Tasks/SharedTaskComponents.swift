@@ -75,3 +75,46 @@ struct EmptyStateView: View {
         .padding(.top, 60)
     }
 }
+
+// MARK: - Deadline toggle row (used by TaskCreateView and TaskEditView)
+
+struct DeadlineToggleRow<Content: View>: View {
+    let icon: String
+    let label: String
+    @Binding var isEnabled: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle(label, isOn: $isEnabled)
+                .labelsHidden()
+                .accessibilityLabel("\(label) deadline")
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .pointerCursor()
+
+            Button(action: { isEnabled.toggle() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textTertiary)
+                        .frame(width: 16)
+
+                    Text(label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.textPrimary : AppTheme.textTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .pointerCursor()
+
+            Spacer()
+
+            if isEnabled {
+                content()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isEnabled)
+    }
+}

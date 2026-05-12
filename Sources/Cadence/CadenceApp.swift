@@ -17,8 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        FocusTimeStore.shared.flushIfNeeded()
+    }
+
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
-        guard event.keyCode == 49 else { return event }  // 49 = space
+        guard event.keyCode == 49, !event.isARepeat else { return event }  // 49 = space; ignore key-repeat
         guard !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
         Task { @MainActor in PomodoroTimer.shared.toggle() }
         return nil  // consume the event so it doesn't insert a space

@@ -17,10 +17,8 @@
 		B0000047 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000027 /* SettingsView.swift */; };
 		B0000048 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000028 /* SidebarView.swift */; };
 		B0000049 /* AllTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000029 /* AllTasksView.swift */; };
-		B000004A /* NewTaskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002A /* NewTaskSheet.swift */; };
 		B000004B /* PeriodTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002B /* PeriodTasksView.swift */; };
 		B000004C /* SharedTaskComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002C /* SharedTaskComponents.swift */; };
-		B000004D /* TaskDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002D /* TaskDetailSheet.swift */; };
 		B000004E /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002E /* TaskRowView.swift */; };
 		B000004F /* PomodoroTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002F /* PomodoroTimer.swift */; };
 		B0000050 /* TimerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000030 /* TimerPanelView.swift */; };
@@ -46,10 +44,8 @@
 		B0000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B0000028 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		B0000029 /* AllTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllTasksView.swift; sourceTree = "<group>"; };
-		B000002A /* NewTaskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewTaskSheet.swift; sourceTree = "<group>"; };
 		B000002B /* PeriodTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeriodTasksView.swift; sourceTree = "<group>"; };
 		B000002C /* SharedTaskComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTaskComponents.swift; sourceTree = "<group>"; };
-		B000002D /* TaskDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailSheet.swift; sourceTree = "<group>"; };
 		B000002E /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
 		B000002F /* PomodoroTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTimer.swift; sourceTree = "<group>"; };
 		B0000030 /* TimerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPanelView.swift; sourceTree = "<group>"; };
@@ -167,10 +163,8 @@
 			isa = PBXGroup;
 			children = (
 				B0000029 /* AllTasksView.swift */,
-				B000002A /* NewTaskSheet.swift */,
 				B000002B /* PeriodTasksView.swift */,
 				B000002C /* SharedTaskComponents.swift */,
-				B000002D /* TaskDetailSheet.swift */,
 				B000002E /* TaskRowView.swift */,
 				B0000035 /* TaskCreateView.swift */,
 				B0000036 /* TaskEditView.swift */,
@@ -266,10 +260,8 @@
 				B0000047 /* SettingsView.swift in Sources */,
 				B0000048 /* SidebarView.swift in Sources */,
 				B0000049 /* AllTasksView.swift in Sources */,
-				B000004A /* NewTaskSheet.swift in Sources */,
 				B000004B /* PeriodTasksView.swift in Sources */,
 				B000004C /* SharedTaskComponents.swift in Sources */,
-				B000004D /* TaskDetailSheet.swift in Sources */,
 				B000004E /* TaskRowView.swift in Sources */,
 				B000004F /* PomodoroTimer.swift in Sources */,
 				B0000050 /* TimerPanelView.swift in Sources */,
