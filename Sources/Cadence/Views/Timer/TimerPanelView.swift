@@ -162,17 +162,14 @@ struct TimerPanelView: View {
                 .padding(.bottom, showFocusStats ? 8 : 12)
 
                 if showFocusStats {
-                    let todaySecs = focusStore.todaySeconds()
-                    let weekFloor = focusStore.weekSeconds(weekStartsOn: settings.weekStartsOn) - todaySecs
-                    let monthFloor = focusStore.monthSeconds() - todaySecs
                     VStack(spacing: 4) {
-                        FocusStatRow(label: "Today", seconds: todaySecs, floor: 0) { newSecs in
+                        FocusStatRow(label: "Today", seconds: focusStore.todaySeconds()) { newSecs in
                             focusStore.setToday(seconds: newSecs)
                         }
-                        FocusStatRow(label: "This week", seconds: focusStore.weekSeconds(weekStartsOn: settings.weekStartsOn), floor: weekFloor) { newSecs in
+                        FocusStatRow(label: "This week", seconds: focusStore.weekSeconds(weekStartsOn: settings.weekStartsOn)) { newSecs in
                             focusStore.setWeek(to: newSecs, weekStartsOn: settings.weekStartsOn)
                         }
-                        FocusStatRow(label: "This month", seconds: focusStore.monthSeconds(), floor: monthFloor) { newSecs in
+                        FocusStatRow(label: "This month", seconds: focusStore.monthSeconds()) { newSecs in
                             focusStore.setMonth(to: newSecs)
                         }
                     }
@@ -218,13 +215,11 @@ struct PresetButton: View {
 struct FocusStatRow: View {
     let label: String
     let seconds: Int
-    /// Minimum achievable aggregate (sum of historical days other than today).
-    let floor: Int
     let onSet: (Int) -> Void
 
     @State private var isEditing = false
     @State private var editBuffer = ""
-    @State private var editError: String? = nil
+    @State private var editError = false
 
     private var formatted: String {
         if seconds <= 0 { return "—" }
@@ -237,79 +232,64 @@ struct FocusStatRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-                if isEditing {
-                    HStack(spacing: 4) {
-                        TextField("", text: $editBuffer)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .frame(width: 56)
-                            .multilineTextAlignment(.trailing)
-                            .onSubmit { commitEdit() }
-                        Text("s")
-                            .font(.system(size: 11))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Button(action: commitEdit) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                        .buttonStyle(.plain)
-                        .pointerCursor()
-                        Button(action: cancelEdit) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10))
-                                .foregroundStyle(AppTheme.textTertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .pointerCursor()
-                    }
-                } else {
-                    Button(action: startEditing) {
-                        Text(formatted)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(seconds > 0 ? AppTheme.textPrimary : AppTheme.textTertiary)
+        HStack {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+            if isEditing {
+                HStack(spacing: 4) {
+                    TextField("", text: $editBuffer)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(editError ? AppTheme.destructive : AppTheme.textPrimary)
+                        .frame(width: 56)
+                        .multilineTextAlignment(.trailing)
+                        .onSubmit { commitEdit() }
+                        .onChange(of: editBuffer) { editError = false }
+                    Text("s")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Button(action: commitEdit) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
                     }
                     .buttonStyle(.plain)
                     .pointerCursor()
-                    .accessibilityLabel("\(label): \(formatted). Tap to edit.")
+                    Button(action: { isEditing = false; editError = false }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
                 }
-            }
-            if let err = editError {
-                Text(err)
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppTheme.destructive)
+            } else {
+                Button(action: startEditing) {
+                    Text(formatted)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(seconds > 0 ? AppTheme.textPrimary : AppTheme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .pointerCursor()
+                .accessibilityLabel("\(label): \(formatted). Click to edit.")
             }
         }
     }
 
     private func startEditing() {
         editBuffer = "\(seconds)"
-        editError = nil
+        editError = false
         isEditing = true
     }
 
     private func commitEdit() {
         guard let newSecs = Int(editBuffer), newSecs >= 0 else {
-            editError = "Enter whole seconds"
+            editError = true
             return
         }
-        guard newSecs >= floor else {
-            editError = "Min \(floor)s (prior days)"
-            return
-        }
-        editError = nil
         onSet(newSecs)
-        isEditing = false
-    }
-
-    private func cancelEdit() {
-        editError = nil
         isEditing = false
     }
 }

@@ -303,15 +303,22 @@ struct DeadlineToggleRow<Content: View>: View {
                 .accessibilityLabel("\(label) deadline")
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .pointerCursor()
 
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textTertiary)
-                .frame(width: 16)
+            Button(action: { isEnabled.toggle() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textTertiary)
+                        .frame(width: 16)
 
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundStyle(isEnabled ? AppTheme.textPrimary : AppTheme.textTertiary)
+                    Text(label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.textPrimary : AppTheme.textTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .pointerCursor()
 
             Spacer()
 
