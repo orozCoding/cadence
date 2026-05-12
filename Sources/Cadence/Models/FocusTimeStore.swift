@@ -8,9 +8,9 @@ final class FocusTimeStore: ObservableObject {
     @Published private(set) var dailySeconds: [String: Int] = [:]
 
     // Independent manual adjustments per period (do not cascade into each other)
-    private var manualToday: [String: Int] = [:]   // dayKey → delta on top of raw
-    private var manualWeek: [String: Int] = [:]    // weekStartKey → delta (excludes today adj)
-    private var manualMonth: [String: Int] = [:]   // monthStartKey → delta (excludes today adj)
+    @Published private var manualToday: [String: Int] = [:]   // dayKey → delta on top of raw
+    @Published private var manualWeek: [String: Int] = [:]    // weekStartKey → delta (excludes today adj)
+    @Published private var manualMonth: [String: Int] = [:]   // monthStartKey → delta (excludes today adj)
 
     private let storageKey       = "focusDailySeconds"
     private let manualTodayKey   = "focusManualToday"
