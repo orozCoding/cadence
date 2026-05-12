@@ -1,14 +1,18 @@
 import Foundation
+import AppKit
 import Combine
 
 @MainActor
 final class PomodoroTimer: ObservableObject {
+    static let shared = PomodoroTimer()
+
     @Published var remaining: TimeInterval = 25 * 60
     @Published var total: TimeInterval = 25 * 60
     @Published var isRunning = false
     @Published var isFinished = false
 
     private var cancellable: AnyCancellable?
+    private var chimeTask: Task<Void, Never>?
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -19,8 +23,13 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(minutes: Int) {
+        set(seconds: TimeInterval(minutes * 60))
+    }
+
+    func set(seconds: TimeInterval) {
+        chimeTask?.cancel()
         pause()
-        total = TimeInterval(minutes * 60)
+        total = max(1, seconds.rounded())
         remaining = total
         isFinished = false
     }
@@ -41,19 +50,34 @@ final class PomodoroTimer: ObservableObject {
     func pause() {
         isRunning = false
         cancellable = nil
+        FocusTimeStore.shared.flushIfNeeded()
     }
 
     func reset() {
+        chimeTask?.cancel()
         pause()
         remaining = total
         isFinished = false
     }
 
     private func tick() {
+        FocusTimeStore.shared.addSecond()
         remaining = max(0, remaining - 1)
         if remaining == 0 {
             pause()
             isFinished = true
+            playCompletionChime()
+        }
+    }
+
+    private func playCompletionChime() {
+        chimeTask?.cancel()
+        chimeTask = Task { @MainActor in
+            for _ in 0..<3 {
+                guard !Task.isCancelled else { return }
+                NSSound(named: .init("Glass"))?.play()
+                try? await Task.sleep(nanoseconds: 700_000_000)
+            }
         }
     }
 }

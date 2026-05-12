@@ -2,12 +2,12 @@ import SwiftUI
 
 struct TasksHeader<Trailing: View>: View {
     let title: String
-    @Binding var showNewTask: Bool
+    let onNewTask: () -> Void
     @ViewBuilder var trailing: () -> Trailing
 
-    init(title: String, showNewTask: Binding<Bool>, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
+    init(title: String, onNewTask: @escaping () -> Void, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
         self.title = title
-        self._showNewTask = showNewTask
+        self.onNewTask = onNewTask
         self.trailing = trailing
     }
 
@@ -21,7 +21,7 @@ struct TasksHeader<Trailing: View>: View {
 
             trailing()
 
-            Button(action: { showNewTask = true }) {
+            Button(action: onNewTask) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
@@ -37,12 +37,6 @@ struct TasksHeader<Trailing: View>: View {
     }
 }
 
-// Overload for no trailing
-extension TasksHeader where Trailing == EmptyView {
-    init(title: String, showNewTask: Binding<Bool>) {
-        self.init(title: title, showNewTask: showNewTask, trailing: { EmptyView() })
-    }
-}
 
 struct SectionHeader: View {
     let label: String
@@ -79,5 +73,48 @@ struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+}
+
+// MARK: - Deadline toggle row (used by TaskCreateView and TaskEditView)
+
+struct DeadlineToggleRow<Content: View>: View {
+    let icon: String
+    let label: String
+    @Binding var isEnabled: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle(label, isOn: $isEnabled)
+                .labelsHidden()
+                .accessibilityLabel("\(label) deadline")
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .pointerCursor()
+
+            Button(action: { isEnabled.toggle() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textTertiary)
+                        .frame(width: 16)
+
+                    Text(label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(isEnabled ? AppTheme.textPrimary : AppTheme.textTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .pointerCursor()
+
+            Spacer()
+
+            if isEnabled {
+                content()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isEnabled)
     }
 }

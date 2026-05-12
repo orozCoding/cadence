@@ -6,7 +6,14 @@ enum NavSelection: Hashable {
     case week(Date)
     case month(Date)
     case year(Int)
+    case focusTime
     case settings
+}
+
+enum CenterContent: Equatable {
+    case list
+    case newTask
+    case editTask(UUID)
 }
 
 struct ContentView: View {
@@ -15,10 +22,14 @@ struct ContentView: View {
     @EnvironmentObject var folderStore: FolderStore
 
     @State private var selection: NavSelection? = .all
-    @State private var selectedTask: CadenceTask? = nil
-    @State private var showNewTask = false
-    @State private var newTaskBackdropTap = false
-    @State private var detailBackdropTap = false
+    @State private var centerContent: CenterContent = .list
+
+    // Discard guard for settings/focusTime navigation and folder switches
+    @State private var showNavigationDiscardAlert = false
+    @State private var navigationOnProceed: (() -> Void)? = nil
+    @State private var navigationOnCancel: (() -> Void)? = nil
+    @State private var isRevertingSelection = false   // guards onChange(of: selection)
+    @State private var isRevertingFolder = false      // guards onChange(of: activeFolder.id)
 
     var body: some View {
         HSplitView {
@@ -27,32 +38,32 @@ struct ContentView: View {
                 .background(AppTheme.sidebarBackground)
 
             Group {
-                switch selection {
-                case .all, .none:
-                    AllTasksView(selectedTask: $selectedTask, showNewTask: $showNewTask)
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                case .day(let date):
-                    PeriodTasksView(period: .day(date), selectedTask: $selectedTask, showNewTask: $showNewTask)
-                        .id("day-\(date)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                case .week(let start):
-                    PeriodTasksView(period: .week(start), selectedTask: $selectedTask, showNewTask: $showNewTask)
-                        .id("week-\(start)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                case .month(let start):
-                    PeriodTasksView(period: .month(start), selectedTask: $selectedTask, showNewTask: $showNewTask)
-                        .id("month-\(start)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                case .year(let y):
-                    PeriodTasksView(period: .year(y), selectedTask: $selectedTask, showNewTask: $showNewTask)
-                        .id("year-\(y)")
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                case .settings:
-                    SettingsView()
+                switch centerContent {
+                case .list:
+                    listView
                         .transition(.opacity)
+                case .newTask:
+                    TaskCreateView(
+                        prefillSelection: selection,
+                        onBack: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list } }
+                    )
+                    .environmentObject(store)
+                    .environmentObject(settings)
+                    .environmentObject(folderStore)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                case .editTask(let taskID):
+                    if let task = store.tasks.first(where: { $0.id == taskID }) {
+                        TaskEditView(
+                            task: task,
+                            onBack: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list } }
+                        )
+                        .environmentObject(store)
+                        .environmentObject(settings)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
                 }
             }
-            .animation(.easeInOut(duration: 0.18), value: selection)
+            .animation(.easeInOut(duration: 0.18), value: centerContent)
             .frame(minWidth: 320)
             .background(AppTheme.contentBackground)
 
@@ -61,59 +72,95 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        // Reset navigation when folder changes so stale period selections don't persist
-        .onChange(of: folderStore.activeFolder.id) { _, _ in
-            withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
+        // Settings and Focus Time are full context switches — guard against silent draft loss
+        .onChange(of: selection) { oldSel, newSel in
+            guard !isRevertingSelection else { isRevertingSelection = false; return }
+            guard (newSel == .settings || newSel == .focusTime), centerContent != .list else { return }
+            isRevertingSelection = true
+            selection = oldSel ?? .all  // revert until user confirms
+            let dest = newSel ?? .all
+            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = dest; centerContent = .list } }
+            navigationOnCancel = {}
+            showNavigationDiscardAlert = true
         }
-        // Overlay modals — background tap dismisses (same as X button)
-        .overlay {
-            if showNewTask {
-                modalOverlay(onDismiss: { newTaskBackdropTap = true }) {
-                    NewTaskSheet(
-                        prefillSelection: selection,
-                        onDismiss: { showNewTask = false },
-                        backdropTap: $newTaskBackdropTap
-                    )
-                    .environmentObject(store)
-                    .environmentObject(settings)
-                    .environmentObject(folderStore)
-                }
+        // Folder switch also requires a discard guard
+        .onChange(of: folderStore.activeFolder.id) { oldID, _ in
+            guard !isRevertingFolder else { isRevertingFolder = false; return }
+            // Focus Time and Settings are global views — folder changes don't affect them.
+            if selection == .focusTime || selection == .settings { return }
+            guard centerContent != .list else {
+                withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+                return
             }
-        }
-        .overlay {
-            if let task = selectedTask {
-                modalOverlay(onDismiss: { detailBackdropTap = true }) {
-                    TaskDetailSheet(
-                        task: task,
-                        onDismiss: { selectedTask = nil },
-                        backdropTap: $detailBackdropTap
-                    )
-                    .environmentObject(store)
-                    .environmentObject(settings)
-                }
+            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list } }
+            navigationOnCancel = {
+                guard let folder = folderStore.folders.first(where: { $0.id == oldID }) else { return }
+                isRevertingFolder = true
+                folderStore.setActive(folder)
             }
+            showNavigationDiscardAlert = true
         }
-        .animation(.easeInOut(duration: 0.18), value: showNewTask)
-        .animation(.easeInOut(duration: 0.18), value: selectedTask != nil)
+        .confirmationDialog("Unsaved Changes", isPresented: $showNavigationDiscardAlert, titleVisibility: .visible) {
+            Button("Discard & Continue", role: .destructive) {
+                navigationOnProceed?()
+                navigationOnProceed = nil; navigationOnCancel = nil
+            }
+            Button("Keep Editing", role: .cancel) {
+                navigationOnCancel?()
+                navigationOnProceed = nil; navigationOnCancel = nil
+            }
+        } message: {
+            Text("Any unsaved changes will be lost.")
+        }
     }
 
     @ViewBuilder
-    private func modalOverlay<Content: View>(onDismiss: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {
-        ZStack {
-            Color.black.opacity(0.28)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { onDismiss() }
-
-            content()
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: .black.opacity(0.18), radius: 30, y: 10)
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                .accessibilityAddTraits(.isModal)
+    private var listView: some View {
+        switch selection {
+        case .all, .none:
+            AllTasksView(
+                onTaskTap: { task in withAnimation(.easeInOut(duration: 0.18)) { centerContent = .editTask(task.id) } },
+                onNewTask: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .newTask } }
+            )
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .day(let date):
+            PeriodTasksView(
+                period: .day(date),
+                onTaskTap: { task in withAnimation(.easeInOut(duration: 0.18)) { centerContent = .editTask(task.id) } },
+                onNewTask: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .newTask } }
+            )
+            .id("day-\(date)")
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .week(let start):
+            PeriodTasksView(
+                period: .week(start),
+                onTaskTap: { task in withAnimation(.easeInOut(duration: 0.18)) { centerContent = .editTask(task.id) } },
+                onNewTask: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .newTask } }
+            )
+            .id("week-\(start)")
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .month(let start):
+            PeriodTasksView(
+                period: .month(start),
+                onTaskTap: { task in withAnimation(.easeInOut(duration: 0.18)) { centerContent = .editTask(task.id) } },
+                onNewTask: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .newTask } }
+            )
+            .id("month-\(start)")
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .year(let y):
+            PeriodTasksView(
+                period: .year(y),
+                onTaskTap: { task in withAnimation(.easeInOut(duration: 0.18)) { centerContent = .editTask(task.id) } },
+                onNewTask: { withAnimation(.easeInOut(duration: 0.18)) { centerContent = .newTask } }
+            )
+            .id("year-\(y)")
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .focusTime:
+            FocusTimeView()
+                .transition(.opacity)
+        case .settings:
+            SettingsView()
+                .transition(.opacity)
         }
-        // Block all non-tap interaction with views behind the overlay
-        .allowsHitTesting(true)
-        .accessibilityAddTraits(.isModal)
-        .transition(.opacity)
     }
 }

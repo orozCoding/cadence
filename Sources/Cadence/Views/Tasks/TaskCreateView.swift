@@ -1,9 +1,8 @@
 import SwiftUI
 
-struct NewTaskSheet: View {
+struct TaskCreateView: View {
     let prefillSelection: NavSelection?
-    let onDismiss: () -> Void
-    @Binding var backdropTap: Bool
+    let onBack: () -> Void
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
@@ -11,17 +10,14 @@ struct NewTaskSheet: View {
 
     @State private var title = ""
     @State private var body_ = ""
-
     @State private var enableDay = false
     @State private var enableWeek = false
     @State private var enableMonth = false
     @State private var enableYear = false
-
     @State private var dayDate = Date()
     @State private var weekDate = Date()
     @State private var monthDate = Date()
     @State private var yearValue = Calendar.current.component(.year, from: Date())
-
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
     @State private var userHasInteracted = false
@@ -32,64 +28,70 @@ struct NewTaskSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
+        VStack(spacing: 0) {
+            // Top bar
             HStack {
-                Text("New Task")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                Button(action: tryDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.textTertiary)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(AppTheme.divider))
+                Button(action: tryBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Back")
+                            .font(.system(size: 13))
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
+
+                Spacer()
+
+                Text("New Task")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Spacer()
+
+                Button(action: save) {
+                    Text("Add Task")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(canSave ? AppTheme.accent : AppTheme.textTertiary))
+                }
+                .buttonStyle(.plain)
+                .pointerCursor()
+                .disabled(!canSave)
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.vertical, 14)
 
             Divider().background(AppTheme.divider)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Title
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Title", systemImage: "pencil")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        TextField("What needs to be done?", text: $title)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 15))
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
-                            .onChange(of: title) { userHasInteracted = true }
-                    }
+                    // Title — no label, just a large prominent field
+                    TextField("Task title", text: $title)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .textFieldStyle(.plain)
+                        .onChange(of: title) { userHasInteracted = true }
 
-                    // Description
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Description", systemImage: "text.alignleft")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        ZStack(alignment: .topLeading) {
-                            if body_.isEmpty {
-                                Text("Add more detail...")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(AppTheme.textTertiary)
-                                    .padding(.top, 10)
-                                    .padding(.leading, 11)
-                            }
-                            TextEditor(text: $body_)
-                                .font(.system(size: 13))
-                                .frame(minHeight: 80)
-                                .scrollContentBackground(.hidden)
-                                .padding(6)
-                                .onChange(of: body_) { userHasInteracted = true }
+                    // Content — no label, no background; italic muted placeholder
+                    ZStack(alignment: .topLeading) {
+                        if body_.isEmpty {
+                            Text("Add content...")
+                                .font(.system(size: 13).italic())
+                                .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                                .allowsHitTesting(false)
+                                .padding(.top, 2)
+                                .padding(.leading, 4)
                         }
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+                        TextEditor(text: $body_)
+                            .font(.system(size: 13))
+                            .frame(minHeight: 80)
+                            .scrollContentBackground(.hidden)
+                            .onChange(of: body_) { userHasInteracted = true }
                     }
 
                     // Deadlines
@@ -138,7 +140,6 @@ struct NewTaskSheet: View {
                         .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
                     }
 
-                    // Validation errors
                     if !validationErrors.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(validationErrors, id: \.self) { err in
@@ -158,50 +159,19 @@ struct NewTaskSheet: View {
                 }
                 .padding(24)
             }
-
-            Divider().background(AppTheme.divider)
-
-            // Footer
-            HStack {
-                Spacer()
-                Button("Cancel") { tryDismiss() }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .pointerCursor()
-
-                Button(action: save) {
-                    Text("Add Task")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(canSave ? AppTheme.accent : AppTheme.textTertiary))
-                }
-                .buttonStyle(.plain)
-                .pointerCursor()
-                .disabled(!canSave)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
         }
-        .frame(width: 480)
         .background(AppTheme.contentBackground)
         .onAppear { prefill() }
-        .onChange(of: backdropTap) { _, tapped in
-            if tapped { backdropTap = false; tryDismiss() }
-        }
         .confirmationDialog("Discard this draft?", isPresented: $showDiscardAlert, titleVisibility: .visible) {
-            Button("Discard", role: .destructive) { onDismiss() }
+            Button("Discard", role: .destructive) { onBack() }
             Button("Keep Editing", role: .cancel) {}
         }
     }
 
     // MARK: - Logic
 
-    private func tryDismiss() {
-        if hasDraft { showDiscardAlert = true } else { onDismiss() }
+    private func tryBack() {
+        if hasDraft { showDiscardAlert = true } else { onBack() }
     }
 
     private func prefill() {
@@ -228,12 +198,10 @@ struct NewTaskSheet: View {
 
     private func cascadeAll() {
         let cal = Calendar.current
-
         if enableDay && enableWeek {
             let dayWeek = dayDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             if weekDate < dayWeek { weekDate = dayWeek }
         }
-
         if enableMonth {
             let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             let reference: Date? = enableWeek ? normalizedWeek : (enableDay ? dayDate : nil)
@@ -242,19 +210,13 @@ struct NewTaskSheet: View {
                 if monthDate < refMonth { monthDate = refMonth }
             }
         }
-
         if enableYear {
             let normalizedWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
             let refYear: Int
-            if enableMonth {
-                refYear = cal.component(.year, from: monthDate)
-            } else if enableWeek {
-                refYear = cal.component(.year, from: normalizedWeek)
-            } else if enableDay {
-                refYear = cal.component(.year, from: dayDate)
-            } else {
-                refYear = cal.component(.year, from: Date())
-            }
+            if enableMonth { refYear = cal.component(.year, from: monthDate) }
+            else if enableWeek { refYear = cal.component(.year, from: normalizedWeek) }
+            else if enableDay { refYear = cal.component(.year, from: dayDate) }
+            else { refYear = cal.component(.year, from: Date()) }
             if yearValue < refYear { yearValue = refYear }
         }
     }
@@ -284,42 +246,6 @@ struct NewTaskSheet: View {
             yearDeadline: enableYear ? yearValue : nil
         )
         store.add(task)
-        onDismiss()
-    }
-}
-
-// MARK: - Helper
-
-struct DeadlineToggleRow<Content: View>: View {
-    let icon: String
-    let label: String
-    @Binding var isEnabled: Bool
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Toggle(label, isOn: $isEnabled)
-                .labelsHidden()
-                .accessibilityLabel("\(label) deadline")
-                .toggleStyle(.switch)
-                .controlSize(.small)
-
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textTertiary)
-                .frame(width: 16)
-
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundStyle(isEnabled ? AppTheme.textPrimary : AppTheme.textTertiary)
-
-            Spacer()
-
-            if isEnabled {
-                content()
-                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .trailing)))
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: isEnabled)
+        onBack()
     }
 }
