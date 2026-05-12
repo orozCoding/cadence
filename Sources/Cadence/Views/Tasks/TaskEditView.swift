@@ -50,8 +50,9 @@ struct TaskEditView: View {
         if enableMonth != (task.monthStart != nil) { return true }
         if enableYear != (task.yearDeadline != nil) { return true }
         if enableDay, let orig = task.dayDeadline, !dayDate.isSameDay(as: orig) { return true }
-        if enableWeek, let orig = task.weekStart,
-           weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() != orig { return true }
+        // Use raw date comparison: weekDate is initialized from task.weekStart, so a matching
+        // day means the user never moved the picker (avoids false positives if weekStartsOn changes).
+        if enableWeek, let orig = task.weekStart, !weekDate.isSameDay(as: orig) { return true }
         if enableMonth, let orig = task.monthStart,
            monthDate.startOfMonth().noonLocal() != orig { return true }
         if enableYear, yearValue != task.yearDeadline { return true }
@@ -260,7 +261,8 @@ struct TaskEditView: View {
             weekStartsOn: settings.weekStartsOn
         )
         if newDay   == task.dayDeadline   { errors.removeAll { $0 == "Day deadline cannot be in the past." } }
-        if newWeek  == task.weekStart     { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
+        // weekDate is initialized to task.weekStart; if the user never moved the picker the raw date is unchanged.
+        if task.weekStart != nil && weekDate.isSameDay(as: task.weekStart!) { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
         if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
         if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
         validationErrors = errors

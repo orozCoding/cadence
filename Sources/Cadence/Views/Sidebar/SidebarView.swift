@@ -203,6 +203,36 @@ struct SidebarView: View {
                 selection = .week(date.startOfWeek(weekStartsOn: newValue))
             }
         }
+        // When the filter is active, clear selection if its period just got filtered out
+        .onChange(of: store.tasks) { _, _ in validateSelection() }
+        .onChange(of: hidePastDone)  { _, _ in validateSelection() }
+    }
+
+    private func validateSelection() {
+        guard hidePastDone, let sel = selection else { return }
+        let fid = folderStore.activeFolder.id
+        let today = Date().startOfDay()
+        let allDoneAndPast: Bool
+        switch sel {
+        case .day(let day):
+            guard day < today else { return }
+            allDoneAndPast = store.tasks(forDay: day, folderId: fid).allSatisfy(\.isDone)
+        case .week(let weekStart):
+            let cur = Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
+            guard weekStart < cur else { return }
+            allDoneAndPast = store.tasks(forWeek: weekStart, weekStartsOn: settings.weekStartsOn, folderId: fid).allSatisfy(\.isDone)
+        case .month(let monthStart):
+            guard monthStart < Date().startOfMonth() else { return }
+            allDoneAndPast = store.tasks(forMonth: monthStart, folderId: fid).allSatisfy(\.isDone)
+        case .year(let year):
+            guard year < Calendar.current.component(.year, from: Date()) else { return }
+            allDoneAndPast = store.tasks(forYear: year, folderId: fid).allSatisfy(\.isDone)
+        default:
+            return
+        }
+        if allDoneAndPast {
+            withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
+        }
     }
 }
 

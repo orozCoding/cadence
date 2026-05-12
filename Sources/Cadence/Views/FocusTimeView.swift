@@ -153,6 +153,10 @@ struct FocusDayRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .onChange(of: seconds) { _, _ in
+            // Store updated the value externally (e.g. timer tick) — drop optimistic override
+            displaySeconds = nil
+        }
     }
 
     private func startEditing() {
