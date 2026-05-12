@@ -12,6 +12,7 @@ final class PomodoroTimer: ObservableObject {
     @Published var isFinished = false
 
     private var cancellable: AnyCancellable?
+    private var chimeTask: Task<Void, Never>?
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -26,6 +27,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(seconds: TimeInterval) {
+        chimeTask?.cancel()
         pause()
         total = max(1, seconds.rounded())
         remaining = total
@@ -52,6 +54,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func reset() {
+        chimeTask?.cancel()
         pause()
         remaining = total
         isFinished = false
@@ -68,8 +71,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func playCompletionChime() {
-        Task { @MainActor in
+        chimeTask?.cancel()
+        chimeTask = Task { @MainActor in
             for _ in 0..<3 {
+                guard !Task.isCancelled else { return }
                 NSSound(named: .init("Glass"))?.play()
                 try? await Task.sleep(nanoseconds: 700_000_000)
             }

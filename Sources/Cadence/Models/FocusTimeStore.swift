@@ -103,9 +103,12 @@ final class FocusTimeStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
-        else { return }
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
+        guard let decoded = try? JSONDecoder().decode([String: Int].self, from: data) else {
+            // Preserve corrupt blob so the next save() doesn't silently overwrite it.
+            UserDefaults.standard.set(data, forKey: storageKey + "_backup")
+            return
+        }
         dailySeconds = decoded
     }
 }

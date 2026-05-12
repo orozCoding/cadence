@@ -24,11 +24,12 @@ struct ContentView: View {
     @State private var selection: NavSelection? = .all
     @State private var centerContent: CenterContent = .list
 
-    // Shared discard guard for folder-switch and settings navigation
+    // Discard guard for settings/focusTime navigation and folder switches
     @State private var showNavigationDiscardAlert = false
     @State private var navigationOnProceed: (() -> Void)? = nil
     @State private var navigationOnCancel: (() -> Void)? = nil
-    @State private var isRevertingNavigation = false
+    @State private var isRevertingSelection = false   // guards onChange(of: selection)
+    @State private var isRevertingFolder = false      // guards onChange(of: activeFolder.id)
 
     var body: some View {
         HSplitView {
@@ -73,10 +74,10 @@ struct ContentView: View {
         .frame(minWidth: 800, minHeight: 500)
         // Settings and Focus Time are full context switches — guard against silent draft loss
         .onChange(of: selection) { oldSel, newSel in
-            guard !isRevertingNavigation else { isRevertingNavigation = false; return }
+            guard !isRevertingSelection else { isRevertingSelection = false; return }
             guard (newSel == .settings || newSel == .focusTime), centerContent != .list else { return }
-            isRevertingNavigation = true
-            selection = oldSel ?? .all  // revert selection until user confirms
+            isRevertingSelection = true
+            selection = oldSel ?? .all  // revert until user confirms
             let dest = newSel ?? .all
             navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = dest; centerContent = .list } }
             navigationOnCancel = {}
@@ -84,7 +85,7 @@ struct ContentView: View {
         }
         // Folder switch also requires a discard guard
         .onChange(of: folderStore.activeFolder.id) { oldID, _ in
-            guard !isRevertingNavigation else { isRevertingNavigation = false; return }
+            guard !isRevertingFolder else { isRevertingFolder = false; return }
             guard centerContent != .list else {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
                 return
@@ -92,7 +93,7 @@ struct ContentView: View {
             navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list } }
             navigationOnCancel = {
                 guard let folder = folderStore.folders.first(where: { $0.id == oldID }) else { return }
-                isRevertingNavigation = true
+                isRevertingFolder = true
                 folderStore.setActive(folder)
             }
             showNavigationDiscardAlert = true

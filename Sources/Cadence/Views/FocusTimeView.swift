@@ -94,8 +94,10 @@ struct FocusDayRow: View {
     @State private var isEditing = false
     @State private var editBuffer = ""
     @State private var editError = false
+    @State private var displaySeconds: Int? = nil  // optimistic value after a commit
 
     private var label: String { FocusTimeStore.shared.labelFor(key: dayKey) }
+    private var shownSeconds: Int { displaySeconds ?? seconds }
 
     var body: some View {
         HStack {
@@ -140,13 +142,13 @@ struct FocusDayRow: View {
                 }
             } else {
                 Button(action: startEditing) {
-                    Text(formatFocusTime(seconds))
+                    Text(formatFocusTime(shownSeconds))
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
-                .accessibilityLabel("\(label): \(formatFocusTime(seconds)). Click to edit.")
+                .accessibilityLabel("\(label): \(formatFocusTime(shownSeconds)). Click to edit.")
             }
         }
         .padding(.horizontal, 14)
@@ -154,13 +156,14 @@ struct FocusDayRow: View {
     }
 
     private func startEditing() {
-        editBuffer = "\(seconds)"
+        editBuffer = "\(shownSeconds)"
         editError = false
         isEditing = true
     }
 
     private func commitEdit() {
         guard let newSecs = Int(editBuffer), newSecs >= 0 else { editError = true; return }
+        displaySeconds = newSecs  // show immediately; store update triggers re-render shortly after
         FocusTimeStore.shared.setDay(key: dayKey, seconds: newSecs)
         isEditing = false
     }
