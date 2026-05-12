@@ -26,7 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Pass through to any focused interactive control (text fields, buttons, pickers, scroll views, etc.)
         let fr = NSApp.keyWindow?.firstResponder
         guard !(fr is NSText), !(fr is NSControl), !(fr is NSScrollView) else { return event }
-        Task { @MainActor in PomodoroTimer.shared.toggle() }
+        // Call synchronously — we're already on the main thread inside an NSEvent monitor.
+        // Using Task { @MainActor in ... } would defer to the next actor turn, letting two
+        // rapid presses both enqueue before either fires, causing a double-toggle.
+        MainActor.assumeIsolated { PomodoroTimer.shared.toggle() }
         return nil  // consume the event so it doesn't insert a space
     }
 
