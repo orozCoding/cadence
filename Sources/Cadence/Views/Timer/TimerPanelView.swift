@@ -184,9 +184,9 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        guard let mins = Int(customMinutes), mins > 0, mins <= 999 else { return }
+        guard let mins = Double(customMinutes), mins > 0, mins <= 999 else { return }
         selectedPreset = nil
-        timer.set(minutes: mins)
+        timer.set(seconds: mins * 60)
     }
 }
 

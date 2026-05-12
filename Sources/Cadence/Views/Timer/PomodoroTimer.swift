@@ -20,8 +20,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(minutes: Int) {
+        set(seconds: TimeInterval(minutes * 60))
+    }
+
+    func set(seconds: TimeInterval) {
         pause()
-        total = TimeInterval(minutes * 60)
+        total = max(1, seconds.rounded())
         remaining = total
         isFinished = false
     }
