@@ -391,6 +391,7 @@ struct SidebarRow: View {
                     .lineLimit(1)
                 Spacer()
             }
+            .contentShape(Rectangle())
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
@@ -441,6 +442,7 @@ struct SidebarPeriodRow: View {
                         .background(Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.25)))
                 }
             }
+            .contentShape(Rectangle())
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
