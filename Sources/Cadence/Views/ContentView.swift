@@ -23,9 +23,11 @@ struct ContentView: View {
     @State private var selection: NavSelection? = .all
     @State private var centerContent: CenterContent = .list
 
-    // Folder-switch discard guard
-    @State private var showFolderDiscardAlert = false
-    @State private var folderRevertID: UUID? = nil
+    // Shared discard guard for folder-switch and settings navigation
+    @State private var showNavigationDiscardAlert = false
+    @State private var navigationOnProceed: (() -> Void)? = nil
+    @State private var navigationOnCancel: (() -> Void)? = nil
+    @State private var isRevertingNavigation = false
 
     var body: some View {
         HSplitView {
@@ -68,34 +70,42 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        // Settings navigation is a full context switch — show the list behind it first
-        .onChange(of: selection) { _, newSel in
-            if case .settings = newSel {
-                withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list }
-            }
+        // Settings is a full context switch — guard against silent draft loss
+        .onChange(of: selection) { oldSel, newSel in
+            guard !isRevertingNavigation else { isRevertingNavigation = false; return }
+            guard case .settings = newSel, centerContent != .list else { return }
+            isRevertingNavigation = true
+            selection = oldSel ?? .all  // revert selection until user confirms
+            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .settings; centerContent = .list } }
+            navigationOnCancel = {}
+            showNavigationDiscardAlert = true
         }
-        // Folder switch: guard against silent edit loss
+        // Folder switch also requires a discard guard
         .onChange(of: folderStore.activeFolder.id) { oldID, _ in
-            if centerContent != .list {
-                folderRevertID = oldID
-                showFolderDiscardAlert = true
-            } else {
+            guard !isRevertingNavigation else { isRevertingNavigation = false; return }
+            guard centerContent != .list else {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+                return
             }
+            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list } }
+            navigationOnCancel = {
+                guard let folder = folderStore.folders.first(where: { $0.id == oldID }) else { return }
+                isRevertingNavigation = true
+                folderStore.setActive(folder)
+            }
+            showNavigationDiscardAlert = true
         }
-        .confirmationDialog("Switch Folder?", isPresented: $showFolderDiscardAlert, titleVisibility: .visible) {
-            Button("Discard & Switch", role: .destructive) {
-                withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
+        .confirmationDialog("Unsaved Changes", isPresented: $showNavigationDiscardAlert, titleVisibility: .visible) {
+            Button("Discard & Continue", role: .destructive) {
+                navigationOnProceed?()
+                navigationOnProceed = nil; navigationOnCancel = nil
             }
             Button("Keep Editing", role: .cancel) {
-                if let revertID = folderRevertID,
-                   let folder = folderStore.folders.first(where: { $0.id == revertID }) {
-                    folderStore.setActive(folder)
-                }
-                folderRevertID = nil
+                navigationOnCancel?()
+                navigationOnProceed = nil; navigationOnCancel = nil
             }
         } message: {
-            Text("Unsaved changes will be lost.")
+            Text("Any unsaved changes will be lost.")
         }
     }
 
