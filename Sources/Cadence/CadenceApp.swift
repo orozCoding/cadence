@@ -23,9 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
         guard event.keyCode == 49, !event.isARepeat else { return event }  // 49 = space; ignore key-repeat
-        // Pass through to any focused interactive control (text fields, buttons, pickers, etc.)
+        // Pass through to any focused interactive control (text fields, buttons, pickers, scroll views, etc.)
         let fr = NSApp.keyWindow?.firstResponder
-        guard !(fr is NSText), !(fr is NSControl) else { return event }
+        guard !(fr is NSText), !(fr is NSControl), !(fr is NSScrollView) else { return event }
         Task { @MainActor in PomodoroTimer.shared.toggle() }
         return nil  // consume the event so it doesn't insert a space
     }

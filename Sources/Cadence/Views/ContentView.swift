@@ -86,6 +86,8 @@ struct ContentView: View {
         // Folder switch also requires a discard guard
         .onChange(of: folderStore.activeFolder.id) { oldID, _ in
             guard !isRevertingFolder else { isRevertingFolder = false; return }
+            // Focus Time and Settings are global views — folder changes don't affect them.
+            if selection == .focusTime || selection == .settings { return }
             guard centerContent != .list else {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
                 return
