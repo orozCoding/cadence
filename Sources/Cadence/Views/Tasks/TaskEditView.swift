@@ -249,7 +249,18 @@ struct TaskEditView: View {
 
     private func save() {
         let newDay   = enableDay   ? dayDate.noonLocal() : nil
-        let newWeek  = enableWeek  ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil
+        // If the user never moved the week picker (weekDate matches the original stored date),
+        // preserve the original value exactly to prevent drift if weekStartsOn changed mid-session.
+        let newWeek: Date?
+        if enableWeek {
+            if let orig = task.weekStart, weekDate.isSameDay(as: orig) {
+                newWeek = orig
+            } else {
+                newWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal()
+            }
+        } else {
+            newWeek = nil
+        }
         let newMonth = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
         let newYear  = enableYear  ? yearValue : nil
 
