@@ -70,40 +70,28 @@ struct TaskCreateView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Title
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Title", systemImage: "pencil")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        TextField("What needs to be done?", text: $title)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 15))
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
-                            .onChange(of: title) { userHasInteracted = true }
-                    }
+                    // Title — no label, just a large prominent field
+                    TextField("Task title", text: $title)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .textFieldStyle(.plain)
+                        .onChange(of: title) { userHasInteracted = true }
 
-                    // Description
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Description", systemImage: "text.alignleft")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        ZStack(alignment: .topLeading) {
-                            if body_.isEmpty {
-                                Text("Add more detail...")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(AppTheme.textTertiary)
-                                    .padding(.top, 10)
-                                    .padding(.leading, 11)
-                            }
-                            TextEditor(text: $body_)
-                                .font(.system(size: 13))
-                                .frame(minHeight: 80)
-                                .scrollContentBackground(.hidden)
-                                .padding(6)
-                                .onChange(of: body_) { userHasInteracted = true }
+                    // Content — no label, no background; italic muted placeholder
+                    ZStack(alignment: .topLeading) {
+                        if body_.isEmpty {
+                            Text("Add content...")
+                                .font(.system(size: 13).italic())
+                                .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                                .allowsHitTesting(false)
+                                .padding(.top, 2)
+                                .padding(.leading, 4)
                         }
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+                        TextEditor(text: $body_)
+                            .font(.system(size: 13))
+                            .frame(minHeight: 80)
+                            .scrollContentBackground(.hidden)
+                            .onChange(of: body_) { userHasInteracted = true }
                     }
 
                     // Deadlines

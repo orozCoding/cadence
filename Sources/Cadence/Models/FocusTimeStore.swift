@@ -43,6 +43,27 @@ final class FocusTimeStore: ObservableObject {
         }
     }
 
+    func setToday(seconds: Int) {
+        dailySeconds[dayKey(for: Date())] = max(0, seconds)
+        save()
+    }
+
+    func setWeek(to seconds: Int, weekStartsOn: Weekday) {
+        let key = dayKey(for: Date())
+        let todayVal = dailySeconds[key, default: 0]
+        let otherDays = weekSeconds(weekStartsOn: weekStartsOn) - todayVal
+        dailySeconds[key] = max(0, seconds - otherDays)
+        save()
+    }
+
+    func setMonth(to seconds: Int) {
+        let key = dayKey(for: Date())
+        let todayVal = dailySeconds[key, default: 0]
+        let otherDays = monthSeconds() - todayVal
+        dailySeconds[key] = max(0, seconds - otherDays)
+        save()
+    }
+
     private func dayKey(for date: Date) -> String { formatter.string(from: date) }
     private func parseKey(_ key: String) -> Date? { formatter.date(from: key) }
 

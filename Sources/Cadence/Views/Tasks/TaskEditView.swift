@@ -116,26 +116,20 @@ struct TaskEditView: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .textFieldStyle(.plain)
 
-                    // Description
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Description", systemImage: "text.alignleft")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        ZStack(alignment: .topLeading) {
-                            if editedBody.isEmpty {
-                                Text("Add more detail...")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(AppTheme.textTertiary)
-                                    .padding(.top, 10)
-                                    .padding(.leading, 11)
-                            }
-                            TextEditor(text: $editedBody)
-                                .font(.system(size: 13))
-                                .frame(minHeight: 80)
-                                .scrollContentBackground(.hidden)
-                                .padding(6)
+                    // Content — no label, no background; italic muted placeholder
+                    ZStack(alignment: .topLeading) {
+                        if editedBody.isEmpty {
+                            Text("Add content...")
+                                .font(.system(size: 13).italic())
+                                .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                                .allowsHitTesting(false)
+                                .padding(.top, 2)
+                                .padding(.leading, 4)
                         }
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+                        TextEditor(text: $editedBody)
+                            .font(.system(size: 13))
+                            .frame(minHeight: 80)
+                            .scrollContentBackground(.hidden)
                     }
 
                     Divider().background(AppTheme.divider)
