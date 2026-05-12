@@ -61,7 +61,16 @@ final class PomodoroTimer: ObservableObject {
         if remaining == 0 {
             pause()
             isFinished = true
-            NSSound(named: .init("Glass"))?.play()
+            playCompletionChime()
+        }
+    }
+
+    private func playCompletionChime() {
+        Task { @MainActor in
+            for _ in 0..<3 {
+                NSSound(named: .init("Glass"))?.play()
+                try? await Task.sleep(nanoseconds: 700_000_000)
+            }
         }
     }
 }
