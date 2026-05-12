@@ -42,6 +42,7 @@ final class PomodoroTimer: ObservableObject {
     func pause() {
         isRunning = false
         cancellable = nil
+        FocusTimeStore.shared.flushIfNeeded()
     }
 
     func reset() {

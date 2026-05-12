@@ -15,12 +15,23 @@ final class FocusTimeStore: ObservableObject {
         return f
     }()
 
+    private var ticksSinceSave = 0
+    private let saveInterval = 10
+
     private init() { load() }
 
     func addSecond() {
         let key = dayKey(for: Date())
         dailySeconds[key, default: 0] += 1
-        save()
+        ticksSinceSave += 1
+        if ticksSinceSave >= saveInterval {
+            ticksSinceSave = 0
+            save()
+        }
+    }
+
+    func flushIfNeeded() {
+        if ticksSinceSave > 0 { ticksSinceSave = 0; save() }
     }
 
     func todaySeconds() -> Int {
