@@ -4,6 +4,8 @@ import Combine
 
 @MainActor
 final class PomodoroTimer: ObservableObject {
+    static let shared = PomodoroTimer()
+
     @Published var remaining: TimeInterval = 25 * 60
     @Published var total: TimeInterval = 25 * 60
     @Published var isRunning = false

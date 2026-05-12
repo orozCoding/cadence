@@ -8,7 +8,7 @@ private let presets: [(label: String, minutes: Int)] = [
 ]
 
 struct TimerPanelView: View {
-    @StateObject private var timer = PomodoroTimer()
+    @ObservedObject private var timer = PomodoroTimer.shared
     @ObservedObject private var focusStore = FocusTimeStore.shared
 
     @State private var customMinutes = ""
