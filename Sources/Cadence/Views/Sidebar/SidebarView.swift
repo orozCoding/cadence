@@ -119,12 +119,17 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Settings at bottom
+            SidebarRow(label: "Focus Time", icon: "chart.bar.fill", isSelected: selection == .focusTime) {
+                withAnimation(.easeInOut(duration: 0.18)) { selection = .focusTime }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+
             SidebarRow(label: "Settings", icon: "gear", isSelected: selection == .settings) {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .settings }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.bottom, 6)
         }
         .onChange(of: settings.weekStartsOn) { _, newValue in
             if case .week(let date) = selection {

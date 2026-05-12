@@ -10,15 +10,12 @@ private let presets: [(label: String, minutes: Int)] = [
 struct TimerPanelView: View {
     @StateObject private var timer = PomodoroTimer()
     @ObservedObject private var focusStore = FocusTimeStore.shared
-    @EnvironmentObject var settings: AppSettings
 
     @State private var customMinutes = ""
     @State private var selectedPreset: Int? = 25
-    @State private var showFocusStats = true
 
     var body: some View {
         VStack(spacing: 0) {
-            // Panel title
             HStack {
                 Text("Focus Timer")
                     .font(.system(size: 13, weight: .semibold))
@@ -89,7 +86,14 @@ struct TimerPanelView: View {
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
             }
 
-            Spacer().frame(height: 24)
+            // Today's focus time — inline below controls
+            let todaySecs = focusStore.todaySeconds()
+            Text(todaySecs > 0 ? "Today  \(formatFocusTime(todaySecs))" : "No focus time today")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+                .padding(.top, 10)
+
+            Spacer().frame(height: 20)
 
             Divider().background(AppTheme.divider)
 
@@ -113,7 +117,6 @@ struct TimerPanelView: View {
                 }
                 .padding(.horizontal, 12)
 
-                // Custom input — always visible
                 HStack(spacing: 8) {
                     Text("Custom")
                         .font(.system(size: 12))
@@ -140,44 +143,6 @@ struct TimerPanelView: View {
                 .padding(.horizontal, 16)
             }
             .padding(.vertical, 12)
-
-            Divider().background(AppTheme.divider)
-
-            // Focus time stats — collapsible
-            VStack(alignment: .leading, spacing: 0) {
-                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showFocusStats.toggle() } }) {
-                    HStack(spacing: 5) {
-                        Text("Focus Time")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Image(systemName: showFocusStats ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .pointerCursor()
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, showFocusStats ? 8 : 12)
-
-                if showFocusStats {
-                    VStack(spacing: 4) {
-                        FocusStatRow(label: "Today", seconds: focusStore.todaySeconds()) { newSecs in
-                            focusStore.setToday(seconds: newSecs)
-                        }
-                        FocusStatRow(label: "This week", seconds: focusStore.weekSeconds(weekStartsOn: settings.weekStartsOn)) { newSecs in
-                            focusStore.setWeek(to: newSecs, weekStartsOn: settings.weekStartsOn)
-                        }
-                        FocusStatRow(label: "This month", seconds: focusStore.monthSeconds()) { newSecs in
-                            focusStore.setMonth(to: newSecs)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-            }
 
             Spacer()
         }
@@ -212,84 +177,12 @@ struct PresetButton: View {
     }
 }
 
-struct FocusStatRow: View {
-    let label: String
-    let seconds: Int
-    let onSet: (Int) -> Void
-
-    @State private var isEditing = false
-    @State private var editBuffer = ""
-    @State private var editError = false
-
-    private var formatted: String {
-        if seconds <= 0 { return "—" }
-        let h = seconds / 3600
-        let m = (seconds % 3600) / 60
-        let s = seconds % 60
-        if h > 0 { return "\(h)h \(m)m \(s)s" }
-        if m > 0 { return "\(m)m \(s)s" }
-        return "\(s)s"
-    }
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundStyle(AppTheme.textSecondary)
-            Spacer()
-            if isEditing {
-                HStack(spacing: 4) {
-                    TextField("", text: $editBuffer)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(editError ? AppTheme.destructive : AppTheme.textPrimary)
-                        .frame(width: 56)
-                        .multilineTextAlignment(.trailing)
-                        .onSubmit { commitEdit() }
-                        .onChange(of: editBuffer) { editError = false }
-                    Text("s")
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textTertiary)
-                    Button(action: commitEdit) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .pointerCursor()
-                    Button(action: { isEditing = false; editError = false }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.textTertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .pointerCursor()
-                }
-            } else {
-                Button(action: startEditing) {
-                    Text(formatted)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(seconds > 0 ? AppTheme.textPrimary : AppTheme.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .pointerCursor()
-                .accessibilityLabel("\(label): \(formatted). Click to edit.")
-            }
-        }
-    }
-
-    private func startEditing() {
-        editBuffer = "\(seconds)"
-        editError = false
-        isEditing = true
-    }
-
-    private func commitEdit() {
-        guard let newSecs = Int(editBuffer), newSecs >= 0 else {
-            editError = true
-            return
-        }
-        onSet(newSecs)
-        isEditing = false
-    }
+func formatFocusTime(_ seconds: Int) -> String {
+    if seconds <= 0 { return "—" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    let s = seconds % 60
+    if h > 0 { return "\(h)h \(m)m \(s)s" }
+    if m > 0 { return "\(m)m \(s)s" }
+    return "\(s)s"
 }

@@ -4,19 +4,10 @@ import Foundation
 final class FocusTimeStore: ObservableObject {
     static let shared = FocusTimeStore()
 
-    // Timer accumulates here (daily buckets, keyed "yyyy-MM-dd")
+    // The only stored data: daily focus seconds keyed by "yyyy-MM-dd".
     @Published private(set) var dailySeconds: [String: Int] = [:]
 
-    // Independent manual adjustments per period (do not cascade into each other)
-    @Published private var manualToday: [String: Int] = [:]   // dayKey → delta on top of raw
-    @Published private var manualWeek: [String: Int] = [:]    // weekStartKey → delta (excludes today adj)
-    @Published private var manualMonth: [String: Int] = [:]   // monthStartKey → delta (excludes today adj)
-
-    private let storageKey       = "focusDailySeconds"
-    private let manualTodayKey   = "focusManualToday"
-    private let manualWeekKey    = "focusManualWeek"
-    private let manualMonthKey   = "focusManualMonth"
-
+    private let storageKey = "focusDailySeconds"
     private let df: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -31,8 +22,7 @@ final class FocusTimeStore: ObservableObject {
     // MARK: - Timer
 
     func addSecond() {
-        let key = dayKey(for: Date())
-        dailySeconds[key, default: 0] += 1
+        dailySeconds[dayKey(for: Date()), default: 0] += 1
         ticksSinceSave += 1
         if ticksSinceSave >= saveInterval { ticksSinceSave = 0; save() }
     }
@@ -41,94 +31,81 @@ final class FocusTimeStore: ObservableObject {
         if ticksSinceSave > 0 { ticksSinceSave = 0; save() }
     }
 
-    // MARK: - Read
-    // Editing "today" propagates to week+month (today is part of both).
-    // Editing "week" or "month" affects only that aggregate.
+    // MARK: - Read (all computed from daily data)
 
     func todaySeconds() -> Int {
-        let key = dayKey(for: Date())
-        return max(0, dailySeconds[key, default: 0] + (manualToday[key] ?? 0))
+        dailySeconds[dayKey(for: Date()), default: 0]
     }
 
     func weekSeconds(weekStartsOn: Weekday) -> Int {
-        max(0, rawWeekSum(weekStartsOn: weekStartsOn)
-            + (manualToday[dayKey(for: Date())] ?? 0)
-            + (manualWeek[weekKey(for: Date(), weekStartsOn: weekStartsOn)] ?? 0))
+        let weekStart = Date().startOfWeek(weekStartsOn: weekStartsOn)
+        return dailySeconds.reduce(0) { acc, pair in
+            guard let date = parseKey(pair.key), date >= weekStart else { return acc }
+            return acc + pair.value
+        }
     }
 
     func monthSeconds() -> Int {
-        max(0, rawMonthSum()
-            + (manualToday[dayKey(for: Date())] ?? 0)
-            + (manualMonth[monthKey(for: Date())] ?? 0))
-    }
-
-    // MARK: - Write (each affects only its own period)
-
-    func setToday(seconds: Int) {
-        let key = dayKey(for: Date())
-        manualToday[key] = seconds - dailySeconds[key, default: 0]
-        save()
-    }
-
-    func setWeek(to seconds: Int, weekStartsOn: Weekday) {
-        let key = weekKey(for: Date(), weekStartsOn: weekStartsOn)
-        manualWeek[key] = (manualWeek[key] ?? 0) + (seconds - weekSeconds(weekStartsOn: weekStartsOn))
-        save()
-    }
-
-    func setMonth(to seconds: Int) {
-        let key = monthKey(for: Date())
-        manualMonth[key] = (manualMonth[key] ?? 0) + (seconds - monthSeconds())
-        save()
-    }
-
-    // MARK: - Private helpers
-
-    private func rawWeekSum(weekStartsOn: Weekday) -> Int {
-        let weekStart = Date().startOfWeek(weekStartsOn: weekStartsOn)
-        return dailySeconds.reduce(0) { acc, pair in
-            guard let date = parseKey(pair.key) else { return acc }
-            return date >= weekStart ? acc + pair.value : acc
-        }
-    }
-
-    private func rawMonthSum() -> Int {
         let monthStart = Date().startOfMonth()
         return dailySeconds.reduce(0) { acc, pair in
-            guard let date = parseKey(pair.key) else { return acc }
-            return date >= monthStart ? acc + pair.value : acc
+            guard let date = parseKey(pair.key), date >= monthStart else { return acc }
+            return acc + pair.value
         }
     }
 
-    private func dayKey(for date: Date) -> String { df.string(from: date) }
-    private func parseKey(_ key: String) -> Date? { df.date(from: key) }
-    private func weekKey(for date: Date, weekStartsOn: Weekday) -> String {
-        df.string(from: date.startOfWeek(weekStartsOn: weekStartsOn))
+    func yearSeconds() -> Int {
+        let year = Calendar.current.component(.year, from: Date())
+        return dailySeconds.reduce(0) { acc, pair in
+            guard let date = parseKey(pair.key),
+                  Calendar.current.component(.year, from: date) == year else { return acc }
+            return acc + pair.value
+        }
     }
-    private func monthKey(for date: Date) -> String { df.string(from: date.startOfMonth()) }
+
+    /// All days with recorded focus time, sorted most recent first.
+    func sortedDays() -> [(key: String, seconds: Int)] {
+        dailySeconds
+            .filter { $0.value > 0 }
+            .sorted { $0.key > $1.key }
+            .map { (key: $0.key, seconds: $0.value) }
+    }
+
+    // MARK: - Write
+
+    /// Directly set the focus seconds for a day by its "yyyy-MM-dd" key.
+    func setDay(key: String, seconds: Int) {
+        if seconds <= 0 {
+            dailySeconds.removeValue(forKey: key)
+        } else {
+            dailySeconds[key] = seconds
+        }
+        save()
+    }
+
+    // MARK: - Helpers
+
+    func dayKey(for date: Date) -> String { df.string(from: date) }
+    func parseKey(_ key: String) -> Date? { df.date(from: key) }
+
+    func labelFor(key: String) -> String {
+        guard let date = parseKey(key) else { return key }
+        if date.isSameDay(as: Date()) { return "Today" }
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()),
+           date.isSameDay(as: yesterday) { return "Yesterday" }
+        return date.dayLabel()
+    }
 
     // MARK: - Persistence
 
     private func save() {
-        let ud = UserDefaults.standard
-        func enc<T: Encodable>(_ v: T, key: String) {
-            if let d = try? JSONEncoder().encode(v) { ud.set(d, forKey: key) }
-        }
-        enc(dailySeconds, key: storageKey)
-        enc(manualToday,  key: manualTodayKey)
-        enc(manualWeek,   key: manualWeekKey)
-        enc(manualMonth,  key: manualMonthKey)
+        guard let data = try? JSONEncoder().encode(dailySeconds) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
     }
 
     private func load() {
-        let ud = UserDefaults.standard
-        func dec<T: Decodable>(_ key: String) -> T? {
-            guard let d = ud.data(forKey: key) else { return nil }
-            return try? JSONDecoder().decode(T.self, from: d)
-        }
-        dailySeconds = dec(storageKey)     ?? [:]
-        manualToday  = dec(manualTodayKey) ?? [:]
-        manualWeek   = dec(manualWeekKey)  ?? [:]
-        manualMonth  = dec(manualMonthKey) ?? [:]
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return }
+        dailySeconds = decoded
     }
 }

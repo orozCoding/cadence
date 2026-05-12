@@ -324,7 +324,7 @@ struct DeadlineToggleRow<Content: View>: View {
 
             if isEnabled {
                 content()
-                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .trailing)))
+                    .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.15), value: isEnabled)

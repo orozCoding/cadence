@@ -6,6 +6,7 @@ enum NavSelection: Hashable {
     case week(Date)
     case month(Date)
     case year(Int)
+    case focusTime
     case settings
 }
 
@@ -70,13 +71,14 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        // Settings is a full context switch — guard against silent draft loss
+        // Settings and Focus Time are full context switches — guard against silent draft loss
         .onChange(of: selection) { oldSel, newSel in
             guard !isRevertingNavigation else { isRevertingNavigation = false; return }
-            guard case .settings = newSel, centerContent != .list else { return }
+            guard (newSel == .settings || newSel == .focusTime), centerContent != .list else { return }
             isRevertingNavigation = true
             selection = oldSel ?? .all  // revert selection until user confirms
-            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .settings; centerContent = .list } }
+            let dest = newSel ?? .all
+            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = dest; centerContent = .list } }
             navigationOnCancel = {}
             showNavigationDiscardAlert = true
         }
@@ -150,6 +152,9 @@ struct ContentView: View {
             )
             .id("year-\(y)")
             .transition(.opacity.combined(with: .move(edge: .leading)))
+        case .focusTime:
+            FocusTimeView()
+                .transition(.opacity)
         case .settings:
             SettingsView()
                 .transition(.opacity)
