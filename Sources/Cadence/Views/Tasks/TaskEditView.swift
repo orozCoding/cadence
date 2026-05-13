@@ -22,6 +22,9 @@ struct TaskEditView: View {
     // Debounced auto-save — cancelled and restarted on every change
     @State private var autoSaveTask: Task<Void, Never>? = nil
 
+    // Guards against a second store.update() when onDisappear fires after goBack() already saved.
+    @State private var didSaveOnBack = false
+
     // Undo/redo history for title + body — immediate push on first burst keystroke,
     // then debounced 1s; capped at 50 snapshots
     @State private var history: [(title: String, body: String)] = []
@@ -241,9 +244,10 @@ struct TaskEditView: View {
         }
         .onDisappear {
             // Sidebar navigation bypasses the Back button — save immediately on disappear.
+            // Skip if goBack() already saved to avoid a redundant store.update().
             autoSaveTask?.cancel()
             historySnapshotTask?.cancel()
-            saveNow()
+            if !didSaveOnBack { saveNow() }
         }
     }
 
@@ -291,6 +295,7 @@ struct TaskEditView: View {
     private func goBack() {
         autoSaveTask?.cancel()
         historySnapshotTask?.cancel()
+        didSaveOnBack = true
         saveNow()
         onBack()
     }
@@ -402,8 +407,11 @@ struct TaskEditView: View {
             history = Array(history[0...historyIndex])
         }
         history.append((title: editedTitle, body: editedBody))
-        if history.count > 50 { history.removeFirst() }
         historyIndex = history.count - 1
+        if history.count > 50 {
+            history.removeFirst()
+            historyIndex -= 1
+        }
     }
 
     private func performUndo() {

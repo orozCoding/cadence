@@ -214,7 +214,8 @@ struct TaskCreateView: View {
         onBack()
     }
 
-    // Save the draft if title is non-empty and deadline validation passes.
+    // Save the draft if title is non-empty. If deadline validation fails, the task
+    // is saved without deadlines so text edits are never silently discarded.
     // The taskSaved flag prevents a second store.add() when onDisappear fires
     // after goBack() or save() have already persisted the task.
     private func saveIfPossible() {
@@ -222,20 +223,19 @@ struct TaskCreateView: View {
         let errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
-        guard errors.isEmpty else { return }
         taskSaved = true
         let task = CadenceTask(
             folderId: folderStore.activeFolder.id,
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
-            dayDeadline: enableDay ? dayDate.noonLocal() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
-            yearDeadline: enableYear ? yearValue : nil
+            dayDeadline: (errors.isEmpty && enableDay) ? dayDate.noonLocal() : nil,
+            weekStart: (errors.isEmpty && enableWeek) ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: (errors.isEmpty && enableMonth) ? monthDate.startOfMonth().noonLocal() : nil,
+            yearDeadline: (errors.isEmpty && enableYear) ? yearValue : nil
         )
         store.add(task)
     }
@@ -296,8 +296,11 @@ struct TaskCreateView: View {
             history = Array(history[0...historyIndex])
         }
         history.append((title: title, body: body_))
-        if history.count > 50 { history.removeFirst() }
         historyIndex = history.count - 1
+        if history.count > 50 {
+            history.removeFirst()
+            historyIndex -= 1
+        }
     }
 
     private func performUndo() {
