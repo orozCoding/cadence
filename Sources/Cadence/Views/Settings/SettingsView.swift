@@ -15,6 +15,7 @@ struct SettingsView: View {
             .padding(.vertical, 14)
             Divider().background(AppTheme.divider)
 
+            ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Calendar section
                 VStack(alignment: .leading, spacing: 12) {
@@ -100,6 +101,9 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                             .pointerCursor()
+                            .accessibilityLabel(style.label)
+                            .accessibilityHint(style.description)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
                     .padding(4)
@@ -135,6 +139,7 @@ struct SettingsView: View {
             }
             .padding(24)
             .frame(maxWidth: 480, alignment: .leading)
+            } // ScrollView
 
             Spacer()
         }

@@ -53,10 +53,13 @@ struct TimerButtonBG: View {
                 .frame(width: size, height: size)
         case .orbit:
             ZStack {
+                // Accent button: solid fill keeps white icon readable (WCAG AA).
+                // Reset button: transparent with ring, matching the orbit aesthetic.
                 Circle()
-                    .fill(isAccent ? AppTheme.accent.opacity(0.12) : Color.clear)
+                    .fill(isAccent ? AppTheme.accent : Color.clear)
                 Circle()
-                    .stroke(isAccent ? AppTheme.accent : AppTheme.textTertiary, lineWidth: 1.5)
+                    .stroke(isAccent ? Color.white.opacity(0.30) : AppTheme.textTertiary,
+                            lineWidth: 1.5)
             }
             .frame(width: size, height: size)
         case .dots:
@@ -75,6 +78,12 @@ struct TimerButtonBG: View {
 }
 
 // MARK: - Style 1: Glassy liquid fill
+
+// Stores wave phase so it survives style-switch round-trips.
+private final class GlassWaveState {
+    static let shared = GlassWaveState()
+    var phase: CGFloat = 0
+}
 
 // Animatable liquid wave shape
 struct LiquidFill: Shape {
@@ -114,9 +123,9 @@ struct GlassTimerCircle: View {
     let timeString: String
     let isRunning: Bool
 
-    @State private var frozenPhase: CGFloat = 0
+    @State private var frozenPhase: CGFloat = GlassWaveState.shared.phase
     @State private var waveStartDate: Date = .now
-    @State private var phaseAtStart: CGFloat = 0
+    @State private var phaseAtStart: CGFloat = GlassWaveState.shared.phase
 
     var body: some View {
         waveContent
@@ -125,6 +134,11 @@ struct GlassTimerCircle: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
+            .onDisappear {
+                // Persist current phase so re-appearing after a style switch continues smoothly.
+                let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
+                GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+            }
             .onChange(of: isRunning) { _, running in
                 if running {
                     waveStartDate = .now
@@ -132,6 +146,7 @@ struct GlassTimerCircle: View {
                 } else {
                     let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
                     frozenPhase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+                    GlassWaveState.shared.phase = frozenPhase
                 }
             }
     }
