@@ -289,6 +289,8 @@ struct TaskEditView: View {
         if task.weekStart != nil && weekDate.isSameDay(as: task.weekStart!) { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
         if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
         if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
+        let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+        errors += normalizedUrls.filter { URL(string: $0) == nil }.map { "Invalid URL: \($0)" }
         validationErrors = errors
         guard errors.isEmpty else { return }
 
@@ -299,7 +301,7 @@ struct TaskEditView: View {
         updated.weekStart    = newWeek
         updated.monthStart   = newMonth
         updated.yearDeadline = newYear
-        updated.urls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty && URL(string: $0) != nil }
+        updated.urls = normalizedUrls
         store.update(updated)
         onBack()
     }

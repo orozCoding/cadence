@@ -242,13 +242,15 @@ struct TaskCreateView: View {
     private func cascadeFromMonth() { cascadeAll() }
 
     private func save() {
-        let errors = CadenceTask.validate(
+        var errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth() : nil,
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
+        let normalizedUrls = urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+        errors += normalizedUrls.filter { URL(string: $0) == nil }.map { "Invalid URL: \($0)" }
         validationErrors = errors
         guard errors.isEmpty else { return }
 
@@ -260,7 +262,7 @@ struct TaskCreateView: View {
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             yearDeadline: enableYear ? yearValue : nil,
-            urls: urls.map { normalizeURL($0) }.filter { !$0.isEmpty && URL(string: $0) != nil }
+            urls: normalizedUrls
         )
         store.add(task)
         onBack()
