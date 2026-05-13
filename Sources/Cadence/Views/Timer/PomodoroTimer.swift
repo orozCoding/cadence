@@ -15,6 +15,7 @@ final class PomodoroTimer: ObservableObject {
     private var cancellable: AnyCancellable?
     private var resumeDate: Date = .now
     private var remainingAtResume: TimeInterval = 25 * 60
+    private var lastTickDate: Date = .now
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -59,6 +60,7 @@ final class PomodoroTimer: ObservableObject {
         }
         resumeDate = .now
         remainingAtResume = remaining
+        lastTickDate = .now
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -68,6 +70,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func pause() {
+        if isRunning {
+            let elapsed = Date().timeIntervalSince(resumeDate)
+            remaining = max(0, remainingAtResume - elapsed)
+        }
         isRunning = false
         cancellable = nil
         FocusTimeStore.shared.flushIfNeeded()
@@ -81,9 +87,14 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func tick() {
-        FocusTimeStore.shared.addSecond()
-        let elapsed = Date().timeIntervalSince(resumeDate)
-        remaining = max(0, (remainingAtResume - elapsed).rounded())
+        let now = Date()
+        let tickElapsed = now.timeIntervalSince(lastTickDate)
+        lastTickDate = now
+        // Cap focus-time credit at 2s per tick so Mac sleep gaps don't inflate focus stats.
+        let focusSeconds = min(Int(tickElapsed.rounded()), 2)
+        for _ in 0..<focusSeconds { FocusTimeStore.shared.addSecond() }
+        let elapsed = now.timeIntervalSince(resumeDate)
+        remaining = max(0, remainingAtResume - elapsed)
         if remaining == 0 {
             pause()
             isFinished = true

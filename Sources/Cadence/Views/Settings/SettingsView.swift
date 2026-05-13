@@ -133,7 +133,7 @@ struct SettingsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textPrimary)
 
-                        Picker("", selection: $settings.timerFinishSound) {
+                        Picker("Finish sound", selection: $settings.timerFinishSound) {
                             ForEach(TimerFinishSound.allCases) { sound in
                                 Text(sound.label).tag(sound)
                             }
