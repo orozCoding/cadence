@@ -193,13 +193,15 @@ struct ChecklistBodyEditor: View {
             guard idx < lines.count else { return }
             // [] at the START of the line triggers a checkbox conversion,
             // so prose like "array[idx]" is never accidentally converted.
+            // Preserve the line's UUID so ForEach identity is stable and the
+            // focusedIndex binding re-focuses the new checkbox TextField without
+            // a nil-hop, avoiding a race with the empty-row cleanup onChange.
             if newVal.hasPrefix("[]") {
                 let cleaned = String(newVal.dropFirst(2))
-                lines[idx] = .checkbox(id: UUID(), checked: false, text: cleaned)
+                guard case .plain(let id, _) = lines[idx] else { return }
+                lines[idx] = .checkbox(id: id, checked: false, text: cleaned)
                 commit()
-                // Clear then re-apply focus so SwiftUI recognises the ID change
-                focusedIndex = nil
-                Task { @MainActor in focusedIndex = idx }
+                // focusedIndex is already idx — the re-rendered TextField claims focus.
                 return
             }
             guard case .plain(let id, _) = lines[idx] else { return }
