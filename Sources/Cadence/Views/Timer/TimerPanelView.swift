@@ -21,8 +21,8 @@ private struct LiquidFill: Shape {
     func path(in rect: CGRect) -> Path {
         let clamped = min(max(level, 0), 1)
         let waveY   = rect.height * (1 - clamped)
-        // Suppress the wave at near-empty / near-full so edges look clean
-        let amplitude: CGFloat = (clamped > 0.02 && clamped < 0.98) ? 5.0 : 0.5
+        // Zero amplitude at near-empty / near-full avoids sliver/gap artifacts.
+        let amplitude: CGFloat = (clamped > 0.02 && clamped < 0.98) ? 5.0 : 0.0
 
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
@@ -50,15 +50,24 @@ private struct GlassTimerCircle: View {
     let timeString: String
     let isRunning: Bool
 
-    // Retains the last rendered wave phase so the surface doesn't snap to 0 on pause.
+    // Wave phase continuity: preserve phase across pause/resume cycles.
     @State private var frozenPhase: CGFloat = 0
+    @State private var waveStartDate: Date = .now
+    @State private var phaseAtStart: CGFloat = 0
 
     var body: some View {
         waveContent
             .frame(width: 130, height: 130)
             .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
             .accessibilityLabel("Timer")
-            .accessibilityValue(timeString)
+            .accessibilityValue(isFinished ? "Done" : timeString)
+            .onChange(of: isRunning) { running in
+                if running {
+                    // Anchor the new playback start so phase continues from where it froze.
+                    waveStartDate = .now
+                    phaseAtStart = frozenPhase
+                }
+            }
     }
 
     // Only drive the TimelineView (and its 30 fps redraws) while the timer is active.
@@ -66,8 +75,8 @@ private struct GlassTimerCircle: View {
     private var waveContent: some View {
         if isRunning {
             TimelineView(.periodic(from: .now, by: 1 / 30)) { context in
-                let elapsed = context.date.timeIntervalSinceReferenceDate
-                let phase   = CGFloat(elapsed.truncatingRemainder(dividingBy: 4.0)) / 4.0 * (.pi * 2)
+                let elapsed = CGFloat(context.date.timeIntervalSince(waveStartDate))
+                let phase   = phaseAtStart + elapsed / 4.0 * (.pi * 2)
                 glassContent(phase: phase)
                     .onChange(of: phase) { newPhase in
                         frozenPhase = newPhase
