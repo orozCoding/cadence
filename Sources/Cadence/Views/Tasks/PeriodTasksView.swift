@@ -28,6 +28,7 @@ struct PeriodTasksView: View {
 
     private var todos: [CadenceTask] { allTasks.filter { !$0.isDone } }
     private var dones: [CadenceTask] { allTasks.filter { $0.isDone } }
+    private var periodKey: String { period.storageKey }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,6 +98,7 @@ struct PeriodTasksView: View {
                 delegate: TaskReorderDelegate(
                     targetTask: task,
                     sectionTasks: tasks,
+                    periodKey: periodKey,
                     draggedId: $draggedId,
                     dropTargetId: $dropTargetId,
                     dropAbove: $dropAbove,
@@ -124,6 +126,7 @@ struct PeriodTasksView: View {
 private struct TaskReorderDelegate: DropDelegate {
     let targetTask: CadenceTask
     let sectionTasks: [CadenceTask]
+    let periodKey: String
     @Binding var draggedId: UUID?
     @Binding var dropTargetId: UUID?
     @Binding var dropAbove: Bool
@@ -163,14 +166,14 @@ private struct TaskReorderDelegate: DropDelegate {
             ids.removeAll { $0 == fromId }
             let toIdx = ids.firstIndex(of: targetTask.id) ?? ids.count
             ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
-            store.reorder(taskIds: ids)
+            store.reorder(taskIds: ids, periodKey: periodKey)
         } else {
             // Cross-section: set done status, then insert near target
             store.setDone(fromId, isDone: targetTask.isDone)
             var ids = sectionTasks.map(\.id)
             let toIdx = ids.firstIndex(of: targetTask.id) ?? ids.count
             ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
-            store.reorder(taskIds: ids)
+            store.reorder(taskIds: ids, periodKey: periodKey)
         }
         return true
     }

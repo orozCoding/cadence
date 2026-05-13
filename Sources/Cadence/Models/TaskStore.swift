@@ -48,38 +48,57 @@ final class TaskStore: ObservableObject {
         save()
     }
 
-    // Reassign sortOrder for tasks in the given order (0, 1, 2, …).
-    // Only the listed IDs are affected; tasks outside this list are untouched.
-    func reorder(taskIds: [UUID]) {
+    // Record the display order for a specific period view.
+    // Uses per-period keys so reordering in one view doesn't affect others.
+    func reorder(taskIds: [UUID], periodKey: String) {
         for (index, id) in taskIds.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == id }) {
-                tasks[idx].sortOrder = index
+                tasks[idx].periodSortKeys[periodKey] = index
             }
         }
         save()
     }
 
     // Update the deadline for the given period level.
-    // Finer-grained levels (which may no longer fall inside the new period) are cleared
-    // to prevent persisting inconsistent deadline combinations.
-    func moveToPeriod(taskId: UUID, period: TaskPeriod) {
+    // - Finer-grained levels are cleared (they may no longer fall inside the new period).
+    // - Coarser-grained levels that were already set are updated to contain the new period,
+    //   keeping deadline combinations internally consistent.
+    // - All dates are stored at noon-local to match the invariant used by NewTaskSheet.
+    func moveToPeriod(taskId: UUID, period: TaskPeriod, weekStartsOn: Weekday = .monday) {
         guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
         switch period {
         case .day(let d):
             tasks[idx].dayDeadline = d.noonLocal()
-            // Day is the finest grain — coarser levels (week/month/year) may still be valid
+            if tasks[idx].weekStart != nil {
+                tasks[idx].weekStart = d.startOfWeek(weekStartsOn: weekStartsOn).noonLocal()
+            }
+            if tasks[idx].monthStart != nil {
+                tasks[idx].monthStart = d.startOfMonth().noonLocal()
+            }
+            if tasks[idx].yearDeadline != nil {
+                tasks[idx].yearDeadline = d.year()
+            }
         case .week(let s):
-            tasks[idx].weekStart = s
-            tasks[idx].dayDeadline = nil   // day may fall outside the new week
+            tasks[idx].weekStart = s.noonLocal()
+            tasks[idx].dayDeadline = nil
+            if tasks[idx].monthStart != nil {
+                tasks[idx].monthStart = s.startOfMonth().noonLocal()
+            }
+            if tasks[idx].yearDeadline != nil {
+                tasks[idx].yearDeadline = s.year()
+            }
         case .month(let s):
-            tasks[idx].monthStart = s
-            tasks[idx].weekStart = nil     // week may fall outside the new month
-            tasks[idx].dayDeadline = nil   // day may fall outside the new month
+            tasks[idx].monthStart = s.noonLocal()
+            tasks[idx].weekStart = nil
+            tasks[idx].dayDeadline = nil
+            if tasks[idx].yearDeadline != nil {
+                tasks[idx].yearDeadline = s.year()
+            }
         case .year(let y):
             tasks[idx].yearDeadline = y
-            tasks[idx].monthStart = nil    // month may fall outside the new year
-            tasks[idx].weekStart = nil     // week may fall outside the new year
-            tasks[idx].dayDeadline = nil   // day may fall outside the new year
+            tasks[idx].monthStart = nil
+            tasks[idx].weekStart = nil
+            tasks[idx].dayDeadline = nil
         }
         save()
     }
@@ -95,25 +114,26 @@ final class TaskStore: ObservableObject {
         tasks.filter { task in
             task.folderId == folderId &&
             task.dayDeadline.map { $0.isSameDay(as: date) } == true
-        }.sortedByOrder()
+        }.sortedByOrder(periodKey: TaskPeriod.day(date).storageKey)
     }
 
     func tasks(forWeek weekStart: Date, weekStartsOn: Weekday, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
             task.folderId == folderId &&
             task.weekStart.map { $0.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn) } == true
-        }.sortedByOrder()
+        }.sortedByOrder(periodKey: TaskPeriod.week(weekStart).storageKey)
     }
 
     func tasks(forMonth monthStart: Date, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
             task.folderId == folderId &&
             task.monthStart.map { $0.isSameMonth(as: monthStart) } == true
-        }.sortedByOrder()
+        }.sortedByOrder(periodKey: TaskPeriod.month(monthStart).storageKey)
     }
 
     func tasks(forYear year: Int, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }.sortedByOrder()
+        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }
+             .sortedByOrder(periodKey: TaskPeriod.year(year).storageKey)
     }
 
     // MARK: - Distinct period keys (folder-scoped)
@@ -172,9 +192,13 @@ final class TaskStore: ObservableObject {
 }
 
 private extension Array where Element == CadenceTask {
-    func sortedByOrder() -> [CadenceTask] {
+    // Sort by the per-period key if one exists, falling back to global sortOrder,
+    // then createdAt as a stable tiebreaker.
+    func sortedByOrder(periodKey: String) -> [CadenceTask] {
         sorted {
-            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+            let ao = $0.periodSortKeys[periodKey] ?? $0.sortOrder
+            let bo = $1.periodSortKeys[periodKey] ?? $1.sortOrder
+            if ao != bo { return ao < bo }
             return $0.createdAt < $1.createdAt
         }
     }

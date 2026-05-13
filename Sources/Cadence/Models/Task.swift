@@ -7,7 +7,8 @@ struct CadenceTask: Identifiable, Codable, Equatable {
     var body: String
     var isDone: Bool
     var createdAt: Date
-    var sortOrder: Int  // user-defined order within a period section
+    var sortOrder: Int              // global fallback order (used when no period key exists)
+    var periodSortKeys: [String: Int]  // per-period ordering keyed by TaskPeriod.storageKey
 
     // Independent deadline levels
     var dayDeadline: Date?
@@ -23,6 +24,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         isDone: Bool = false,
         createdAt: Date = Date(),
         sortOrder: Int = 0,
+        periodSortKeys: [String: Int] = [:],
         dayDeadline: Date? = nil,
         weekStart: Date? = nil,
         monthStart: Date? = nil,
@@ -35,6 +37,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         self.isDone = isDone
         self.createdAt = createdAt
         self.sortOrder = sortOrder
+        self.periodSortKeys = periodSortKeys
         self.dayDeadline = dayDeadline
         self.weekStart = weekStart
         self.monthStart = monthStart
@@ -43,23 +46,24 @@ struct CadenceTask: Identifiable, Codable, Equatable {
 
     // Custom decoder: existing tasks without folderId default to General
     private enum CodingKeys: String, CodingKey {
-        case id, folderId, title, body, isDone, createdAt, sortOrder
+        case id, folderId, title, body, isDone, createdAt, sortOrder, periodSortKeys
         case dayDeadline, weekStart, monthStart, yearDeadline
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id          = try c.decode(UUID.self, forKey: .id)
-        folderId    = try c.decodeIfPresent(UUID.self, forKey: .folderId) ?? .generalFolderID
-        title       = try c.decode(String.self, forKey: .title)
-        body        = try c.decode(String.self, forKey: .body)
-        isDone      = try c.decode(Bool.self, forKey: .isDone)
-        createdAt   = try c.decode(Date.self, forKey: .createdAt)
-        sortOrder   = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
-        dayDeadline = try c.decodeIfPresent(Date.self, forKey: .dayDeadline)
-        weekStart   = try c.decodeIfPresent(Date.self, forKey: .weekStart)
-        monthStart  = try c.decodeIfPresent(Date.self, forKey: .monthStart)
-        yearDeadline = try c.decodeIfPresent(Int.self, forKey: .yearDeadline)
+        id              = try c.decode(UUID.self, forKey: .id)
+        folderId        = try c.decodeIfPresent(UUID.self, forKey: .folderId) ?? .generalFolderID
+        title           = try c.decode(String.self, forKey: .title)
+        body            = try c.decode(String.self, forKey: .body)
+        isDone          = try c.decode(Bool.self, forKey: .isDone)
+        createdAt       = try c.decode(Date.self, forKey: .createdAt)
+        sortOrder       = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        periodSortKeys  = try c.decodeIfPresent([String: Int].self, forKey: .periodSortKeys) ?? [:]
+        dayDeadline     = try c.decodeIfPresent(Date.self, forKey: .dayDeadline)
+        weekStart       = try c.decodeIfPresent(Date.self, forKey: .weekStart)
+        monthStart      = try c.decodeIfPresent(Date.self, forKey: .monthStart)
+        yearDeadline    = try c.decodeIfPresent(Int.self, forKey: .yearDeadline)
     }
 
     // MARK: - Validation

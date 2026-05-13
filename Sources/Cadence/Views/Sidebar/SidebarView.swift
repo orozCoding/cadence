@@ -143,9 +143,12 @@ struct SidebarView: View {
     }
 
     private func loadAndMove(_ providers: [NSItemProvider], to period: TaskPeriod) {
+        let weekStartsOn = settings.weekStartsOn
         providers.first?.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
             guard let str = item as? String, let id = UUID(uuidString: str) else { return }
-            DispatchQueue.main.async { store.moveToPeriod(taskId: id, period: period) }
+            DispatchQueue.main.async {
+                store.moveToPeriod(taskId: id, period: period, weekStartsOn: weekStartsOn)
+            }
         }
     }
 }
