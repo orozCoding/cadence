@@ -138,15 +138,16 @@ func normalizeURL(_ raw: String) -> String {
             return "http://" + s
         }
     }
-    // Distinguish host:port (with optional path/query/fragment) from a non-authority
-    // URI scheme (mailto:, tel:, facetime:, spotify:, maps:, etc.).
-    // Port: leading digits after colon, terminated by / ? # or end-of-string.
-    if let colon = s.firstIndex(of: ":") {
-        let afterColon = s[s.index(after: colon)...]
+    // Distinguish host:port from a non-authority URI scheme (mailto:, tel:, spotify:, etc.).
+    // Only inspect the authority portion — before the first / ? # — so that a colon inside
+    // a query string (e.g. example.com?next=foo:bar) is not mistaken for a scheme separator.
+    let authEnd = s.firstIndex(where: { $0 == "/" || $0 == "?" || $0 == "#" }) ?? s.endIndex
+    let authority = s[s.startIndex..<authEnd]
+    if let colon = authority.firstIndex(of: ":") {
+        let afterColon = authority[authority.index(after: colon)...]
         let portStr = String(afterColon.prefix(while: \.isNumber))
-        let charAfterPort = afterColon.dropFirst(portStr.count).first
         let isPort = !portStr.isEmpty
-            && (charAfterPort == nil || charAfterPort == "/" || charAfterPort == "?" || charAfterPort == "#")
+            && afterColon.dropFirst(portStr.count).isEmpty
             && (Int(portStr) ?? 65536) <= 65535
         if !isPort { return s }  // non-authority URI scheme — leave as-is
     }
