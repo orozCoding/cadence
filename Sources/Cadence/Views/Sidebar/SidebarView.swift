@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Binding var selection: NavSelection?
@@ -41,13 +42,15 @@ struct SidebarView: View {
                     if !days.isEmpty {
                         SidebarSection(label: "Days", isExpanded: $daysExpanded) {
                             ForEach(days, id: \.self) { day in
-                                SidebarRow(
+                                SidebarPeriodRow(
                                     label: day.isSameDay(as: Date()) ? "Today" : day.dayLabel(),
                                     icon: "sun.max",
-                                    isSelected: selection == .day(day)
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) }
-                                }
+                                    isSelected: selection == .day(day),
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) } },
+                                    onDrop: { providers in
+                                        loadAndMove(providers, to: .day(day))
+                                    }
+                                )
                             }
                         }
                     }
@@ -57,13 +60,15 @@ struct SidebarView: View {
                     if !weeks.isEmpty {
                         SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
                             ForEach(weeks, id: \.self) { weekStart in
-                                SidebarRow(
+                                SidebarPeriodRow(
                                     label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn),
                                     icon: "calendar",
-                                    isSelected: selection == .week(weekStart)
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) }
-                                }
+                                    isSelected: selection == .week(weekStart),
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) } },
+                                    onDrop: { providers in
+                                        loadAndMove(providers, to: .week(weekStart))
+                                    }
+                                )
                             }
                         }
                     }
@@ -73,13 +78,15 @@ struct SidebarView: View {
                     if !months.isEmpty {
                         SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
                             ForEach(months, id: \.self) { monthStart in
-                                SidebarRow(
+                                SidebarPeriodRow(
                                     label: monthStart.monthLabel(),
                                     icon: "calendar.badge.clock",
-                                    isSelected: selection == .month(monthStart)
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) }
-                                }
+                                    isSelected: selection == .month(monthStart),
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) } },
+                                    onDrop: { providers in
+                                        loadAndMove(providers, to: .month(monthStart))
+                                    }
+                                )
                             }
                         }
                     }
@@ -89,13 +96,15 @@ struct SidebarView: View {
                     if !years.isEmpty {
                         SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
                             ForEach(years, id: \.self) { year in
-                                SidebarRow(
+                                SidebarPeriodRow(
                                     label: String(year),
                                     icon: "archivebox",
-                                    isSelected: selection == .year(year)
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) }
-                                }
+                                    isSelected: selection == .year(year),
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) } },
+                                    onDrop: { providers in
+                                        loadAndMove(providers, to: .year(year))
+                                    }
+                                )
                             }
                         }
                     }
@@ -130,6 +139,13 @@ struct SidebarView: View {
             if case .week(let date) = selection {
                 selection = .week(date.startOfWeek(weekStartsOn: newValue))
             }
+        }
+    }
+
+    private func loadAndMove(_ providers: [NSItemProvider], to period: TaskPeriod) {
+        providers.first?.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            guard let str = item as? String, let id = UUID(uuidString: str) else { return }
+            DispatchQueue.main.async { store.moveToPeriod(taskId: id, period: period) }
         }
     }
 }
@@ -299,5 +315,34 @@ struct SidebarRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .pointerCursor()
+    }
+}
+
+// MARK: - Period Row (with drag-and-drop target support)
+
+private struct SidebarPeriodRow: View {
+    let label: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    let onDrop: ([NSItemProvider]) -> Void
+
+    @State private var isTargeted = false
+
+    var body: some View {
+        ZStack(alignment: .center) {
+            SidebarRow(label: label, icon: icon, isSelected: isSelected, action: action)
+
+            if isTargeted {
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                    .stroke(AppTheme.accent, lineWidth: 2)
+                    .padding(1)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [UTType.plainText], isTargeted: $isTargeted) { providers in
+            onDrop(providers)
+            return true
+        }
     }
 }

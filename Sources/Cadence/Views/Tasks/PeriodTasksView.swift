@@ -1,22 +1,5 @@
 import SwiftUI
-
-enum TaskPeriod: Equatable, Hashable {
-    case day(Date)
-    case week(Date)
-    case month(Date)
-    case year(Int)
-
-    var title: String { titleFor(weekStartsOn: .monday) }
-
-    func titleFor(weekStartsOn: Weekday) -> String {
-        switch self {
-        case .day(let d):   return d.isSameDay(as: Date()) ? "Today" : d.dayLabel()
-        case .week(let s):  return s.weekLabel(weekStartsOn: weekStartsOn)
-        case .month(let s): return s.monthLabel()
-        case .year(let y):  return String(y)
-        }
-    }
-}
+import UniformTypeIdentifiers
 
 struct PeriodTasksView: View {
     let period: TaskPeriod
@@ -26,6 +9,12 @@ struct PeriodTasksView: View {
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var folderStore: FolderStore
+
+    @State private var draggedId: UUID? = nil
+    @State private var dropTargetId: UUID? = nil
+    @State private var dropAbove: Bool = true
+    @State private var todoHeaderTargeted = false
+    @State private var doneHeaderTargeted = false
 
     private var allTasks: [CadenceTask] {
         let fid = folderStore.activeFolder.id
@@ -37,12 +26,8 @@ struct PeriodTasksView: View {
         }
     }
 
-    private var ordered: [CadenceTask] {
-        allTasks.filter { !$0.isDone } + allTasks.filter { $0.isDone }
-    }
-
-    private var pendingCount: Int { ordered.filter { !$0.isDone }.count }
-    private var doneCount: Int    { ordered.count - pendingCount }
+    private var todos: [CadenceTask] { allTasks.filter { !$0.isDone } }
+    private var dones: [CadenceTask] { allTasks.filter { $0.isDone } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,31 +40,146 @@ struct PeriodTasksView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        if pendingCount > 0 {
-                            SectionHeader(label: "To Do", count: pendingCount)
+                        // To Do section
+                        if !todos.isEmpty {
+                            SectionHeader(label: "To Do", count: todos.count)
+                                .background(todoHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
+                                .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
+                                    loadTaskId(providers) { id in store.setDone(id, isDone: false) }
+                                    return true
+                                }
                         }
+                        periodTaskRows(tasks: todos, isDoneSection: false)
 
-                        ForEach(ordered) { task in
-                            if task.id == ordered.first(where: { $0.isDone })?.id {
-                                SectionHeader(label: "Done", count: doneCount)
-                                    .padding(.top, pendingCount > 0 ? 8 : 0)
-                                    .transition(.opacity)
-                            }
-
-                            TaskRowView(
-                                task: task,
-                                onTap: { withAnimation { selectedTask = task } },
-                                onToggle: { store.toggle(task) }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 2)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        // Done section
+                        if !dones.isEmpty {
+                            SectionHeader(label: "Done", count: dones.count)
+                                .padding(.top, !todos.isEmpty ? 8 : 0)
+                                .background(doneHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
+                                .transition(.opacity)
+                                .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
+                                    loadTaskId(providers) { id in store.setDone(id, isDone: true) }
+                                    return true
+                                }
                         }
+                        periodTaskRows(tasks: dones, isDoneSection: true)
                     }
                     .padding(.vertical, 12)
-                    .animation(.easeInOut(duration: 0.28), value: ordered.map(\.id))
+                    .animation(.easeInOut(duration: 0.28), value: allTasks)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func periodTaskRows(tasks: [CadenceTask], isDoneSection: Bool) -> some View {
+        ForEach(tasks) { task in
+            if dropTargetId == task.id && dropAbove {
+                DragInsertionLine().padding(.horizontal, 20)
+            }
+
+            TaskRowView(
+                task: task,
+                onTap: { withAnimation { selectedTask = task } },
+                onToggle: { store.toggle(task) }
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 2)
+            .opacity(draggedId == task.id ? 0.4 : 1.0)
+            .onDrag {
+                draggedId = task.id
+                return NSItemProvider(object: task.id.uuidString as NSString)
+            }
+            .onDrop(
+                of: [UTType.plainText],
+                delegate: TaskReorderDelegate(
+                    targetTask: task,
+                    sectionTasks: tasks,
+                    draggedId: $draggedId,
+                    dropTargetId: $dropTargetId,
+                    dropAbove: $dropAbove,
+                    store: store
+                )
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+
+            if dropTargetId == task.id && !dropAbove {
+                DragInsertionLine().padding(.horizontal, 20)
+            }
+        }
+    }
+
+    private func loadTaskId(_ providers: [NSItemProvider], action: @escaping (UUID) -> Void) {
+        providers.first?.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            guard let str = item as? String, let id = UUID(uuidString: str) else { return }
+            DispatchQueue.main.async { action(id) }
+        }
+    }
+}
+
+// MARK: - Drop Delegate
+
+private struct TaskReorderDelegate: DropDelegate {
+    let targetTask: CadenceTask
+    let sectionTasks: [CadenceTask]
+    @Binding var draggedId: UUID?
+    @Binding var dropTargetId: UUID?
+    @Binding var dropAbove: Bool
+    let store: TaskStore
+
+    func dropEntered(info: DropInfo) {
+        guard draggedId != nil, draggedId != targetTask.id else { return }
+        dropTargetId = targetTask.id
+        dropAbove = info.location.y < AppTheme.rowHeight / 2
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard draggedId != nil, draggedId != targetTask.id else {
+            return DropProposal(operation: .forbidden)
+        }
+        dropAbove = info.location.y < AppTheme.rowHeight / 2
+        dropTargetId = targetTask.id
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if dropTargetId == targetTask.id { dropTargetId = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            draggedId = nil
+            dropTargetId = nil
+        }
+        guard let fromId = draggedId, fromId != targetTask.id else { return false }
+
+        let above = dropAbove
+
+        if sectionTasks.contains(where: { $0.id == fromId }) {
+            // Same section: reorder
+            var ids = sectionTasks.map(\.id)
+            ids.removeAll { $0 == fromId }
+            let toIdx = ids.firstIndex(of: targetTask.id) ?? ids.count
+            ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
+            store.reorder(taskIds: ids)
+        } else {
+            // Cross-section: set done status, then insert near target
+            store.setDone(fromId, isDone: targetTask.isDone)
+            var ids = sectionTasks.map(\.id)
+            let toIdx = ids.firstIndex(of: targetTask.id) ?? ids.count
+            ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
+            store.reorder(taskIds: ids)
+        }
+        return true
+    }
+}
+
+// MARK: - Insertion Line
+
+private struct DragInsertionLine: View {
+    var body: some View {
+        Capsule()
+            .fill(AppTheme.accent)
+            .frame(height: 2)
     }
 }

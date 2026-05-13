@@ -53,6 +53,14 @@ struct TaskRowView: View {
 
             Spacer()
 
+            if isHovered {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .padding(.trailing, 2)
+                    .transition(.opacity)
+            }
+
             deadlineBadges
         }
         .padding(.horizontal, 14)

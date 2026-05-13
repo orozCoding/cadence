@@ -7,6 +7,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
     var body: String
     var isDone: Bool
     var createdAt: Date
+    var sortOrder: Int  // user-defined order within a period section
 
     // Independent deadline levels
     var dayDeadline: Date?
@@ -21,6 +22,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         body: String = "",
         isDone: Bool = false,
         createdAt: Date = Date(),
+        sortOrder: Int = 0,
         dayDeadline: Date? = nil,
         weekStart: Date? = nil,
         monthStart: Date? = nil,
@@ -32,6 +34,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         self.body = body
         self.isDone = isDone
         self.createdAt = createdAt
+        self.sortOrder = sortOrder
         self.dayDeadline = dayDeadline
         self.weekStart = weekStart
         self.monthStart = monthStart
@@ -40,7 +43,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
 
     // Custom decoder: existing tasks without folderId default to General
     private enum CodingKeys: String, CodingKey {
-        case id, folderId, title, body, isDone, createdAt
+        case id, folderId, title, body, isDone, createdAt, sortOrder
         case dayDeadline, weekStart, monthStart, yearDeadline
     }
 
@@ -52,6 +55,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         body        = try c.decode(String.self, forKey: .body)
         isDone      = try c.decode(Bool.self, forKey: .isDone)
         createdAt   = try c.decode(Date.self, forKey: .createdAt)
+        sortOrder   = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         dayDeadline = try c.decodeIfPresent(Date.self, forKey: .dayDeadline)
         weekStart   = try c.decodeIfPresent(Date.self, forKey: .weekStart)
         monthStart  = try c.decodeIfPresent(Date.self, forKey: .monthStart)

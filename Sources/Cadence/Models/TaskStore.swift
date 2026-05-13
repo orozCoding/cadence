@@ -19,7 +19,9 @@ final class TaskStore: ObservableObject {
     // MARK: - CRUD
 
     func add(_ task: CadenceTask) {
-        tasks.append(task)
+        var t = task
+        t.sortOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
+        tasks.append(t)
         save()
     }
 
@@ -40,6 +42,35 @@ final class TaskStore: ObservableObject {
         save()
     }
 
+    func setDone(_ taskId: UUID, isDone: Bool) {
+        guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        tasks[idx].isDone = isDone
+        save()
+    }
+
+    // Reassign sortOrder for tasks in the given order (0, 1, 2, …).
+    // Only the listed IDs are affected; tasks outside this list are untouched.
+    func reorder(taskIds: [UUID]) {
+        for (index, id) in taskIds.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == id }) {
+                tasks[idx].sortOrder = index
+            }
+        }
+        save()
+    }
+
+    // Update the deadline for the given period level without touching other levels.
+    func moveToPeriod(taskId: UUID, period: TaskPeriod) {
+        guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        switch period {
+        case .day(let d):   tasks[idx].dayDeadline = d.noonLocal()
+        case .week(let s):  tasks[idx].weekStart = s
+        case .month(let s): tasks[idx].monthStart = s
+        case .year(let y):  tasks[idx].yearDeadline = y
+        }
+        save()
+    }
+
     func deleteAll(inFolder folderId: UUID) {
         tasks.removeAll { $0.folderId == folderId }
         save()
@@ -51,25 +82,25 @@ final class TaskStore: ObservableObject {
         tasks.filter { task in
             task.folderId == folderId &&
             task.dayDeadline.map { $0.isSameDay(as: date) } == true
-        }
+        }.sortedByOrder()
     }
 
     func tasks(forWeek weekStart: Date, weekStartsOn: Weekday, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
             task.folderId == folderId &&
             task.weekStart.map { $0.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn) } == true
-        }
+        }.sortedByOrder()
     }
 
     func tasks(forMonth monthStart: Date, folderId: UUID) -> [CadenceTask] {
         tasks.filter { task in
             task.folderId == folderId &&
             task.monthStart.map { $0.isSameMonth(as: monthStart) } == true
-        }
+        }.sortedByOrder()
     }
 
     func tasks(forYear year: Int, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }
+        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }.sortedByOrder()
     }
 
     // MARK: - Distinct period keys (folder-scoped)
@@ -123,6 +154,15 @@ final class TaskStore: ObservableObject {
                 tasks = recovered
                 return
             }
+        }
+    }
+}
+
+private extension Array where Element == CadenceTask {
+    func sortedByOrder() -> [CadenceTask] {
+        sorted {
+            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+            return $0.createdAt < $1.createdAt
         }
     }
 }
