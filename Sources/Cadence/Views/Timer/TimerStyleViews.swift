@@ -145,9 +145,10 @@ struct GlassTimerCircle: View {
                 let saved = GlassWaveState.shared.phase
                 // If the timer was running while Glassy was hidden, advance the phase
                 // by the time elapsed during the hidden period so the wave is continuous.
+                // Advance wave phase by time elapsed while hidden, but only if the timer
+                // was running when Glassy was hidden (paused-when-left → no advance).
                 let hiddenAdvance: CGFloat
-                if isRunning,
-                   GlassWaveState.shared.disappearIsRunning,
+                if GlassWaveState.shared.disappearIsRunning,
                    let d = GlassWaveState.shared.disappearDate {
                     hiddenAdvance = CGFloat(Date().timeIntervalSince(d)) / 4.0 * (.pi * 2)
                 } else {
