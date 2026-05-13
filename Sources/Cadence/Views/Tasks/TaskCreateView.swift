@@ -21,6 +21,7 @@ struct TaskCreateView: View {
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
     @State private var userHasInteracted = false
+    @State private var bodyFocusTrigger = 0
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
     private var hasDraft: Bool {
@@ -78,22 +79,28 @@ struct TaskCreateView: View {
                 .padding(.bottom, 12)
                 .onChange(of: title) { userHasInteracted = true }
 
-            // Body — fills all remaining space; TextEditor's own scroll handles long text
-            ZStack(alignment: .topLeading) {
-                if body_.isEmpty {
-                    Text("Add content...")
-                        .font(.system(size: 13).italic())
-                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                        .allowsHitTesting(false)
-                        .padding(.top, 2)
-                        .padding(.leading, 28)
+            // Body — fills all remaining space; ChecklistBodyEditor handles checkboxes and plain text
+            ScrollView {
+                ZStack(alignment: .topLeading) {
+                    if body_.isEmpty {
+                        Text("Add content… type [] for a checklist item")
+                            .font(.system(size: 13).italic())
+                            .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                            .allowsHitTesting(false)
+                            .padding(.top, 2)
+                    }
+                    ChecklistBodyEditor(text: $body_, focusTrigger: bodyFocusTrigger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onChange(of: body_) { userHasInteracted = true }
                 }
-                TextEditor(text: $body_)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 20)
-                    .onChange(of: body_) { userHasInteracted = true }
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 

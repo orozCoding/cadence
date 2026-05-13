@@ -19,6 +19,7 @@ struct TaskEditView: View {
     @State private var yearValue: Int
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
+    @State private var bodyFocusTrigger = 0
 
     init(task: CadenceTask, onBack: @escaping () -> Void) {
         self.task = task
@@ -118,21 +119,27 @@ struct TaskEditView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 12)
 
-            // Body — fills all remaining space; TextEditor's own scroll handles long text
-            ZStack(alignment: .topLeading) {
-                if editedBody.isEmpty {
-                    Text("Add content...")
-                        .font(.system(size: 13).italic())
-                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                        .allowsHitTesting(false)
-                        .padding(.top, 2)
-                        .padding(.leading, 28)
+            // Body — fills all remaining space; ChecklistBodyEditor handles checkboxes and plain text
+            ScrollView {
+                ZStack(alignment: .topLeading) {
+                    if editedBody.isEmpty {
+                        Text("Add content… type [] for a checklist item")
+                            .font(.system(size: 13).italic())
+                            .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                            .allowsHitTesting(false)
+                            .padding(.top, 2)
+                    }
+                    ChecklistBodyEditor(text: $editedBody, focusTrigger: bodyFocusTrigger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                TextEditor(text: $editedBody)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 
