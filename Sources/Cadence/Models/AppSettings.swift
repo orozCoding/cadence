@@ -34,6 +34,7 @@ final class AppSettings: ObservableObject {
     @Published var soundsMuted: Bool {
         didSet {
             save()
+            // Both AppSettings and SoundManager are @MainActor; this call is always on the main thread.
             if soundsMuted { SoundManager.shared.stopAll() }
         }
     }

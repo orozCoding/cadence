@@ -64,6 +64,7 @@ struct SettingsView: View {
                         Toggle("Mute sounds", isOn: $settings.soundsMuted)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .accessibilityHint("Stops any currently playing sound immediately")
                     }
 
                     if !settings.soundsMuted {
