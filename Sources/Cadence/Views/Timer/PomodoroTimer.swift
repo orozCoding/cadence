@@ -13,6 +13,8 @@ final class PomodoroTimer: ObservableObject {
     @Published var isFinished = false
 
     private var cancellable: AnyCancellable?
+    private var resumeDate: Date = .now
+    private var remainingAtResume: TimeInterval = 25 * 60
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -55,6 +57,8 @@ final class PomodoroTimer: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
             if let error { print("[Cadence] Notification auth error: \(error)") }
         }
+        resumeDate = .now
+        remainingAtResume = remaining
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -78,7 +82,8 @@ final class PomodoroTimer: ObservableObject {
 
     private func tick() {
         FocusTimeStore.shared.addSecond()
-        remaining = max(0, remaining - 1)
+        let elapsed = Date().timeIntervalSince(resumeDate)
+        remaining = max(0, (remainingAtResume - elapsed).rounded())
         if remaining == 0 {
             pause()
             isFinished = true

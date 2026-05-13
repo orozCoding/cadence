@@ -151,6 +151,11 @@ struct GlassTimerCircle: View {
                     frozenPhase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
                 }
             }
+            .onChange(of: progress) { _, newProgress in
+                guard !isPreview, newProgress == 0 else { return }
+                frozenPhase  = 0
+                phaseAtStart = 0
+            }
     }
 
     @ViewBuilder

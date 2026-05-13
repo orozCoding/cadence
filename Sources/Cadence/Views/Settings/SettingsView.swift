@@ -28,7 +28,10 @@ struct SettingsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textPrimary)
                         Spacer()
-                        // Segmented-style weekday picker with pointer cursors
+                        // Segmented-style weekday picker with pointer cursors.
+                        // accessibilityRepresentation exposes a Picker to VoiceOver so
+                        // arrow-key navigation and radio-group semantics work correctly
+                        // while preserving the custom visual design.
                         HStack(spacing: 0) {
                             ForEach(Weekday.allCases, id: \.self) { day in
                                 let isSelected = settings.weekStartsOn == day
@@ -42,12 +45,17 @@ struct SettingsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .pointerCursor()
-                                .accessibilityLabel(day.label)
-                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
                         .background(RoundedRectangle(cornerRadius: 7).fill(AppTheme.divider))
                         .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .accessibilityRepresentation {
+                            Picker("Week starts on", selection: $settings.weekStartsOn) {
+                                ForEach(Weekday.allCases, id: \.self) { day in
+                                    Text(day.label).tag(day)
+                                }
+                            }
+                        }
                     }
                 }
 
