@@ -59,13 +59,18 @@ private struct GlassTimerCircle: View {
         waveContent
             .frame(width: 130, height: 130)
             .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
+            // Suppress child Text elements so VoiceOver reads only this single element.
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
             .onChange(of: isRunning) { running in
                 if running {
-                    // Anchor the new playback start so phase continues from where it froze.
                     waveStartDate = .now
                     phaseAtStart = frozenPhase
+                } else {
+                    // Snapshot the current phase on pause — avoids per-frame @State mutations.
+                    let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
+                    frozenPhase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
                 }
             }
     }
@@ -78,9 +83,6 @@ private struct GlassTimerCircle: View {
                 let elapsed = CGFloat(context.date.timeIntervalSince(waveStartDate))
                 let phase   = phaseAtStart + elapsed / 4.0 * (.pi * 2)
                 glassContent(phase: phase)
-                    .onChange(of: phase) { newPhase in
-                        frozenPhase = newPhase
-                    }
             }
         } else {
             glassContent(phase: frozenPhase)
