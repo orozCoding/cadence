@@ -119,10 +119,25 @@ private final class BodyNSTextView: NSTextView {
             return super.accessibilityString(for: range)
         }
         let raw = coordinator.extractRaw(from: ts, range: range)
-        // Convert "- [ ] " / "- [x] " to human-readable AX labels.
-        return raw
-            .replacingOccurrences(of: "- [x] ", with: "✓ ", options: .caseInsensitive)
-            .replacingOccurrences(of: "- [ ] ", with: "□ ")
+        // Scope prefix substitution to line-start only to avoid rewriting literal
+        // "- [ ] " text that appears mid-sentence in plain-text lines.
+        return raw.components(separatedBy: "\n").map { line in
+            if line.hasPrefix("- [x] ") || line.lowercased().hasPrefix("- [x] ") {
+                return "✓ " + line.dropFirst(6)
+            }
+            if line.hasPrefix("- [ ] ") { return "□ " + line.dropFirst(6) }
+            return line
+        }.joined(separator: "\n")
+    }
+
+    // Force plain-text-only paste so that rich-text pastes from external sources
+    // don't introduce foreign attributes that bypass our AppTheme normalization.
+    override func paste(_ sender: Any?) {
+        if let plain = NSPasteboard.general.string(forType: .string) {
+            insertText(plain, replacementRange: selectedRange())
+        } else {
+            super.paste(sender)
+        }
     }
 }
 
@@ -385,6 +400,13 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         let cursor = sel.location          // selection start (or plain cursor)
         let selEnd = NSMaxRange(sel)       // selection end; used to delete selected text on split
         let ns     = ts.string as NSString
+
+        // If the selection spans multiple lines, let NSTextView delete them first;
+        // our handler only manages single-line checkbox splits.
+        if sel.length > 0 {
+            let selStr = ns.substring(with: sel)
+            if selStr.contains("\n") { return false }
+        }
 
         // Find start of current line by scanning backwards for newline.
         var lineStart = 0
