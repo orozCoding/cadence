@@ -12,7 +12,6 @@ final class PomodoroTimer: ObservableObject {
     @Published var isFinished = false
 
     private var cancellable: AnyCancellable?
-    private var chimeTask: Task<Void, Never>?
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -27,21 +26,27 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(seconds: TimeInterval) {
-        chimeTask?.cancel()
         pause()
         total = max(1, seconds.rounded())
         remaining = total
         isFinished = false
+        SoundManager.shared.playTimerSetOrReset()
     }
 
     func toggle() {
-        isRunning ? pause() : start()
+        if isRunning {
+            SoundManager.shared.playTimerPause()
+            pause()
+        } else {
+            start()
+        }
     }
 
     func start() {
         guard remaining > 0 else { return }
         isRunning = true
         isFinished = false
+        SoundManager.shared.playTimerStart()
         cancellable = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in self?.tick() }
@@ -54,10 +59,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func reset() {
-        chimeTask?.cancel()
         pause()
         remaining = total
         isFinished = false
+        SoundManager.shared.playTimerSetOrReset()
     }
 
     private func tick() {
@@ -66,18 +71,7 @@ final class PomodoroTimer: ObservableObject {
         if remaining == 0 {
             pause()
             isFinished = true
-            playCompletionChime()
-        }
-    }
-
-    private func playCompletionChime() {
-        chimeTask?.cancel()
-        chimeTask = Task { @MainActor in
-            for _ in 0..<3 {
-                guard !Task.isCancelled else { return }
-                NSSound(named: .init("Glass"))?.play()
-                try? await Task.sleep(nanoseconds: 700_000_000)
-            }
+            SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
         }
     }
 }

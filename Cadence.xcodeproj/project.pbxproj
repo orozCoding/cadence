@@ -30,6 +30,13 @@
 		B0000056 /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000036 /* TaskEditView.swift */; };
 		B0000057 /* FocusTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000037 /* FocusTimeView.swift */; };
 		B0000058 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0000038 /* Assets.xcassets */; };
+		B0000070 /* timer_start.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000060 /* timer_start.mp3 */; };
+		B0000071 /* timer_pause.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000061 /* timer_pause.mp3 */; };
+		B0000072 /* timer_finished.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000062 /* timer_finished.mp3 */; };
+		B0000073 /* timer_finished_2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000063 /* timer_finished_2.mp3 */; };
+		B0000074 /* timer_finished_3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000064 /* timer_finished_3.mp3 */; };
+		B0000075 /* timer_finished_song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000065 /* timer_finished_song.mp3 */; };
+		B0000076 /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000066 /* SoundManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +64,13 @@
 		B0000036 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
 		B0000037 /* FocusTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTimeView.swift; sourceTree = "<group>"; };
 		B0000038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B0000060 /* timer_start.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_start.mp3; sourceTree = "<group>"; };
+		B0000061 /* timer_pause.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_pause.mp3; sourceTree = "<group>"; };
+		B0000062 /* timer_finished.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished.mp3; sourceTree = "<group>"; };
+		B0000063 /* timer_finished_2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_2.mp3; sourceTree = "<group>"; };
+		B0000064 /* timer_finished_3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_3.mp3; sourceTree = "<group>"; };
+		B0000065 /* timer_finished_song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_song.mp3; sourceTree = "<group>"; };
+		B0000066 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,11 +107,42 @@
 				B0000020 /* CadenceApp.swift */,
 				B0000011 /* Extensions */,
 				B0000012 /* Models */,
+				B0000067 /* Resources */,
+				B0000069 /* Services */,
 				B0000013 /* Theme */,
 				B0000014 /* Views */,
 			);
 			name = Cadence;
 			path = Sources/Cadence;
+			sourceTree = "<group>";
+		};
+		B0000067 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B0000068 /* Sounds */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		B0000068 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				B0000060 /* timer_start.mp3 */,
+				B0000061 /* timer_pause.mp3 */,
+				B0000062 /* timer_finished.mp3 */,
+				B0000063 /* timer_finished_2.mp3 */,
+				B0000064 /* timer_finished_3.mp3 */,
+				B0000065 /* timer_finished_song.mp3 */,
+			);
+			path = Sounds;
+			sourceTree = "<group>";
+		};
+		B0000069 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B0000066 /* SoundManager.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		B0000011 /* Extensions */ = {
@@ -240,6 +285,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				B0000058 /* Assets.xcassets in Resources */,
+				B0000070 /* timer_start.mp3 in Resources */,
+				B0000071 /* timer_pause.mp3 in Resources */,
+				B0000072 /* timer_finished.mp3 in Resources */,
+				B0000073 /* timer_finished_2.mp3 in Resources */,
+				B0000074 /* timer_finished_3.mp3 in Resources */,
+				B0000075 /* timer_finished_song.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -272,6 +323,7 @@
 				B0000055 /* TaskCreateView.swift in Sources */,
 				B0000056 /* TaskEditView.swift in Sources */,
 				B0000057 /* FocusTimeView.swift in Sources */,
+				B0000076 /* SoundManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
