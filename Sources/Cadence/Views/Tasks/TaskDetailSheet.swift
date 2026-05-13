@@ -130,17 +130,18 @@ struct DeadlineInfoSection: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
 
+            let today = settings.currentDate
             if let d = task.dayDeadline {
-                DeadlineRow(icon: "sun.max", label: "Day", value: d.dayLabel())
+                DeadlineRow(icon: "sun.max", label: "Day", value: d.dayLabel(today: today))
             }
             if let w = task.weekStart {
-                DeadlineRow(icon: "calendar", label: "Week", value: w.weekLabel(weekStartsOn: settings.weekStartsOn))
+                DeadlineRow(icon: "calendar", label: "Week", value: w.weekLabel(weekStartsOn: settings.weekStartsOn, today: today))
             }
             if let m = task.monthStart {
-                DeadlineRow(icon: "calendar.badge.clock", label: "Month", value: m.monthLabel())
+                DeadlineRow(icon: "calendar.badge.clock", label: "Month", value: m.monthLabel(today: today))
             }
             if let y = task.yearDeadline {
-                DeadlineRow(icon: "archivebox", label: "Year", value: String(y))
+                DeadlineRow(icon: "archivebox", label: "Year", value: y.yearLabel(today: today))
             }
         }
     }

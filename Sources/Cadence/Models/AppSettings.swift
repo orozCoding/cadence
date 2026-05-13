@@ -17,11 +17,16 @@ final class AppSettings: ObservableObject {
         let raw = UserDefaults.standard.integer(forKey: "weekStartsOn")
         weekStartsOn = Weekday(rawValue: raw) ?? .monday
 
+        let refreshDate: (Notification) -> Void = { [weak self] _ in
+            self?.currentDate = Calendar.current.startOfDay(for: Date())
+        }
         NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.currentDate = Calendar.current.startOfDay(for: Date())
-            }
+            .sink(receiveValue: refreshDate)
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveValue: refreshDate)
             .store(in: &cancellables)
     }
 
