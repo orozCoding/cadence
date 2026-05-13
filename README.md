@@ -28,6 +28,14 @@ A focused macOS productivity app combining a hierarchical to-do list with a Pomo
 
 That's it — no simulators, no provisioning needed.
 
+You can also simply open the `Cadence.xcodeproj` from the terminal while being on the project/worktree directory:
+
+```bash
+open Cadence.xcodeproj
+```
+
+Then run the app from Xcode's toolbar or pressing **⌘R**.
+
 ---
 
 ## App Overview
