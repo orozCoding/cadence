@@ -125,8 +125,12 @@ struct DeadlineToggleRow<Content: View>: View {
 func normalizeURL(_ raw: String) -> String {
     let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !s.isEmpty else { return s }
-    // Authority-based scheme (https://, http://, slack://, zoommtg://, etc.)
-    if s.contains("://") { return s }
+    // Return early only when :// belongs to a scheme at the very start of the string.
+    // s.contains("://") would falsely match query values like
+    // example.com?next=https://idp.example/callback.
+    // RFC 3986 scheme chars: ALPHA / DIGIT / "+" / "-" / "."
+    let possibleScheme = s.prefix(while: { $0.isLetter || $0.isNumber || $0 == "+" || $0 == "-" || $0 == "." })
+    if !possibleScheme.isEmpty && s[possibleScheme.endIndex...].hasPrefix("://") { return s }
     let lower = s.lowercased()
     // Loopback addresses → http. Match at hostname boundary so localhost.run
     // or 127.0.0.1.example.com are not misclassified.
