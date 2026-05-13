@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import UserNotifications
 
 @MainActor
 final class PomodoroTimer: ObservableObject {
@@ -44,6 +45,10 @@ final class PomodoroTimer: ObservableObject {
 
     func start() {
         guard remaining > 0 else { return }
+        // Request permission on first timer start so the prompt appears in context.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error { print("[Cadence] Notification auth error: \(error)") }
+        }
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -72,6 +77,33 @@ final class PomodoroTimer: ObservableObject {
             pause()
             isFinished = true
             SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
+            sendTimerFinishedNotification()
         }
+    }
+
+    private func sendTimerFinishedNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Time's Up!"
+        content.subtitle = formattedDuration(total)
+        // No notification sound — SoundManager already handles audio feedback.
+        content.sound = nil
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { print("[Cadence] Failed to schedule notification: \(error)") }
+        }
+    }
+
+    private func formattedDuration(_ seconds: TimeInterval) -> String {
+        let totalMinutes = Int(seconds) / 60
+        let remainingSeconds = Int(seconds) % 60
+        if remainingSeconds == 0 {
+            return totalMinutes == 1 ? "1-minute session complete" : "\(totalMinutes)-minute session complete"
+        }
+        return "\(totalMinutes) min \(remainingSeconds) sec session complete"
     }
 }
