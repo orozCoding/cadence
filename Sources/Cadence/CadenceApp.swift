@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
-
+        Task { @MainActor in DockIconController.shared.start() }
         // Space bar → toggle timer (only when no text field is focused)
         if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: handleKeyDown) {
             monitors.append(m)
