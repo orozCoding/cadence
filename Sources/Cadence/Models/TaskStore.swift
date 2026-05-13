@@ -100,11 +100,17 @@ final class TaskStore: ObservableObject {
             tasks[idx].weekStart = nil
             tasks[idx].dayDeadline = nil
         }
-        // Stamp a To Do sort key so the task lands at the end of the destination section
+        // Stamp a sort key for the destination section so the task lands at the end
         // rather than falling back to global sortOrder and causing unexpected reshuffles.
-        let destKey = "td:\(period.storageKey)"
-        let maxKey = tasks.compactMap { $0.periodSortKeys[destKey] }.max() ?? -1
-        tasks[idx].periodSortKeys[destKey] = maxKey + 1
+        // Use max(periodSortKeys[key] ?? sortOrder) across all tasks so the result
+        // is always higher than any task's effective sort value for this section.
+        let prefix = tasks[idx].isDone ? "dn:" : "td:"
+        let destKey = prefix + period.storageKey
+        let maxEffective = tasks
+            .filter { $0.id != taskId }
+            .map { $0.periodSortKeys[destKey] ?? $0.sortOrder }
+            .max() ?? -1
+        tasks[idx].periodSortKeys[destKey] = maxEffective + 1
         save()
     }
 
