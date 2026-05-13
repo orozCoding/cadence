@@ -55,6 +55,8 @@ struct TaskRowView: View {
             Spacer()
 
             deadlineBadges
+
+            urlBadges
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -68,11 +70,31 @@ struct TaskRowView: View {
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
         .pointerCursor()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
         .accessibilityAction(.default, onTap)
         .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)
+    }
+
+    @ViewBuilder
+    private var urlBadges: some View {
+        let validUrls = Array(task.urls.filter { !$0.isEmpty })
+        if !validUrls.isEmpty {
+            HStack(spacing: 3) {
+                ForEach(Array(validUrls.prefix(5).enumerated()), id: \.offset) { _, url in
+                    URLBadgeIcon(url: url)
+                }
+                if validUrls.count > 5 {
+                    Text("+\(validUrls.count - 5)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(AppTheme.divider.opacity(0.5)))
+                }
+            }
+        }
     }
 
     @ViewBuilder

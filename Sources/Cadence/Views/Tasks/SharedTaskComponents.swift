@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct TasksHeader<Trailing: View>: View {
     let title: String
@@ -116,5 +117,125 @@ struct DeadlineToggleRow<Content: View>: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: isEnabled)
+    }
+}
+
+// MARK: - URL Normalization
+
+func normalizeURL(_ raw: String) -> String {
+    let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !s.isEmpty else { return s }
+    // Authority-based scheme (https://, http://, slack://, zoommtg://, etc.)
+    if s.contains("://") { return s }
+    let lower = s.lowercased()
+    // Loopback addresses → http. Match at hostname boundary so localhost.run
+    // or 127.0.0.1.example.com are not misclassified.
+    let loopbackHosts = ["localhost", "127.0.0.1", "[::1]"]
+    for host in loopbackHosts where lower.hasPrefix(host) {
+        let rest = lower.dropFirst(host.count)
+        if rest.isEmpty || rest.hasPrefix(":") || rest.hasPrefix("/")
+            || rest.hasPrefix("?") || rest.hasPrefix("#") {
+            return "http://" + s
+        }
+    }
+    // Distinguish host:port (with optional path/query/fragment) from a non-authority
+    // URI scheme (mailto:, tel:, facetime:, spotify:, maps:, etc.).
+    // Port: leading digits after colon, terminated by / ? # or end-of-string.
+    if let colon = s.firstIndex(of: ":") {
+        let afterColon = s[s.index(after: colon)...]
+        let portStr = String(afterColon.prefix(while: \.isNumber))
+        let charAfterPort = afterColon.dropFirst(portStr.count).first
+        let isPort = !portStr.isEmpty
+            && (charAfterPort == nil || charAfterPort == "/" || charAfterPort == "?" || charAfterPort == "#")
+            && (Int(portStr) ?? 65536) <= 65535
+        if !isPort { return s }  // non-authority URI scheme — leave as-is
+    }
+    return "https://" + s
+}
+
+// MARK: - URL Components
+
+struct URLEditSection: View {
+    @Binding var urls: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("URLs", systemImage: "globe")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.textTertiary)
+
+            ForEach(Array(urls.enumerated()), id: \.offset) { i, _ in
+                HStack(spacing: 8) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 13))
+                        .foregroundStyle(urls[i].isEmpty ? AppTheme.textTertiary : AppTheme.accent)
+                        .frame(width: 16)
+                        .animation(.easeInOut(duration: 0.15), value: urls[i].isEmpty)
+
+                    TextField("Paste a URL...", text: $urls[i])
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+
+                    if urls.count > 1 {
+                        Button(action: {
+                            var next = urls
+                            next.remove(at: i)
+                            urls = next
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(AppTheme.textTertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .pointerCursor()
+                        .accessibilityLabel("Remove URL")
+                    }
+                }
+            }
+
+            if !(urls.last?.isEmpty ?? true) {
+                Button(action: { urls.append("") }) {
+                    Label("Add URL", systemImage: "plus.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                .buttonStyle(.plain)
+                .pointerCursor()
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
+                .animation(.easeInOut(duration: 0.15), value: urls.last?.isEmpty ?? true)
+            }
+        }
+    }
+}
+
+struct URLBadgeIcon: View {
+    let url: String
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: openInBrowser) {
+            Image(systemName: "globe")
+                .font(.system(size: 10))
+                .foregroundStyle(isHovered ? AppTheme.accentDark : AppTheme.accentLight)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.accentLight.opacity(isHovered ? 0.22 : 0.12))
+                )
+        }
+        .buttonStyle(.plain)
+        .pointerCursor()
+        .onHover { isHovered = $0 }
+        .help(url)
+        .accessibilityLabel("Open URL: \(url)")
+    }
+
+    private func openInBrowser() {
+        // URLs are normalized at save time; apply normalizeURL as a fallback for legacy entries.
+        guard let u = URL(string: normalizeURL(url)) else { return }
+        NSWorkspace.shared.open(u)
     }
 }

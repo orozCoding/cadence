@@ -17,6 +17,7 @@ struct TaskEditView: View {
     @State private var weekDate: Date
     @State private var monthDate: Date
     @State private var yearValue: Int
+    @State private var editedUrls: [String]
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
 
@@ -33,6 +34,7 @@ struct TaskEditView: View {
         _weekDate    = State(initialValue: task.weekStart ?? Date())
         _monthDate   = State(initialValue: task.monthStart ?? Date())
         _yearValue   = State(initialValue: task.yearDeadline ?? Calendar.current.component(.year, from: Date()))
+        _editedUrls  = State(initialValue: task.urls.isEmpty ? [""] : task.urls)
     }
 
     private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
@@ -56,6 +58,9 @@ struct TaskEditView: View {
         if enableMonth, let orig = task.monthStart,
            monthDate.startOfMonth().noonLocal() != orig { return true }
         if enableYear, yearValue != task.yearDeadline { return true }
+        let normalizedEdited = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+        let normalizedStored = task.urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+        if normalizedEdited != normalizedStored { return true }
         return false
     }
 
@@ -138,8 +143,13 @@ struct TaskEditView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Deadlines — anchored to bottom, always visible
-            VStack(alignment: .leading, spacing: 12) {
+            // URLs + Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 16) {
+                URLEditSection(urls: $editedUrls)
+
+                Divider().background(AppTheme.divider)
+
+                VStack(alignment: .leading, spacing: 12) {
                 Text("Deadlines")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.textTertiary)
@@ -203,7 +213,8 @@ struct TaskEditView: View {
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
                 }
-            }
+                }  // end inner Deadlines VStack
+            }      // end outer URLs+Deadlines VStack
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
@@ -288,6 +299,7 @@ struct TaskEditView: View {
         updated.weekStart    = newWeek
         updated.monthStart   = newMonth
         updated.yearDeadline = newYear
+        updated.urls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         store.update(updated)
         onBack()
     }

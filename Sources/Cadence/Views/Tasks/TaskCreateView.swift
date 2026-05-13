@@ -18,13 +18,18 @@ struct TaskCreateView: View {
     @State private var weekDate = Date()
     @State private var monthDate = Date()
     @State private var yearValue = Calendar.current.component(.year, from: Date())
+    @State private var urls: [String] = [""]
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
     @State private var userHasInteracted = false
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
     private var hasDraft: Bool {
-        userHasInteracted && (!title.isEmpty || !body_.isEmpty || enableDay || enableWeek || enableMonth || enableYear)
+        userHasInteracted && (
+            !title.isEmpty || !body_.isEmpty ||
+            enableDay || enableWeek || enableMonth || enableYear ||
+            urls.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        )
     }
 
     var body: some View {
@@ -99,8 +104,14 @@ struct TaskCreateView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Deadlines — anchored to bottom, always visible
-            VStack(alignment: .leading, spacing: 12) {
+            // URLs + Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 16) {
+                URLEditSection(urls: $urls)
+                    .onChange(of: urls) { userHasInteracted = true }
+
+                Divider().background(AppTheme.divider)
+
+                VStack(alignment: .leading, spacing: 12) {
                 Text("Deadlines")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.textTertiary)
@@ -160,7 +171,8 @@ struct TaskCreateView: View {
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
                 }
-            }
+                }  // end inner Deadlines VStack
+            }      // end outer URLs+Deadlines VStack
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
@@ -247,7 +259,8 @@ struct TaskCreateView: View {
             dayDeadline: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
-            yearDeadline: enableYear ? yearValue : nil
+            yearDeadline: enableYear ? yearValue : nil,
+            urls: urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         )
         store.add(task)
         onBack()
