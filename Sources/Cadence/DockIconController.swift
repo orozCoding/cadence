@@ -14,11 +14,18 @@ final class DockIconController {
 
     func start() {
         baseIcon = NSApplication.shared.applicationIconImage?.copy() as? NSImage
-        cancellable = PomodoroTimer.shared.$isRunning
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] running in
-                if running { self?.startSpinning() } else { self?.stopSpinning() }
+        cancellable = Publishers.CombineLatest(
+            PomodoroTimer.shared.$isRunning,
+            AppSettings.shared.$animateDockIcon
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] isRunning, shouldAnimate in
+            if isRunning && shouldAnimate {
+                self?.startSpinning()
+            } else {
+                self?.stopSpinning()
             }
+        }
     }
 
     private func startSpinning() {

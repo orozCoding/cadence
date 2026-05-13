@@ -33,12 +33,18 @@ final class AppSettings: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    @Published var animateDockIcon: Bool {
+        didSet { save() }
+    }
+
     private init() {
         let raw = UserDefaults.standard.integer(forKey: "weekStartsOn")
         weekStartsOn = Weekday(rawValue: raw) ?? .monday
 
         let soundRaw = UserDefaults.standard.string(forKey: "timerFinishSound") ?? ""
         timerFinishSound = TimerFinishSound(rawValue: soundRaw) ?? .standard
+
+        animateDockIcon = UserDefaults.standard.object(forKey: "animateDockIcon") as? Bool ?? true
 
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
@@ -54,5 +60,6 @@ final class AppSettings: ObservableObject {
     private func save() {
         UserDefaults.standard.set(weekStartsOn.rawValue, forKey: "weekStartsOn")
         UserDefaults.standard.set(timerFinishSound.rawValue, forKey: "timerFinishSound")
+        UserDefaults.standard.set(animateDockIcon, forKey: "animateDockIcon")
     }
 }
