@@ -89,7 +89,10 @@ Click **Settings** in the sidebar to choose whether the week starts on **Monday*
 To run Cadence as a standalone app (no Xcode open required), build a Release binary and drop it in `/Applications`:
 
 ```bash
+# cd to the project directory e.g.
 cd /Users/angelorozco/OrozCoding/repositories/cadence
+
+# build the app
 xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && cp -R dist/Cadence.app /Applications/Cadence.app
 ```
 
