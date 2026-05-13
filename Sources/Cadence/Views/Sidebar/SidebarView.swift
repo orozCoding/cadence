@@ -476,6 +476,9 @@ struct SidebarPeriodRow: View {
             }
         }
         .onDrop(of: [UTType.plainText], isTargeted: $isTargeted) { providers in
+            // Mirror the past-deadline guard from TaskCreateView/TaskEditView:
+            // reject drops onto rows whose period is already in the past.
+            guard !isPast else { return false }
             onDrop(providers)
             return true
         }
