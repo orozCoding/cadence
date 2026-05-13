@@ -265,6 +265,7 @@ struct TaskEditView: View {
         updated.title = titleToSave
         updated.body  = editedBody
         if errors.isEmpty {
+            validationErrors = []
             updated.dayDeadline  = newDay
             updated.weekStart    = newWeek
             updated.monthStart   = newMonth
