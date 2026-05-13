@@ -97,32 +97,38 @@ final class TaskStore: ObservableObject {
         }
         guard !alreadyThere else { return }
 
+        // Update the target level and adjust coarser levels only when they would become
+        // invalid (too early). Intentionally-later deadlines (e.g. a March sprint deadline
+        // on a January execution day) are preserved — the app allows "follows" relationships.
         switch period {
         case .day(let d):
             tasks[idx].dayDeadline = d.noonLocal()
-            if tasks[idx].weekStart != nil {
+            // Week must contain the day; update only if it no longer does.
+            if let w = tasks[idx].weekStart, !w.isSameWeek(as: d, weekStartsOn: weekStartsOn) {
                 tasks[idx].weekStart = d.startOfWeek(weekStartsOn: weekStartsOn).noonLocal()
             }
-            if tasks[idx].monthStart != nil {
+            // Month must be >= day's month; update only if it would precede it.
+            if let m = tasks[idx].monthStart, m.startOfMonth() < d.startOfMonth() {
                 tasks[idx].monthStart = d.startOfMonth().noonLocal()
             }
-            if tasks[idx].yearDeadline != nil {
+            // Year must be >= day's year; update only if it would precede it.
+            if let y = tasks[idx].yearDeadline, y < d.year() {
                 tasks[idx].yearDeadline = d.year()
             }
         case .week(let s):
             tasks[idx].weekStart = s.noonLocal()
             tasks[idx].dayDeadline = nil
-            if tasks[idx].monthStart != nil {
+            if let m = tasks[idx].monthStart, m.startOfMonth() < s.startOfMonth() {
                 tasks[idx].monthStart = s.startOfMonth().noonLocal()
             }
-            if tasks[idx].yearDeadline != nil {
+            if let y = tasks[idx].yearDeadline, y < s.year() {
                 tasks[idx].yearDeadline = s.year()
             }
         case .month(let s):
             tasks[idx].monthStart = s.noonLocal()
             tasks[idx].weekStart = nil
             tasks[idx].dayDeadline = nil
-            if tasks[idx].yearDeadline != nil {
+            if let y = tasks[idx].yearDeadline, y < s.year() {
                 tasks[idx].yearDeadline = s.year()
             }
         case .year(let y):
