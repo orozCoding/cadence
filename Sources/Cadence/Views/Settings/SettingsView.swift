@@ -50,6 +50,65 @@ struct SettingsView: View {
                     }
                 }
 
+                // Timer Style section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Timer Style")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
+
+                    VStack(spacing: 2) {
+                        ForEach(TimerStyle.allCases) { style in
+                            let selected = settings.timerStyle == style
+                            Button(action: { settings.timerStyle = style }) {
+                                HStack(spacing: 10) {
+                                    // Mini clock preview
+                                    TimerClockView(
+                                        style: style,
+                                        progress: 0.6,
+                                        isFinished: false,
+                                        timeString: "12:30",
+                                        isRunning: false
+                                    )
+                                    .scaleEffect(0.30)
+                                    .frame(width: 39, height: 39)
+                                    .clipped()
+
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(style.label)
+                                            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                            .foregroundStyle(selected ? AppTheme.accent : AppTheme.textPrimary)
+                                        Text(style.description)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(AppTheme.textTertiary)
+                                    }
+
+                                    Spacer()
+
+                                    if selected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(AppTheme.accent)
+                                            .font(.system(size: 15))
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(selected ? AppTheme.selectedItem : Color.clear)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .pointerCursor()
+                        }
+                    }
+                    .padding(4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9)
+                            .stroke(AppTheme.divider, lineWidth: 1)
+                    )
+                }
+
                 // Timer Sounds section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Timer Sounds")

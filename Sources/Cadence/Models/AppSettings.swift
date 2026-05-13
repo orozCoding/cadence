@@ -1,6 +1,36 @@
 import Foundation
 import Combine
 
+enum TimerStyle: String, CaseIterable, Identifiable {
+    case glassy   = "glassy"
+    case minimal  = "minimal"
+    case orbit    = "orbit"
+    case segments = "segments"
+    case dots     = "dots"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .glassy:   return "Glassy"
+        case .minimal:  return "Minimal"
+        case .orbit:    return "Orbit"
+        case .segments: return "Segments"
+        case .dots:     return "Dots"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .glassy:   return "Liquid glass fill"
+        case .minimal:  return "Clean arc stroke"
+        case .orbit:    return "Orbiting dot trail"
+        case .segments: return "Arc tick marks"
+        case .dots:     return "Glowing dot ring"
+        }
+    }
+}
+
 enum TimerFinishSound: String, CaseIterable, Identifiable {
     case standard = "timer_finished"
     case variant2 = "timer_finished_2"
@@ -29,6 +59,9 @@ final class AppSettings: ObservableObject {
     @Published var timerFinishSound: TimerFinishSound {
         didSet { save() }
     }
+    @Published var timerStyle: TimerStyle {
+        didSet { save() }
+    }
     @Published var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
     private var cancellables = Set<AnyCancellable>()
@@ -39,6 +72,9 @@ final class AppSettings: ObservableObject {
 
         let soundRaw = UserDefaults.standard.string(forKey: "timerFinishSound") ?? ""
         timerFinishSound = TimerFinishSound(rawValue: soundRaw) ?? .standard
+
+        let styleRaw = UserDefaults.standard.string(forKey: "timerStyle") ?? ""
+        timerStyle = TimerStyle(rawValue: styleRaw) ?? .glassy
 
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
@@ -54,5 +90,6 @@ final class AppSettings: ObservableObject {
     private func save() {
         UserDefaults.standard.set(weekStartsOn.rawValue, forKey: "weekStartsOn")
         UserDefaults.standard.set(timerFinishSound.rawValue, forKey: "timerFinishSound")
+        UserDefaults.standard.set(timerStyle.rawValue, forKey: "timerStyle")
     }
 }
