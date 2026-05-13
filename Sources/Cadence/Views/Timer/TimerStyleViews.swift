@@ -85,6 +85,7 @@ struct TimerButtonBG: View {
 private final class GlassWaveState {
     static let shared = GlassWaveState()
     var phase: CGFloat = 0
+    var disappearDate: Date? = nil
 }
 
 // Animatable liquid wave shape
@@ -140,12 +141,22 @@ struct GlassTimerCircle: View {
             .onAppear {
                 guard !isPreview else { return }
                 let saved = GlassWaveState.shared.phase
-                frozenPhase   = saved
-                phaseAtStart  = saved
+                // If the timer was running while Glassy was hidden, advance the phase
+                // by the time elapsed during the hidden period so the wave is continuous.
+                let hiddenAdvance: CGFloat
+                if isRunning, let d = GlassWaveState.shared.disappearDate {
+                    hiddenAdvance = CGFloat(Date().timeIntervalSince(d)) / 4.0 * (.pi * 2)
+                } else {
+                    hiddenAdvance = 0
+                }
+                GlassWaveState.shared.disappearDate = nil
+                frozenPhase  = saved
+                phaseAtStart = saved + hiddenAdvance
                 waveStartDate = .now
             }
             .onDisappear {
                 guard !isPreview else { return }
+                GlassWaveState.shared.disappearDate = Date()
                 if isRunning {
                     let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
                     GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)

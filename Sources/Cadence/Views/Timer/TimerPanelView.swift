@@ -131,6 +131,7 @@ struct TimerPanelView: View {
 
     private func applyCustom() {
         let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
         formatter.locale = .current
         guard let num = formatter.number(from: customMinutes),
               num.doubleValue > 0, num.doubleValue <= 999 else { return }
