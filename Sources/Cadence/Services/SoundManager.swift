@@ -40,7 +40,7 @@ final class SoundManager {
     private func playBundled(_ name: String) {
         player?.stop()
         systemSound?.stop()
-        guard let url = SoundManager.resourceBundle.url(forResource: name, withExtension: "mp3") else { return }
+        guard let url = SoundManager.resourceBundle.url(forResource: name, withExtension: "mp3", subdirectory: "Sounds") else { return }
         player = try? AVAudioPlayer(contentsOf: url)
         player?.play()
     }
