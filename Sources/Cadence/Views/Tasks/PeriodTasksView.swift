@@ -102,8 +102,9 @@ struct PeriodTasksView: View {
                 .onAppear {
                     mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
                         if draggedId != nil {
-                            // Delay slightly so performDrop (which also clears draggedId) runs first.
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            // 100ms lets performDrop (which sets draggedId=nil synchronously via defer)
+                            // complete before we clear the fallback — eliminates double-clear on success.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 draggedId = nil
                                 dropTargetId = nil
                             }
@@ -163,7 +164,10 @@ struct PeriodTasksView: View {
                     draggedId: $draggedId,
                     dropTargetId: $dropTargetId,
                     dropAbove: $dropAbove,
-                    store: store
+                    store: store,
+                    // Live read of destination section: re-evaluated after store mutations
+                    // so cross-section drops see the moved task in the right section.
+                    reloadSection: { isDoneSection ? self.dones : self.todos }
                 )
             )
             .accessibilityAction(named: "Move Up") {
@@ -204,6 +208,7 @@ private struct TaskReorderDelegate: DropDelegate {
     @Binding var dropTargetId: UUID?
     @Binding var dropAbove: Bool
     let store: TaskStore
+    let reloadSection: () -> [CadenceTask]  // live read after store mutations
 
     func dropEntered(info: DropInfo) {
         guard draggedId != nil, draggedId != targetTask.id else { return }
@@ -241,9 +246,11 @@ private struct TaskReorderDelegate: DropDelegate {
             ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
             store.reorder(taskIds: ids, periodKey: sectionKey)
         } else {
-            // Cross-section: toggle done status, then place near target in the destination section
+            // Cross-section: toggle done status, then place near target in the destination section.
+            // Re-read destination section after setDone so the moved task is included.
             store.setDone(fromId, isDone: targetTask.isDone)
-            var ids = sectionTasks.map(\.id)
+            var ids = reloadSection().map(\.id)
+            ids.removeAll { $0 == fromId }  // will be re-inserted at the chosen position
             let toIdx = ids.firstIndex(of: targetTask.id) ?? ids.count
             ids.insert(fromId, at: above ? toIdx : min(toIdx + 1, ids.count))
             store.reorder(taskIds: ids, periodKey: sectionKey)

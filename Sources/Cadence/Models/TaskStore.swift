@@ -150,8 +150,12 @@ final class TaskStore: ObservableObject {
 
         // Stamp a sort key for the destination section so the task lands at the end
         // rather than falling back to global sortOrder and causing unexpected reshuffles.
+        // isDone is NOT mutated by moveToPeriod (sidebar drops change period, not done-state),
+        // so the prefix correctly reflects the section the task belongs to in the new period.
         let prefix = tasks[idx].isDone ? "dn:" : "td:"
         let destKey = prefix + period.storageKey
+        // Include ?? sortOrder fallback so tasks without explicit keys are counted;
+        // without it, a new arrival could sort BEFORE tasks that fall back to high sortOrders.
         let maxEffective = tasks
             .filter { $0.id != taskId }
             .map { $0.periodSortKeys[destKey] ?? $0.sortOrder }
