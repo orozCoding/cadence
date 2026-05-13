@@ -77,6 +77,9 @@ struct SidebarView: View {
                                     label: day.dayLabel(today: settings.currentDate),
                                     icon: "sun.max",
                                     isSelected: selection == .day(day),
+                                    // Safe: both day (startOfDay) and today (settings.currentDate,
+                                    // also startOfDay via NSCalendarDayChanged) are midnight-normalized,
+                                    // so day < today is false for today's row.
                                     isPast: day < today,
                                     incompleteCount: incompleteCount,
                                     allDone: incompleteCount == 0,

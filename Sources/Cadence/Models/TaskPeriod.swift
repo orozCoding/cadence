@@ -17,6 +17,10 @@ enum TaskPeriod: Equatable, Hashable {
 
     // Stable string key used to isolate sort orders per period view.
     // Calendar-component based so keys survive timezone changes.
+    // Week keys use the stored weekStart date, which depends on the weekStartsOn setting
+    // at the time the task was created/moved. Changing weekStartsOn invalidates existing
+    // weekly sort keys (they fall back to sortOrder). Migrating keys on setting change is
+    // out of scope — impact is limited to loss of manual week-view sort order.
     var storageKey: String {
         let cal = Calendar.current
         switch self {
