@@ -296,34 +296,34 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
 
         var raw = extractRaw(from: ts)
 
-        // Detect `[]` at start of any line → convert to unchecked checkbox.
-        let lines = raw.components(separatedBy: "\n")
+        // Scope `[]` detection to the currently-edited line only so that existing
+        // plain-text lines that happen to start with `[]` are never silently converted.
+        let cursor = tv.selectedRange().location
+        let lines  = raw.components(separatedBy: "\n")
+        let curLI  = lineIndex(for: cursor, in: ts)
         var conversionLine: Int? = nil
-        let converted: [String] = lines.enumerated().map { idx, line in
-            if line.hasPrefix("[]") {
-                if conversionLine == nil { conversionLine = idx }
-                return "- [ ] " + line.dropFirst(2)
-            }
-            return line
+        if curLI < lines.count, lines[curLI].hasPrefix("[]") {
+            var newLines = lines
+            newLines[curLI] = "- [ ] " + newLines[curLI].dropFirst(2)
+            raw = newLines.joined(separator: "\n")
+            conversionLine = curLI
         }
-        if converted != lines { raw = converted.joined(separator: "\n") }
 
         guard raw != committedText else { return }
-        text         = raw
-        committedText = raw
+        text = raw; committedText = raw
 
-        let sel = tv.selectedRange()
-        isRendering = true
-        ts.setAttributedString(buildAttr(raw))
-        let newLen = ts.length
-
-        if conversionLine != nil {
+        if let _ = conversionLine {
+            // Structural change (attachment inserted): full rebuild required.
+            // Regular typing does NOT rebuild — preserves IME/dead-key marked-text state.
+            let sel = tv.selectedRange()
+            isRendering = true
+            ts.setAttributedString(buildAttr(raw))
+            let newLen = ts.length
             // `[]` (2 display chars) → `[FFFC]` (1 display char): shift cursor back by 1.
             tv.setSelectedRange(NSRange(location: min(max(0, sel.location - 1), newLen), length: 0))
-        } else {
-            tv.setSelectedRange(NSRange(location: min(sel.location, newLen), length: 0))
+            isRendering = false
         }
-        isRendering = false
+
         tv.invalidateIntrinsicContentSize()
     }
 
@@ -412,11 +412,12 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             isRendering = false
             tv.invalidateIntrinsicContentSize()
         } else {
-            // Split content at cursor; new line is always unchecked.
-            let posInContent = max(0, min(cursor - contentStart, displayContent.count))
-            let splitIdx     = displayContent.index(displayContent.startIndex, offsetBy: posInContent)
-            let before = String(displayContent[..<splitIdx])
-            let after  = String(displayContent[splitIdx...])
+            // Split content at cursor using UTF-16 offsets (NSTextView cursor is UTF-16).
+            // Using grapheme-based Swift String indexing would mis-split on emoji.
+            let utf16Offset   = max(0, min(cursor - contentStart, (displayContent as NSString).length))
+            let displayNS     = displayContent as NSString
+            let before        = displayNS.substring(to: utf16Offset)
+            let after         = displayNS.substring(from: utf16Offset)
 
             let pfx = att.isChecked ? "- [x] " : "- [ ] "
             rawLines[li] = pfx + before
