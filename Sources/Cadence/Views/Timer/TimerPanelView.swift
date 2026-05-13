@@ -8,14 +8,14 @@ private let presets: [(label: String, minutes: Int)] = [
 ]
 
 struct TimerPanelView: View {
-    @StateObject private var timer = PomodoroTimer()
+    @ObservedObject private var timer = PomodoroTimer.shared
+    @ObservedObject private var focusStore = FocusTimeStore.shared
+
     @State private var customMinutes = ""
-    @State private var showCustom = false
     @State private var selectedPreset: Int? = 25
 
     var body: some View {
         VStack(spacing: 0) {
-            // Panel title
             HStack {
                 Text("Focus Timer")
                     .font(.system(size: 13, weight: .semibold))
@@ -86,11 +86,18 @@ struct TimerPanelView: View {
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
             }
 
-            Spacer().frame(height: 24)
+            // Today's focus time — inline below controls
+            let todaySecs = focusStore.todaySeconds()
+            Text(todaySecs > 0 ? "Today  \(formatFocusTime(todaySecs))" : "No focus time today")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+                .padding(.top, 10)
+
+            Spacer().frame(height: 20)
 
             Divider().background(AppTheme.divider)
 
-            // Presets
+            // Presets + always-visible custom input
             VStack(alignment: .leading, spacing: 8) {
                 Text("Presets")
                     .font(.system(size: 10, weight: .semibold))
@@ -104,52 +111,47 @@ struct TimerPanelView: View {
                             isSelected: selectedPreset == preset.minutes
                         ) {
                             selectedPreset = preset.minutes
-                            showCustom = false
                             timer.set(minutes: preset.minutes)
                         }
-                    }
-
-                    PresetButton(label: "Custom", isSelected: showCustom) {
-                        selectedPreset = nil
-                        showCustom = true
                     }
                 }
                 .padding(.horizontal, 12)
 
-                if showCustom {
-                    HStack(spacing: 6) {
-                        TextField("min", text: $customMinutes)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13))
-                            .frame(width: 50)
-                            .padding(6)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.contentBackground))
-                            .onSubmit { applyCustom() }
-
-                        Text("min")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.textTertiary)
-
-                        Button("Set") { applyCustom() }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .pointerCursor()
-                    }
-                    .padding(.horizontal, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                HStack(spacing: 8) {
+                    Text("Custom")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    TextField("min", text: $customMinutes)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .frame(width: 44)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(AppTheme.contentBackground))
+                        .onSubmit { applyCustom() }
+                    Text("min")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Button("Set") { applyCustom() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .pointerCursor()
                 }
+                .padding(.horizontal, 16)
             }
             .padding(.vertical, 12)
 
             Spacer()
         }
-        .animation(.easeInOut(duration: 0.15), value: showCustom)
     }
 
     private func applyCustom() {
-        guard let mins = Int(customMinutes), mins > 0, mins <= 999 else { return }
-        timer.set(minutes: mins)
+        guard let mins = Double(customMinutes), mins > 0, mins <= 999 else { return }
+        selectedPreset = nil
+        timer.set(seconds: mins * 60)
     }
 }
 
@@ -173,4 +175,14 @@ struct PresetButton: View {
         .buttonStyle(.plain)
         .pointerCursor()
     }
+}
+
+func formatFocusTime(_ seconds: Int) -> String {
+    if seconds <= 0 { return "—" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    let s = seconds % 60
+    if h > 0 { return "\(h)h \(m)m \(s)s" }
+    if m > 0 { return "\(m)m \(s)s" }
+    return "\(s)s"
 }

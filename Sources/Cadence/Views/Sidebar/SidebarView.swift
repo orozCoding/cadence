@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SidebarView: View {
     @Binding var selection: NavSelection?
@@ -11,11 +12,16 @@ struct SidebarView: View {
     @State private var monthsExpanded = true
     @State private var yearsExpanded = true
     @State private var showAddFolder = false
+    @State private var hidePastDone = false
 
     var body: some View {
         VStack(spacing: 0) {
             // App title
-            HStack {
+            HStack(spacing: 8) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
                 Text("Cadence")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
@@ -29,22 +35,50 @@ struct SidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     let fid = folderStore.activeFolder.id
+                    let today = settings.currentDate
+                    let currentWeekStart = settings.currentDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
+                    let currentMonthStart = settings.currentDate.startOfMonth()
+                    let currentYear = Calendar.current.component(.year, from: settings.currentDate)
 
-                    // All
+                    // All Tasks + hide-past-done toggle
                     SidebarRow(label: "All Tasks", icon: "square.grid.2x2", isSelected: selection == .all) {
                         withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
+                    }
+                    .overlay(alignment: .trailing) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) { hidePastDone.toggle() }
+                        } label: {
+                            Image(systemName: hidePastDone ? "checkmark.circle.fill" : "checkmark.circle")
+                                .font(.system(size: 13))
+                                .foregroundStyle(hidePastDone ? AppTheme.accent : AppTheme.textTertiary)
+                                .padding(.trailing, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Hide past periods with all tasks completed")
+                        .pointerCursor()
                     }
                     .padding(.top, 8)
 
                     // Days
-                    let days = store.distinctDays(folderId: fid)
+                    let allDays = store.distinctDays(folderId: fid)
+                    let days: [Date] = hidePastDone
+                        ? allDays.filter { day in
+                            guard day < today else { return true }
+                            return store.tasks(forDay: day, folderId: fid).contains { !$0.isDone }
+                          }
+                        : allDays
                     if !days.isEmpty {
                         SidebarSection(label: "Days", isExpanded: $daysExpanded) {
                             ForEach(days, id: \.self) { day in
-                                SidebarRow(
+                                let dayTasks = store.tasks(forDay: day, folderId: fid)
+                                let incompleteCount = dayTasks.filter { !$0.isDone }.count
+                                SidebarPeriodRow(
                                     label: day.dayLabel(today: settings.currentDate),
                                     icon: "sun.max",
-                                    isSelected: selection == .day(day)
+                                    isSelected: selection == .day(day),
+                                    isPast: day < today,
+                                    incompleteCount: incompleteCount,
+                                    allDone: incompleteCount == 0
                                 ) {
                                     withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) }
                                 }
@@ -53,14 +87,25 @@ struct SidebarView: View {
                     }
 
                     // Weeks
-                    let weeks = store.distinctWeeks(weekStartsOn: settings.weekStartsOn, folderId: fid)
+                    let allWeeks = store.distinctWeeks(weekStartsOn: settings.weekStartsOn, folderId: fid)
+                    let weeks: [Date] = hidePastDone
+                        ? allWeeks.filter { weekStart in
+                            guard weekStart < currentWeekStart else { return true }
+                            return store.tasks(forWeek: weekStart, weekStartsOn: settings.weekStartsOn, folderId: fid).contains { !$0.isDone }
+                          }
+                        : allWeeks
                     if !weeks.isEmpty {
                         SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
                             ForEach(weeks, id: \.self) { weekStart in
-                                SidebarRow(
+                                let weekTasks = store.tasks(forWeek: weekStart, weekStartsOn: settings.weekStartsOn, folderId: fid)
+                                let incompleteCount = weekTasks.filter { !$0.isDone }.count
+                                SidebarPeriodRow(
                                     label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn, today: settings.currentDate),
                                     icon: "calendar",
-                                    isSelected: selection == .week(weekStart)
+                                    isSelected: selection == .week(weekStart),
+                                    isPast: weekStart < currentWeekStart,
+                                    incompleteCount: incompleteCount,
+                                    allDone: incompleteCount == 0
                                 ) {
                                     withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) }
                                 }
@@ -69,14 +114,25 @@ struct SidebarView: View {
                     }
 
                     // Months
-                    let months = store.distinctMonths(folderId: fid)
+                    let allMonths = store.distinctMonths(folderId: fid)
+                    let months: [Date] = hidePastDone
+                        ? allMonths.filter { monthStart in
+                            guard monthStart < currentMonthStart else { return true }
+                            return store.tasks(forMonth: monthStart, folderId: fid).contains { !$0.isDone }
+                          }
+                        : allMonths
                     if !months.isEmpty {
                         SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
                             ForEach(months, id: \.self) { monthStart in
-                                SidebarRow(
+                                let monthTasks = store.tasks(forMonth: monthStart, folderId: fid)
+                                let incompleteCount = monthTasks.filter { !$0.isDone }.count
+                                SidebarPeriodRow(
                                     label: monthStart.monthLabel(today: settings.currentDate),
                                     icon: "calendar.badge.clock",
-                                    isSelected: selection == .month(monthStart)
+                                    isSelected: selection == .month(monthStart),
+                                    isPast: monthStart < currentMonthStart,
+                                    incompleteCount: incompleteCount,
+                                    allDone: incompleteCount == 0
                                 ) {
                                     withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) }
                                 }
@@ -85,14 +141,25 @@ struct SidebarView: View {
                     }
 
                     // Years
-                    let years = store.distinctYears(folderId: fid)
+                    let allYears = store.distinctYears(folderId: fid)
+                    let years: [Int] = hidePastDone
+                        ? allYears.filter { year in
+                            guard year < currentYear else { return true }
+                            return store.tasks(forYear: year, folderId: fid).contains { !$0.isDone }
+                          }
+                        : allYears
                     if !years.isEmpty {
                         SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
                             ForEach(years, id: \.self) { year in
-                                SidebarRow(
+                                let yearTasks = store.tasks(forYear: year, folderId: fid)
+                                let incompleteCount = yearTasks.filter { !$0.isDone }.count
+                                SidebarPeriodRow(
                                     label: year.yearLabel(today: settings.currentDate),
                                     icon: "archivebox",
-                                    isSelected: selection == .year(year)
+                                    isSelected: selection == .year(year),
+                                    isPast: year < currentYear,
+                                    incompleteCount: incompleteCount,
+                                    allDone: incompleteCount == 0
                                 ) {
                                     withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) }
                                 }
@@ -119,17 +186,52 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Settings at bottom
+            SidebarRow(label: "Focus Time", icon: "chart.bar.fill", isSelected: selection == .focusTime) {
+                withAnimation(.easeInOut(duration: 0.18)) { selection = .focusTime }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+
             SidebarRow(label: "Settings", icon: "gear", isSelected: selection == .settings) {
                 withAnimation(.easeInOut(duration: 0.18)) { selection = .settings }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.bottom, 6)
         }
         .onChange(of: settings.weekStartsOn) { _, newValue in
             if case .week(let date) = selection {
                 selection = .week(date.startOfWeek(weekStartsOn: newValue))
             }
+        }
+        // When the filter is active, clear selection if its period just got filtered out
+        .onChange(of: store.tasks) { _, _ in validateSelection() }
+        .onChange(of: hidePastDone)  { _, _ in validateSelection() }
+    }
+
+    private func validateSelection() {
+        guard hidePastDone, let sel = selection else { return }
+        let fid = folderStore.activeFolder.id
+        let today = Date().startOfDay()
+        let allDoneAndPast: Bool
+        switch sel {
+        case .day(let day):
+            guard day < today else { return }
+            allDoneAndPast = store.tasks(forDay: day, folderId: fid).allSatisfy(\.isDone)
+        case .week(let weekStart):
+            let cur = Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
+            guard weekStart < cur else { return }
+            allDoneAndPast = store.tasks(forWeek: weekStart, weekStartsOn: settings.weekStartsOn, folderId: fid).allSatisfy(\.isDone)
+        case .month(let monthStart):
+            guard monthStart < Date().startOfMonth() else { return }
+            allDoneAndPast = store.tasks(forMonth: monthStart, folderId: fid).allSatisfy(\.isDone)
+        case .year(let year):
+            guard year < Calendar.current.component(.year, from: Date()) else { return }
+            allDoneAndPast = store.tasks(forYear: year, folderId: fid).allSatisfy(\.isDone)
+        default:
+            return
+        }
+        if allDoneAndPast {
+            withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
         }
     }
 }
@@ -159,7 +261,7 @@ private struct FolderSwitcher: View {
             Button("Add New Folder…") { showAddFolder = true }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "folder.fill")
+                Image(systemName: "folder")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.accent)
                 Text(folderStore.activeFolder.name)
@@ -266,7 +368,7 @@ struct SidebarSection<Content: View>: View {
     }
 }
 
-// MARK: - Row
+// MARK: - Plain row (for All Tasks, Focus Time, Settings)
 
 struct SidebarRow: View {
     let label: String
@@ -289,6 +391,7 @@ struct SidebarRow: View {
                     .lineLimit(1)
                 Spacer()
             }
+            .contentShape(Rectangle())
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
@@ -299,5 +402,68 @@ struct SidebarRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .pointerCursor()
+    }
+}
+
+// MARK: - Period row (Days / Weeks / Months / Years — with past/done state)
+
+struct SidebarPeriodRow: View {
+    let label: String
+    let icon: String
+    let isSelected: Bool
+    let isPast: Bool
+    let incompleteCount: Int
+    let allDone: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    private var isStrikethrough: Bool { isPast && allDone }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 16)
+                Text(label)
+                    .font(.system(size: 13))
+                    .foregroundStyle(labelColor)
+                    .strikethrough(isStrikethrough, color: AppTheme.textTertiary)
+                    .lineLimit(1)
+                Spacer()
+                if isPast && incompleteCount > 0 {
+                    Text("\(incompleteCount)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.25)))
+                }
+            }
+            .contentShape(Rectangle())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                    .fill(isSelected ? AppTheme.selectedItem : (isHovered ? AppTheme.hoveredItem : Color.clear))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+    }
+
+    private var iconColor: Color {
+        if isSelected { return AppTheme.accent }
+        if isStrikethrough { return AppTheme.textTertiary }
+        return AppTheme.textSecondary
+    }
+
+    private var labelColor: Color {
+        if isSelected { return AppTheme.accentDark }
+        if isStrikethrough { return AppTheme.textTertiary }
+        return AppTheme.textPrimary
     }
 }
