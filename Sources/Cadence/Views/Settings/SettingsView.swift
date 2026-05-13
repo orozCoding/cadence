@@ -26,6 +26,24 @@ struct SettingsView: View {
                 } header: {
                     Text("Calendar")
                 }
+
+                Section {
+                    Picker("Finish sound", selection: $settings.timerFinishSound) {
+                        ForEach(TimerFinishSound.allCases) { sound in
+                            Text(sound.label).tag(sound)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+
+                    Button("Preview") {
+                        SoundManager.shared.playTimerFinished(sound: settings.timerFinishSound)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.accent)
+                } header: {
+                    Text("Timer Sounds")
+                }
             }
             .formStyle(.grouped)
             .frame(maxWidth: 480)
