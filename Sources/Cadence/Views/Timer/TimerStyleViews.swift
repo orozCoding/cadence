@@ -81,15 +81,6 @@ struct TimerButtonBG: View {
 
 // MARK: - Style 1: Glassy liquid fill
 
-// Stores wave phase so it survives style-switch round-trips.
-@MainActor
-private final class GlassWaveState {
-    static let shared = GlassWaveState()
-    var phase: CGFloat = 0
-    var disappearDate: Date? = nil
-    var disappearIsRunning: Bool = false
-}
-
 // Animatable liquid wave shape
 struct LiquidFill: Shape {
     var level: CGFloat
@@ -142,34 +133,13 @@ struct GlassTimerCircle: View {
             .accessibilityValue(isFinished ? "Done" : timeString)
             .onAppear {
                 guard !isPreview else { return }
-                let saved = GlassWaveState.shared.phase
-                // If the timer was running while Glassy was hidden, advance the phase
-                // by the time elapsed during the hidden period so the wave is continuous.
-                // Advance wave phase by time elapsed while hidden, but only if the timer
-                // was running when Glassy was hidden (paused-when-left → no advance).
-                let hiddenAdvance: CGFloat
-                if GlassWaveState.shared.disappearIsRunning,
-                   let d = GlassWaveState.shared.disappearDate {
-                    hiddenAdvance = CGFloat(Date().timeIntervalSince(d)) / 4.0 * (.pi * 2)
-                } else {
-                    hiddenAdvance = 0
-                }
-                GlassWaveState.shared.disappearDate = nil
-                GlassWaveState.shared.disappearIsRunning = false
-                frozenPhase  = saved
-                phaseAtStart = saved + hiddenAdvance
+                // Anchor wave phase to actual elapsed running time so it stays
+                // consistent across style-switch round-trips, pauses, and resumes.
+                let elapsed = PomodoroTimer.shared.total - PomodoroTimer.shared.remaining
+                let anchored = CGFloat(elapsed / 4.0) * (.pi * 2)
+                frozenPhase  = anchored
+                phaseAtStart = anchored
                 waveStartDate = .now
-            }
-            .onDisappear {
-                guard !isPreview else { return }
-                GlassWaveState.shared.disappearDate = Date()
-                GlassWaveState.shared.disappearIsRunning = isRunning
-                if isRunning {
-                    let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
-                    GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
-                } else {
-                    GlassWaveState.shared.phase = frozenPhase
-                }
             }
             .onChange(of: isRunning) { _, running in
                 guard !isPreview else { return }
@@ -179,7 +149,6 @@ struct GlassTimerCircle: View {
                 } else {
                     let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
                     frozenPhase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
-                    GlassWaveState.shared.phase = frozenPhase
                 }
             }
     }

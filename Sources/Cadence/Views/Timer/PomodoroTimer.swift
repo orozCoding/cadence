@@ -36,7 +36,9 @@ final class PomodoroTimer: ObservableObject {
 
     func toggle() {
         if isFinished {
-            reset()
+            remaining = total
+            isFinished = false
+            start()
             return
         }
         if isRunning {
