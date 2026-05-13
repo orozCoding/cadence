@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 
 // MARK: - App delegate (keyboard + click monitors)
 
@@ -7,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var monitors: [Any] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+
         // Space bar → toggle timer (only when no text field is focused)
         if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: handleKeyDown) {
             monitors.append(m)
@@ -42,6 +45,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.makeFirstResponder(nil)
         }
         return event
+    }
+}
+
+// MARK: - Foreground notification presentation
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 }
 
