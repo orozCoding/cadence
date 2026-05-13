@@ -6,6 +6,15 @@ final class SoundManager {
     static let shared = SoundManager()
 
     private var player: AVAudioPlayer?
+    private var systemSound: NSSound?
+
+    private static var resourceBundle: Bundle {
+        #if SWIFT_PACKAGE
+        return Bundle.module
+        #else
+        return Bundle.main
+        #endif
+    }
 
     private init() {}
 
@@ -23,12 +32,15 @@ final class SoundManager {
 
     func playTimerSetOrReset() {
         player?.stop()
-        NSSound(named: "Tink")?.play()
+        systemSound?.stop()
+        systemSound = NSSound(named: "Tink")
+        systemSound?.play()
     }
 
     private func playBundled(_ name: String) {
         player?.stop()
-        guard let url = Bundle.main.url(forResource: name, withExtension: "mp3") else { return }
+        systemSound?.stop()
+        guard let url = SoundManager.resourceBundle.url(forResource: name, withExtension: "mp3") else { return }
         player = try? AVAudioPlayer(contentsOf: url)
         player?.play()
     }
