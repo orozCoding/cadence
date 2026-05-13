@@ -1,301 +1,414 @@
 import SwiftUI
+import AppKit
 
-// MARK: - Line model (file-private)
+// MARK: - Public view (API unchanged)
 
-private enum BodyLine {
-    case checkbox(id: UUID, checked: Bool, text: String)
-    case plain(id: UUID, text: String)
-
-    var id: UUID {
-        switch self {
-        case .checkbox(let id, _, _): return id
-        case .plain(let id, _): return id
-        }
-    }
-}
-
-private func parseBodyLines(_ body: String) -> [BodyLine] {
-    guard !body.isEmpty else { return [.plain(id: UUID(), text: "")] }
-    return body.components(separatedBy: "\n").map { line in
-        if line.hasPrefix("- [ ] ") {
-            return .checkbox(id: UUID(), checked: false, text: String(line.dropFirst(6)))
-        } else if line.lowercased().hasPrefix("- [x] ") {
-            return .checkbox(id: UUID(), checked: true, text: String(line.dropFirst(6)))
-        } else {
-            return .plain(id: UUID(), text: line)
-        }
-    }
-}
-
-private func serializeBodyLines(_ lines: [BodyLine]) -> String {
-    lines.map { line -> String in
-        switch line {
-        case .checkbox(_, let checked, let text):
-            return (checked ? "- [x] " : "- [ ] ") + text
-        case .plain(_, let text):
-            return text
-        }
-    }.joined(separator: "\n")
-}
-
-// MARK: - ChecklistBodyEditor
-
-/// Renders a task body as a mix of interactive checkbox rows and plain-text lines.
-/// • Typing `[]` at the start of a line converts it to an unchecked checkbox.
-/// • Return splits the current line at the cursor, inserting the suffix into a new row.
-/// • Return on an empty checkbox exits checkbox mode (converts to plain text).
-/// • Backspace on an empty row removes it and moves focus up.
-/// • Empty checkbox rows are removed when focus leaves them.
 struct ChecklistBodyEditor: View {
     @Binding var text: String
     var focusTrigger: Int = 0
 
-    @FocusState private var focusedIndex: Int?
-    @State private var lines: [BodyLine]
-    @State private var suppressCleanup = false
-
-    init(text: Binding<String>, focusTrigger: Int = 0) {
-        self._text = text
-        self.focusTrigger = focusTrigger
-        self._lines = State(initialValue: parseBodyLines(text.wrappedValue))
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ForEach(Array(lines.enumerated()), id: \.element.id) { idx, line in
-                rowView(at: idx, line: line)
-            }
-        }
-        .onChange(of: text) { _, newText in
-            guard serializeBodyLines(lines) != newText else { return }
-            let newParsed = parseBodyLines(newText)
-            // Preserve UUID identity for same-type lines at the same position so
-            // ForEach doesn't destroy and recreate rows on an external reset.
-            lines = newParsed.enumerated().map { i, newLine in
-                guard i < lines.count else { return newLine }
-                switch (lines[i], newLine) {
-                case (.checkbox(let id, _, _), .checkbox(_, let c, let t)):
-                    return .checkbox(id: id, checked: c, text: t)
-                case (.plain(let id, _), .plain(_, let t)):
-                    return .plain(id: id, text: t)
-                default:
-                    return newLine
-                }
-            }
-        }
-        .onChange(of: focusedIndex) { old, new in
-            guard !suppressCleanup else { return }
-            guard let old = old, old < lines.count else { return }
-            guard case .checkbox(_, _, let t) = lines[old],
-                  t.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-            if lines.count > 1 {
-                lines.remove(at: old)
-                commit()
-                if let new = new, new > old {
-                    Task { @MainActor in focusedIndex = new - 1 }
-                }
-            } else {
-                lines[0] = .plain(id: lines[0].id, text: "")
-                commit()
-            }
-        }
-        .onChange(of: focusTrigger) { _, _ in
-            // All rows use TextField so every index is focusable.
-            focusedIndex = lines.indices.last
-        }
+        BodyEditorRepresentable(text: $text, focusTrigger: focusTrigger)
+    }
+}
+
+// MARK: - Checkbox attachment
+
+private final class CheckboxAttachment: NSTextAttachment {
+    let isChecked: Bool
+
+    init(isChecked: Bool) {
+        self.isChecked = isChecked
+        super.init(data: nil, ofType: nil)
+        applyImage()
     }
 
-    // MARK: - Row rendering
+    required init?(coder: NSCoder) { fatalError() }
 
-    @ViewBuilder
-    private func rowView(at idx: Int, line: BodyLine) -> some View {
-        switch line {
-        case .checkbox(_, let checked, _):
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Button { toggleCheckbox(at: idx) } label: {
-                    Image(systemName: checked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 14))
-                        .foregroundStyle(checked ? AppTheme.accent : AppTheme.textTertiary)
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.plain)
-                .pointerCursor()
-                .accessibilityLabel({
-                    let rawText = checkboxItemText(at: idx)
-                    let state = checked ? "checked" : "unchecked"
-                    return rawText.isEmpty ? state : "\(rawText), \(state)"
-                }())
-                .accessibilityHint("Toggle")
+    private func applyImage() {
+        let symName = isChecked ? "checkmark.square.fill" : "square"
+        let color   = isChecked ? NSColor(AppTheme.accent) : NSColor(AppTheme.textTertiary)
+        guard let base = NSImage(systemSymbolName: symName, accessibilityDescription: nil),
+              let sized = base.withSymbolConfiguration(.init(pointSize: 13, weight: .regular))
+        else { return }
 
-                TextField("", text: checkboxBinding(at: idx))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(checked ? AppTheme.textTertiary : AppTheme.textSecondary)
-                    .strikethrough(checked, color: AppTheme.textTertiary)
-                    .focused($focusedIndex, equals: idx)
-                    .onKeyPress(.return) {
-                        let pos = (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectedRange().location
-                        handleEnterOnCheckbox(at: idx, cursorPos: pos)
-                        return .handled
-                    }
-                    .onKeyPress(.delete) {
-                        guard checkboxItemText(at: idx).trimmingCharacters(in: .whitespaces).isEmpty else { return .ignored }
-                        if lines.count > 1 {
-                            if idx > 0 { Task { @MainActor in focusedIndex = idx - 1 } }
-                            lines.remove(at: idx)
-                            commit()
-                        } else {
-                            lines[0] = .plain(id: lines[0].id, text: "")
-                            commit()
-                        }
-                        return .handled
-                    }
-                    .accessibilityLabel(checkboxItemText(at: idx).isEmpty
-                        ? (checked ? "Completed item" : "Checklist item")
-                        : checkboxItemText(at: idx))
-                    .accessibilityValue(checked ? "Completed" : "To do")
-            }
-            .padding(.vertical, 2)
-
-        case .plain(_, _):
-            TextField("", text: plainBinding(at: idx))
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.textSecondary)
-                .focused($focusedIndex, equals: idx)
-                .onKeyPress(.return) {
-                    let pos = (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectedRange().location
-                    handleEnterOnPlain(at: idx, cursorPos: pos)
-                    return .handled
-                }
-                .onKeyPress(.delete) {
-                    guard plainText(at: idx).isEmpty && lines.count > 1 else { return .ignored }
-                    if idx > 0 { Task { @MainActor in focusedIndex = idx - 1 } }
-                    lines.remove(at: idx)
-                    commit()
-                    return .handled
-                }
-                .accessibilityLabel(plainText(at: idx).isEmpty ? "Description line" : plainText(at: idx))
-                .padding(.vertical, 2)
+        // Build tinted image with right-side padding so the icon doesn't crowd text.
+        let iconW: CGFloat = 14
+        let pad:  CGFloat  = 4
+        let h:    CGFloat  = 14
+        let img = NSImage(size: NSSize(width: iconW + pad, height: h), flipped: false) { rect in
+            sized.draw(in: NSRect(x: 0, y: 0, width: iconW, height: h))
+            color.set()
+            NSRect(x: 0, y: 0, width: iconW, height: h).fill(using: .sourceAtop)
+            return true
         }
+        image  = img
+        bounds = CGRect(x: 0, y: -2, width: iconW + pad, height: h)
+    }
+}
+
+// MARK: - NSTextView subclass
+
+private final class BodyNSTextView: NSTextView {
+    weak var bodyCoordinator: BodyEditorCoordinator?
+
+    func configure(coordinator: BodyEditorCoordinator) {
+        bodyCoordinator = coordinator
+        isEditable      = true
+        isSelectable    = true
+        allowsUndo      = true
+        isRichText      = true
+        importsGraphics = false
+        usesFontPanel   = false
+        usesRuler       = false
+        backgroundColor = .clear
+        drawsBackground = false
+        isVerticallyResizable   = true
+        isHorizontallyResizable = false
+        autoresizingMask = [.width]
+        textContainer?.widthTracksTextView = true
+        textContainer?.lineFragmentPadding = 0
+        isAutomaticSpellingCorrectionEnabled = false
+        isAutomaticDashSubstitutionEnabled   = false
+        isAutomaticQuoteSubstitutionEnabled  = false
+        isAutomaticTextReplacementEnabled    = false
+        delegate = coordinator
     }
 
-    // MARK: - Text helpers
-
-    private func checkboxItemText(at idx: Int) -> String {
-        guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
-        return t
+    override var intrinsicContentSize: NSSize {
+        guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
+        lm.ensureLayout(for: tc)
+        return NSSize(width: NSView.noIntrinsicMetric, height: max(lm.usedRect(for: tc).height, 16))
     }
 
-    private func plainText(at idx: Int) -> String {
-        guard case .plain(_, let t) = lines[safe: idx] else { return "" }
-        return t
+    override func didChangeText() {
+        super.didChangeText()
+        invalidateIntrinsicContentSize()
     }
 
-    // MARK: - Bindings
-
-    private func checkboxBinding(at idx: Int) -> Binding<String> {
-        Binding {
-            guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
-            return t
-        } set: { newVal in
-            guard idx < lines.count, case .checkbox(let id, let c, _) = lines[idx] else { return }
-            lines[idx] = .checkbox(id: id, checked: c, text: newVal)
-            commit()
-        }
-    }
-
-    private func plainBinding(at idx: Int) -> Binding<String> {
-        Binding {
-            guard case .plain(_, let t) = lines[safe: idx] else { return "" }
-            return t
-        } set: { newVal in
-            guard idx < lines.count else { return }
-            // [] at the START of the line triggers checkbox conversion.
-            // Preserve the UUID so ForEach identity is stable across the type change.
-            // Use nil→idx focus hop so @FocusState sees a real transition; suppressCleanup
-            // prevents the blur-cleanup from removing the newly created empty checkbox.
-            if newVal.hasPrefix("[]") {
-                let cleaned = String(newVal.dropFirst(2))
-                guard case .plain(let id, _) = lines[idx] else { return }
-                lines[idx] = .checkbox(id: id, checked: false, text: cleaned)
-                commit()
-                suppressCleanup = true
-                focusedIndex = nil
-                Task { @MainActor in
-                    focusedIndex = idx
-                    suppressCleanup = false
-                }
+    // Detect clicks on attachment chars and route them as checkbox toggles.
+    override func mouseDown(with event: NSEvent) {
+        let pt = convert(event.locationInWindow, from: nil)
+        if let lm = layoutManager, let tc = textContainer, let ts = textStorage {
+            let idx = lm.characterIndex(for: pt, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
+            if idx < ts.length,
+               (ts.string as NSString).character(at: idx) == 0xFFFC,
+               let att = ts.attribute(.attachment, at: idx, effectiveRange: nil) as? CheckboxAttachment {
+                bodyCoordinator?.toggleCheckbox(att, in: self)
                 return
             }
-            guard case .plain(let id, _) = lines[idx] else { return }
-            lines[idx] = .plain(id: id, text: newVal)
-            commit()
         }
+        super.mouseDown(with: event)
+    }
+}
+
+// MARK: - NSViewRepresentable
+
+private struct BodyEditorRepresentable: NSViewRepresentable {
+    @Binding var text: String
+    var focusTrigger: Int
+
+    func makeCoordinator() -> BodyEditorCoordinator { BodyEditorCoordinator(text: $text) }
+
+    func makeNSView(context: Context) -> BodyNSTextView {
+        let tv = BodyNSTextView()
+        tv.configure(coordinator: context.coordinator)
+        context.coordinator.render(text, to: tv)
+        return tv
     }
 
-    // MARK: - Actions
-
-    private func toggleCheckbox(at idx: Int) {
-        guard idx < lines.count, case .checkbox(let id, let c, let t) = lines[idx] else { return }
-        lines[idx] = .checkbox(id: id, checked: !c, text: t)
-        commit()
-    }
-
-    private func handleEnterOnCheckbox(at idx: Int, cursorPos: Int? = nil) {
-        guard case .checkbox(_, let c, let t) = lines[safe: idx] else { return }
-        if t.trimmingCharacters(in: .whitespaces).isEmpty {
-            // Empty checkbox + Return → exit checkbox mode
-            lines[idx] = .plain(id: UUID(), text: "")
-            commit()
-            Task { @MainActor in focusedIndex = idx }
-        } else {
-            // Split at cursor; if no cursor info, insert empty row below.
-            let suffix: String
-            if let pos = cursorPos {
-                let clampedPos = min(pos, t.utf16.count)
-                let splitIdx = String.Index(utf16Offset: clampedPos, in: t)
-                let prefix = String(t[..<splitIdx])
-                suffix = String(t[splitIdx...])
-                guard case .checkbox(let id, _, _) = lines[idx] else { return }
-                lines[idx] = .checkbox(id: id, checked: c, text: prefix)
-            } else {
-                suffix = ""
+    func updateNSView(_ tv: BodyNSTextView, context: Context) {
+        let c = context.coordinator
+        if c.committedText != text { c.render(text, to: tv) }
+        if focusTrigger > c.lastFocusTrigger {
+            c.lastFocusTrigger = focusTrigger
+            DispatchQueue.main.async {
+                tv.window?.makeFirstResponder(tv)
+                tv.setSelectedRange(NSRange(location: tv.textStorage?.length ?? 0, length: 0))
             }
-            lines.insert(.checkbox(id: UUID(), checked: false, text: suffix), at: idx + 1)
-            commit()
-            Task { @MainActor in focusedIndex = idx + 1 }
         }
     }
 
-    private func handleEnterOnPlain(at idx: Int, cursorPos: Int? = nil) {
-        let t = plainText(at: idx)
-        let suffix: String
-        if let pos = cursorPos {
-            let clampedPos = min(pos, t.utf16.count)
-            let splitIdx = String.Index(utf16Offset: clampedPos, in: t)
-            let prefix = String(t[..<splitIdx])
-            suffix = String(t[splitIdx...])
-            guard case .plain(let id, _) = lines[idx] else { return }
-            lines[idx] = .plain(id: id, text: prefix)
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView tv: BodyNSTextView, context: Context) -> CGSize? {
+        guard let w = proposal.width, w > 0,
+              let lm = tv.layoutManager, let tc = tv.textContainer else { return nil }
+        tc.containerSize = CGSize(width: w, height: .greatestFiniteMagnitude)
+        lm.ensureLayout(for: tc)
+        return CGSize(width: w, height: max(lm.usedRect(for: tc).height, 16))
+    }
+}
+
+// MARK: - Coordinator
+
+private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
+    @Binding var text: String
+    var lastFocusTrigger = 0
+    var committedText    = ""
+    private var isRendering = false
+
+    init(text: Binding<String>) {
+        _text         = text
+        committedText = text.wrappedValue
+    }
+
+    // MARK: Build display attributed string from raw text
+
+    func buildAttr(_ raw: String) -> NSAttributedString {
+        let result   = NSMutableAttributedString()
+        let font     = NSFont.systemFont(ofSize: 13)
+        let secondary = NSColor(AppTheme.textSecondary)
+        let tertiary  = NSColor(AppTheme.textTertiary)
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byWordWrapping
+        let plainAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: secondary, .paragraphStyle: para]
+
+        for (i, line) in raw.components(separatedBy: "\n").enumerated() {
+            if i > 0 { result.append(NSAttributedString(string: "\n", attributes: plainAttrs)) }
+
+            if line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ") {
+                let checked = line.lowercased().hasPrefix("- [x] ")
+                let attAS = NSMutableAttributedString(attachment: CheckboxAttachment(isChecked: checked))
+                attAS.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: attAS.length))
+                result.append(attAS)
+                let content = String(line.dropFirst(6))
+                if checked {
+                    result.append(NSAttributedString(string: content, attributes: [
+                        .font: font, .foregroundColor: tertiary,
+                        .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                        .strikethroughColor: tertiary, .paragraphStyle: para
+                    ]))
+                } else {
+                    result.append(NSAttributedString(string: content, attributes: plainAttrs))
+                }
+            } else {
+                result.append(NSAttributedString(string: line, attributes: plainAttrs))
+            }
+        }
+        return result
+    }
+
+    // MARK: Extract raw text from display textStorage
+    // Attachment chars (U+FFFC) are replaced with their "- [ ] " / "- [x] " prefixes.
+
+    func extractRaw(from ts: NSTextStorage) -> String {
+        let ns  = ts.string as NSString
+        let len = ts.length
+        var result = ""
+        var i = 0
+        while i < len {
+            let ch = ns.character(at: i)
+            if ch == 0xFFFC {
+                if let att = ts.attribute(.attachment, at: i, effectiveRange: nil) as? CheckboxAttachment {
+                    result += att.isChecked ? "- [x] " : "- [ ] "
+                }
+                i += 1
+            } else if ch >= 0xD800 && ch <= 0xDBFF && i + 1 < len {
+                // Surrogate pair (emoji etc.)
+                result += ns.substring(with: NSRange(location: i, length: 2))
+                i += 2
+            } else {
+                result += ns.substring(with: NSRange(location: i, length: 1))
+                i += 1
+            }
+        }
+        return result
+    }
+
+    // MARK: Apply render (full rebuild)
+
+    func render(_ raw: String, to tv: BodyNSTextView) {
+        isRendering = true
+        let sel = tv.selectedRange()
+        tv.textStorage?.setAttributedString(buildAttr(raw))
+        let newLen = tv.textStorage?.length ?? 0
+        tv.setSelectedRange(NSRange(location: min(sel.location, newLen), length: 0))
+        committedText = raw
+        tv.invalidateIntrinsicContentSize()
+        isRendering = false
+    }
+
+    // MARK: Checkbox toggle
+
+    func toggleCheckbox(_ att: CheckboxAttachment, in tv: BodyNSTextView) {
+        guard let ts = tv.textStorage else { return }
+        let raw = extractRaw(from: ts)
+        var lines = raw.components(separatedBy: "\n")
+        // Identify which line holds this attachment object by identity.
+        let ns = ts.string as NSString
+        var lineIdx = 0
+        var found   = false
+        for i in 0..<ts.length {
+            if ns.character(at: i) == 0x0A { lineIdx += 1 }
+            if ns.character(at: i) == 0xFFFC,
+               let a = ts.attribute(.attachment, at: i, effectiveRange: nil) as? CheckboxAttachment,
+               a === att {
+                found = true; break
+            }
+        }
+        guard found, lineIdx < lines.count else { return }
+        let ln = lines[lineIdx]
+        if ln.hasPrefix("- [ ] ") {
+            lines[lineIdx] = "- [x] " + ln.dropFirst(6)
+        } else if ln.lowercased().hasPrefix("- [x] ") {
+            lines[lineIdx] = "- [ ] " + ln.dropFirst(6)
+        }
+        let newRaw = lines.joined(separator: "\n")
+        text = newRaw
+        committedText = newRaw
+        render(newRaw, to: tv)
+    }
+
+    // MARK: textDidChange
+
+    func textDidChange(_ notification: Notification) {
+        guard !isRendering,
+              let tv = notification.object as? BodyNSTextView,
+              let ts = tv.textStorage else { return }
+
+        var raw = extractRaw(from: ts)
+
+        // Detect `[]` at start of any line → convert to unchecked checkbox.
+        let lines = raw.components(separatedBy: "\n")
+        var conversionLine: Int? = nil
+        let converted: [String] = lines.enumerated().map { idx, line in
+            if line.hasPrefix("[]") {
+                if conversionLine == nil { conversionLine = idx }
+                return "- [ ] " + line.dropFirst(2)
+            }
+            return line
+        }
+        if converted != lines { raw = converted.joined(separator: "\n") }
+
+        guard raw != committedText else { return }
+        text         = raw
+        committedText = raw
+
+        let sel = tv.selectedRange()
+        isRendering = true
+        ts.setAttributedString(buildAttr(raw))
+        let newLen = ts.length
+
+        if let convLine = conversionLine {
+            // Place cursor at the content area of the converted checkbox line.
+            tv.setSelectedRange(NSRange(location: min(lineContentStart(convLine, in: tv), newLen), length: 0))
         } else {
-            suffix = ""
+            tv.setSelectedRange(NSRange(location: min(sel.location, newLen), length: 0))
         }
-        lines.insert(.plain(id: UUID(), text: suffix), at: idx + 1)
-        commit()
-        Task { @MainActor in focusedIndex = idx + 1 }
+        isRendering = false
+        tv.invalidateIntrinsicContentSize()
     }
 
-    private func commit() {
-        let serialized = serializeBodyLines(lines)
-        if text != serialized { text = serialized }
+    // MARK: Return key — maintain checklist line continuation
+
+    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard commandSelector == #selector(NSResponder.insertNewline(_:)),
+              let tv = textView as? BodyNSTextView,
+              let ts = tv.textStorage else { return false }
+
+        let cursor = tv.selectedRange().location
+        let ns     = ts.string as NSString
+
+        // Find start of current line by scanning backwards for newline.
+        var lineStart = 0
+        if cursor > 0 {
+            for i in stride(from: cursor - 1, through: 0, by: -1) {
+                if ns.character(at: i) == 0x0A { lineStart = i + 1; break }
+            }
+        }
+
+        // Only intercept if the line starts with a checkbox attachment.
+        guard lineStart < ts.length,
+              ns.character(at: lineStart) == 0xFFFC,
+              let att = ts.attribute(.attachment, at: lineStart, effectiveRange: nil) as? CheckboxAttachment
+        else { return false }
+
+        // Content starts immediately after the attachment char.
+        let contentStart = lineStart + 1
+        var lineEnd = ts.length
+        for i in contentStart..<ts.length {
+            if ns.character(at: i) == 0x0A { lineEnd = i; break }
+        }
+        let displayContent = lineEnd > contentStart
+            ? ns.substring(with: NSRange(location: contentStart, length: lineEnd - contentStart))
+            : ""
+
+        let raw      = extractRaw(from: ts)
+        var rawLines = raw.components(separatedBy: "\n")
+        let li       = lineIndex(for: lineStart, in: ts)
+        guard li < rawLines.count else { return false }
+
+        if displayContent.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Empty checkbox → exit checkbox mode (convert to plain text line).
+            rawLines[li] = ""
+            let newRaw = rawLines.joined(separator: "\n")
+            text = newRaw; committedText = newRaw
+            render(newRaw, to: tv)
+        } else {
+            // Split content at cursor; new line is always unchecked.
+            let posInContent = max(0, min(cursor - contentStart, displayContent.count))
+            let splitIdx     = displayContent.index(displayContent.startIndex, offsetBy: posInContent)
+            let before = String(displayContent[..<splitIdx])
+            let after  = String(displayContent[splitIdx...])
+
+            let pfx = att.isChecked ? "- [x] " : "- [ ] "
+            rawLines[li] = pfx + before
+            rawLines.insert("- [ ] " + after, at: li + 1)
+            let newRaw = rawLines.joined(separator: "\n")
+            text = newRaw; committedText = newRaw
+
+            let newAttr = buildAttr(newRaw)
+            isRendering = true
+            ts.setAttributedString(newAttr)
+            let newLen = ts.length
+            // Cursor goes to the start of the new checkbox's content area.
+            let newLinePos = lineContentStart(li + 1, in: tv)
+            tv.setSelectedRange(NSRange(location: min(newLinePos, newLen), length: 0))
+            isRendering = false
+            tv.invalidateIntrinsicContentSize()
+        }
+        return true
+    }
+
+    // MARK: Helpers
+
+    /// Index (0-based) of the line that contains display position `pos`.
+    private func lineIndex(for pos: Int, in ts: NSTextStorage) -> Int {
+        let ns = ts.string as NSString
+        var count = 0
+        for i in 0..<min(pos, ts.length) {
+            if ns.character(at: i) == 0x0A { count += 1 }
+        }
+        return count
+    }
+
+    /// Display position of the first char of `lineIdx` (0-based).
+    private func lineStart(_ lineIdx: Int, in tv: BodyNSTextView) -> Int {
+        guard let ts = tv.textStorage else { return 0 }
+        let ns = ts.string as NSString
+        var count = 0
+        for i in 0..<ts.length {
+            if count == lineIdx { return i }
+            if ns.character(at: i) == 0x0A { count += 1 }
+        }
+        return ts.length
+    }
+
+    /// Display position of the content area start of `lineIdx`.
+    /// For checkbox lines that's lineStart+1; for plain lines it's lineStart.
+    private func lineContentStart(_ lineIdx: Int, in tv: BodyNSTextView) -> Int {
+        guard let ts = tv.textStorage else { return 0 }
+        let start = lineStart(lineIdx, in: tv)
+        if start < ts.length,
+           (ts.string as NSString).character(at: start) == 0xFFFC {
+            return start + 1
+        }
+        return start
     }
 }
 
 // MARK: - CadenceTask checklist helpers
 
 extension CadenceTask {
-    /// Returns (completed, total) counting only checkboxes that have non-whitespace text.
     var checklistProgress: (completed: Int, total: Int)? {
         let all = body.components(separatedBy: "\n")
         let hasText: (String, String) -> Bool = { line, prefix in
@@ -308,13 +421,5 @@ extension CadenceTask {
         guard total > 0 else { return nil }
         let done = all.filter { $0.lowercased().hasPrefix("- [x] ") && hasText($0, "- [x] ") }.count
         return (done, total)
-    }
-}
-
-// MARK: - Array safe subscript
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
