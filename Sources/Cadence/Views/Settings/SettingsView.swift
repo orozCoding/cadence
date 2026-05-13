@@ -34,13 +34,9 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
-
-                    Button("Preview") {
-                        SoundManager.shared.playTimerFinished(sound: settings.timerFinishSound)
+                    .onChange(of: settings.timerFinishSound) { _, newSound in
+                        SoundManager.shared.playTimerFinished(sound: newSound)
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.accent)
                 } header: {
                     Text("Timer Sounds")
                 }

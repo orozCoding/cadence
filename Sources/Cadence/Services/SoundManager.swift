@@ -22,10 +22,12 @@ final class SoundManager {
     }
 
     func playTimerSetOrReset() {
+        player?.stop()
         NSSound(named: "Tink")?.play()
     }
 
     private func playBundled(_ name: String) {
+        player?.stop()
         guard let url = Bundle.main.url(forResource: name, withExtension: "mp3") else { return }
         player = try? AVAudioPlayer(contentsOf: url)
         player?.play()
