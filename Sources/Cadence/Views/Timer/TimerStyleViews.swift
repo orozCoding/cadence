@@ -86,6 +86,7 @@ private final class GlassWaveState {
     static let shared = GlassWaveState()
     var phase: CGFloat = 0
     var disappearDate: Date? = nil
+    var disappearIsRunning: Bool = false
 }
 
 // Animatable liquid wave shape
@@ -144,12 +145,15 @@ struct GlassTimerCircle: View {
                 // If the timer was running while Glassy was hidden, advance the phase
                 // by the time elapsed during the hidden period so the wave is continuous.
                 let hiddenAdvance: CGFloat
-                if isRunning, let d = GlassWaveState.shared.disappearDate {
+                if isRunning,
+                   GlassWaveState.shared.disappearIsRunning,
+                   let d = GlassWaveState.shared.disappearDate {
                     hiddenAdvance = CGFloat(Date().timeIntervalSince(d)) / 4.0 * (.pi * 2)
                 } else {
                     hiddenAdvance = 0
                 }
                 GlassWaveState.shared.disappearDate = nil
+                GlassWaveState.shared.disappearIsRunning = false
                 frozenPhase  = saved
                 phaseAtStart = saved + hiddenAdvance
                 waveStartDate = .now
@@ -157,6 +161,7 @@ struct GlassTimerCircle: View {
             .onDisappear {
                 guard !isPreview else { return }
                 GlassWaveState.shared.disappearDate = Date()
+                GlassWaveState.shared.disappearIsRunning = isRunning
                 if isRunning {
                     let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
                     GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
@@ -361,39 +366,37 @@ struct OrbitTimerCircle: View {
             Circle()
                 .stroke(AppTheme.divider, lineWidth: 2)
 
-            // Full elapsed arc (faint)
-            if progress > 0 {
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(AppTheme.accent.opacity(0.22), lineWidth: 3)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.5), value: progress)
+            // Full elapsed arc (faint) — zero-length trim is invisible at progress=0
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(AppTheme.accent.opacity(0.22), lineWidth: 3)
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.5), value: progress)
 
-                // Short comet tail
-                Circle()
-                    .trim(from: max(0, progress - 0.09), to: progress)
-                    .stroke(AppTheme.accent.opacity(0.75),
-                            style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.5), value: progress)
+            // Short comet tail
+            Circle()
+                .trim(from: max(0, progress - 0.09), to: progress)
+                .stroke(AppTheme.accent.opacity(0.75),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.5), value: progress)
 
-                // Glow halo
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.28))
-                    .frame(width: 16, height: 16)
-                    .blur(radius: 4)
-                    .offset(x: dotX, y: dotY)
-                    .animation(.linear(duration: 0.5), value: progress)
+            // Glow halo — always visible, sits at 12 o'clock when progress=0
+            Circle()
+                .fill(AppTheme.accent.opacity(0.28))
+                .frame(width: 16, height: 16)
+                .blur(radius: 4)
+                .offset(x: dotX, y: dotY)
+                .animation(.linear(duration: 0.5), value: progress)
 
-                // Dot
-                Circle()
-                    .fill(AppTheme.accent)
-                    .frame(width: 9, height: 9)
-                    .overlay(Circle().fill(Color.white.opacity(0.5)).padding(3))
-                    .shadow(color: AppTheme.accent.opacity(0.6), radius: 4)
-                    .offset(x: dotX, y: dotY)
-                    .animation(.linear(duration: 0.5), value: progress)
-            }
+            // Dot
+            Circle()
+                .fill(AppTheme.accent)
+                .frame(width: 9, height: 9)
+                .overlay(Circle().fill(Color.white.opacity(0.5)).padding(3))
+                .shadow(color: AppTheme.accent.opacity(0.6), radius: 4)
+                .offset(x: dotX, y: dotY)
+                .animation(.linear(duration: 0.5), value: progress)
 
             // Time label
             VStack(spacing: 2) {
