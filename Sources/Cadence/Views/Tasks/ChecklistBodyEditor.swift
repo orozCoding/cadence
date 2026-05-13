@@ -102,14 +102,14 @@ private final class BodyNSTextView: NSTextView {
     }
 
     // Fix [p2]: plain-text copy exports raw markdown, not U+FFFC attachment chars.
+    // When nothing is selected, delegate to super (standard AppKit: copy nothing).
     override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
-        guard let ts = textStorage, let coordinator = bodyCoordinator else {
+        let sel = selectedRange()
+        guard sel.length > 0, let ts = textStorage, let coordinator = bodyCoordinator else {
             return super.writeSelection(to: pboard, types: types)
         }
-        let sel = selectedRange()
-        let rawSel = coordinator.extractRaw(from: ts, range: sel.length > 0 ? sel : NSRange(location: 0, length: ts.length))
         pboard.clearContents()
-        pboard.setString(rawSel, forType: .string)
+        pboard.setString(coordinator.extractRaw(from: ts, range: sel), forType: .string)
         return true
     }
 
@@ -232,9 +232,13 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
                     result += att.isChecked ? "- [x] " : "- [ ] "
                 }
                 i += 1
-            } else if ch >= 0xD800 && ch <= 0xDBFF && i + 1 < end {
-                result += ns.substring(with: NSRange(location: i, length: 2))
-                i += 2
+            } else if ch >= 0xD800 && ch <= 0xDBFF {
+                // High surrogate: always emit as a pair to avoid malformed UTF-16.
+                // Include the low surrogate even if it lies just outside the requested
+                // range — a lone high surrogate is inherently invalid.
+                let pairLen = (i + 1 < len) ? 2 : 1
+                result += ns.substring(with: NSRange(location: i, length: pairLen))
+                i += pairLen
             } else {
                 result += ns.substring(with: NSRange(location: i, length: 1))
                 i += 1
@@ -312,16 +316,28 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         guard raw != committedText else { return }
         text = raw; committedText = raw
 
+        let sel = tv.selectedRange()
+
         if let _ = conversionLine {
             // Structural change (attachment inserted): full rebuild required.
             // Regular typing does NOT rebuild — preserves IME/dead-key marked-text state.
-            let sel = tv.selectedRange()
             isRendering = true
             ts.setAttributedString(buildAttr(raw))
             let newLen = ts.length
             // `[]` (2 display chars) → `[FFFC]` (1 display char): shift cursor back by 1.
             tv.setSelectedRange(NSRange(location: min(max(0, sel.location - 1), newLen), length: 0))
             isRendering = false
+        } else {
+            // Check if the display structure is out of sync with the raw text.
+            // This catches pasted checkbox syntax (including "- [X] " capital X)
+            // that arrived as plain characters without attachment rendering.
+            let newAttr = buildAttr(raw)
+            if newAttr.string != ts.string {
+                isRendering = true
+                ts.setAttributedString(newAttr)
+                tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
+                isRendering = false
+            }
         }
 
         tv.invalidateIntrinsicContentSize()
@@ -414,6 +430,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         } else {
             // Split content at cursor using UTF-16 offsets (NSTextView cursor is UTF-16).
             // Using grapheme-based Swift String indexing would mis-split on emoji.
+            // max(0, ...) clamps gracefully when cursor sits on the attachment glyph itself.
             let utf16Offset   = max(0, min(cursor - contentStart, (displayContent as NSString).length))
             let displayNS     = displayContent as NSString
             let before        = displayNS.substring(to: utf16Offset)
