@@ -32,7 +32,10 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var soundsMuted: Bool {
-        didSet { save() }
+        didSet {
+            save()
+            if soundsMuted { SoundManager.shared.stopAll() }
+        }
     }
 
     private init() {

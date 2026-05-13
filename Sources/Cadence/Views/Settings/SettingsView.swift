@@ -61,7 +61,7 @@ struct SettingsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textPrimary)
                         Spacer()
-                        Toggle("", isOn: $settings.soundsMuted)
+                        Toggle("Mute sounds", isOn: $settings.soundsMuted)
                             .labelsHidden()
                             .toggleStyle(.switch)
                     }
