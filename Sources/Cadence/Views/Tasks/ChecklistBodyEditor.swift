@@ -80,16 +80,21 @@ struct ChecklistBodyEditor: View {
                 }
             }
         }
-        .onChange(of: focusedIndex) { old, _ in
-            // Remove empty checkbox rows the moment they lose focus.
+        .onChange(of: focusedIndex) { old, new in
+            // Clean up empty checkbox rows the moment they lose focus.
             guard let old = old, old < lines.count else { return }
-            if case .checkbox(_, _, let t) = lines[old], t.isEmpty, lines.count > 1 {
-                let newFocus = focusedIndex
+            guard case .checkbox(_, _, let t) = lines[old], t.isEmpty else { return }
+            if lines.count > 1 {
+                // Multi-row: remove the empty checkbox entirely.
                 lines.remove(at: old)
                 commit()
-                if let new = newFocus, new > old {
+                if let new = new, new > old {
                     Task { @MainActor in focusedIndex = new - 1 }
                 }
+            } else {
+                // Single-row: revert to a plain text line so the body stays "" (not "- [ ] ").
+                lines[0] = .plain(id: lines[0].id, text: "")
+                commit()
             }
         }
     }
