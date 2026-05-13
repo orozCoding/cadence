@@ -68,7 +68,8 @@ struct SettingsView: View {
                                         progress: 0.6,
                                         isFinished: false,
                                         timeString: "12:30",
-                                        isRunning: false
+                                        isRunning: false,
+                                        isPreview: true
                                     )
                                     .scaleEffect(0.30)
                                     .frame(width: 39, height: 39)

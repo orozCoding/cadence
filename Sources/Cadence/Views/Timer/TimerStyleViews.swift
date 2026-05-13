@@ -9,13 +9,15 @@ struct TimerClockView: View {
     let isFinished: Bool
     let timeString: String
     let isRunning: Bool
+    var isPreview: Bool = false
 
     var body: some View {
         switch style {
         case .glassy:
             GlassTimerCircle(
                 progress: progress, isFinished: isFinished,
-                timeString: timeString, isRunning: isRunning
+                timeString: timeString, isRunning: isRunning,
+                isPreview: isPreview
             )
         case .minimal:
             MinimalTimerCircle(
@@ -122,6 +124,7 @@ struct GlassTimerCircle: View {
     let isFinished: Bool
     let timeString: String
     let isRunning: Bool
+    var isPreview: Bool = false
 
     @State private var frozenPhase: CGFloat = GlassWaveState.shared.phase
     @State private var waveStartDate: Date = .now
@@ -135,6 +138,7 @@ struct GlassTimerCircle: View {
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
             .onDisappear {
+                guard !isPreview else { return }
                 if isRunning {
                     let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
                     GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
@@ -143,6 +147,7 @@ struct GlassTimerCircle: View {
                 }
             }
             .onChange(of: isRunning) { _, running in
+                guard !isPreview else { return }
                 if running {
                     waveStartDate = .now
                     phaseAtStart  = frozenPhase
