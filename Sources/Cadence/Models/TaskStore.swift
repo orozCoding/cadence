@@ -111,29 +111,38 @@ final class TaskStore: ObservableObject {
     // MARK: - Filtered views (folder-scoped)
 
     func tasks(forDay date: Date, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { task in
-            task.folderId == folderId &&
-            task.dayDeadline.map { $0.isSameDay(as: date) } == true
-        }.sortedByOrder(periodKey: TaskPeriod.day(date).storageKey)
+        splitSorted(
+            tasks.filter { $0.folderId == folderId && $0.dayDeadline.map { $0.isSameDay(as: date) } == true },
+            periodKey: TaskPeriod.day(date).storageKey
+        )
     }
 
     func tasks(forWeek weekStart: Date, weekStartsOn: Weekday, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { task in
-            task.folderId == folderId &&
-            task.weekStart.map { $0.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn) } == true
-        }.sortedByOrder(periodKey: TaskPeriod.week(weekStart).storageKey)
+        splitSorted(
+            tasks.filter { $0.folderId == folderId && $0.weekStart.map { $0.isSameWeek(as: weekStart, weekStartsOn: weekStartsOn) } == true },
+            periodKey: TaskPeriod.week(weekStart).storageKey
+        )
     }
 
     func tasks(forMonth monthStart: Date, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { task in
-            task.folderId == folderId &&
-            task.monthStart.map { $0.isSameMonth(as: monthStart) } == true
-        }.sortedByOrder(periodKey: TaskPeriod.month(monthStart).storageKey)
+        splitSorted(
+            tasks.filter { $0.folderId == folderId && $0.monthStart.map { $0.isSameMonth(as: monthStart) } == true },
+            periodKey: TaskPeriod.month(monthStart).storageKey
+        )
     }
 
     func tasks(forYear year: Int, folderId: UUID) -> [CadenceTask] {
-        tasks.filter { $0.folderId == folderId && $0.yearDeadline == year }
-             .sortedByOrder(periodKey: TaskPeriod.year(year).storageKey)
+        splitSorted(
+            tasks.filter { $0.folderId == folderId && $0.yearDeadline == year },
+            periodKey: TaskPeriod.year(year).storageKey
+        )
+    }
+
+    // Sort todos and dones using section-scoped keys ("td:" / "dn:") to prevent
+    // index collisions between the two sections when tasks move between them.
+    private func splitSorted(_ all: [CadenceTask], periodKey: String) -> [CadenceTask] {
+        all.filter { !$0.isDone }.sortedByOrder(periodKey: "td:\(periodKey)")
+        + all.filter {  $0.isDone }.sortedByOrder(periodKey: "dn:\(periodKey)")
     }
 
     // MARK: - Distinct period keys (folder-scoped)
