@@ -35,6 +35,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func toggle() {
+        if isFinished {
+            reset()
+            return
+        }
         if isRunning {
             SoundManager.shared.playTimerPause()
             pause()

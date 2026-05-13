@@ -33,7 +33,7 @@ struct TimerPanelView: View {
             // Timer clock — style driven by settings
             TimerClockView(
                 style: settings.timerStyle,
-                progress: timer.progress,
+                progress: CGFloat(timer.progress),
                 isFinished: timer.isFinished,
                 timeString: timer.timeString,
                 isRunning: timer.isRunning
