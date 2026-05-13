@@ -7,15 +7,256 @@ private let presets: [(label: String, minutes: Int)] = [
     ("45 min", 45),
 ]
 
+// MARK: - Liquid wave shape
+
+private struct LiquidFill: Shape {
+    var level: CGFloat   // 0 = empty, 1 = full
+    var phase: CGFloat   // wave phase — not in animatableData, updated per frame
+
+    var animatableData: CGFloat {
+        get { level }
+        set { level = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let clamped = min(max(level, 0), 1)
+        let waveY   = rect.height * (1 - clamped)
+        // Zero amplitude at near-empty / near-full avoids sliver/gap artifacts.
+        let amplitude: CGFloat = (clamped > 0.02 && clamped < 0.98) ? 5.0 : 0.0
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: waveY))
+
+        let step = max(rect.width / 60, 2)
+        var x: CGFloat = 0
+        while x <= rect.width {
+            let y = waveY + sin((x / rect.width) * .pi * 3 + phase) * amplitude
+            path.addLine(to: CGPoint(x: rect.minX + x, y: y))
+            x += step
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Glass timer circle
+
+private struct GlassTimerCircle: View {
+    let progress: CGFloat
+    let isFinished: Bool
+    let timeString: String
+    let isRunning: Bool
+
+    // Wave phase continuity: preserve phase across pause/resume cycles.
+    @State private var frozenPhase: CGFloat = 0
+    @State private var waveStartDate: Date = .now
+    @State private var phaseAtStart: CGFloat = 0
+
+    var body: some View {
+        waveContent
+            .frame(width: 130, height: 130)
+            .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
+            // Suppress child Text elements so VoiceOver reads only this single element.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Timer")
+            .accessibilityValue(isFinished ? "Done" : timeString)
+            .onChange(of: isRunning) { running in
+                if running {
+                    waveStartDate = .now
+                    phaseAtStart = frozenPhase
+                } else {
+                    // Snapshot the current phase on pause — avoids per-frame @State mutations.
+                    let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
+                    frozenPhase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+                }
+            }
+    }
+
+    // Only drive the TimelineView (and its 30 fps redraws) while the timer is active.
+    @ViewBuilder
+    private var waveContent: some View {
+        if isRunning {
+            TimelineView(.periodic(from: .now, by: 1 / 30)) { context in
+                let elapsed = CGFloat(context.date.timeIntervalSince(waveStartDate))
+                let phase   = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+                glassContent(phase: phase)
+            }
+        } else {
+            glassContent(phase: frozenPhase)
+        }
+    }
+
+    @ViewBuilder
+    private func glassContent(phase: CGFloat) -> some View {
+        ZStack {
+            // ── Frosted glass body ─────────────────────────────────────────
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.28),
+                            AppTheme.sidebarBackground.opacity(0.40)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // ── Blue liquid fill (animates with progress) ─────────────────
+            LiquidFill(level: progress, phase: phase)
+                .fill(
+                    LinearGradient(
+                        colors: [AppTheme.accentDark, AppTheme.accent.opacity(0.82)],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                )
+                .clipShape(Circle())
+                .animation(.linear(duration: 0.5), value: progress)
+
+            // ── Inner depth gradient (glass volume illusion) ───────────────
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.07),
+                            Color.clear,
+                            AppTheme.accentDark.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // ── Inner rim fine highlight ───────────────────────────────────
+            Circle()
+                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                .padding(5)
+
+            // ── Specular / glossy highlight (top-left) ────────────────────
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.58), Color.clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 26
+                    )
+                )
+                .frame(width: 52, height: 22)
+                .offset(x: -17, y: -34)
+                .rotationEffect(.degrees(-25))
+                .blendMode(.plusLighter)
+
+            // ── Timer label ───────────────────────────────────────────────
+            VStack(spacing: 2) {
+                Text(timeString)
+                    .font(.system(size: 28, weight: .thin, design: .monospaced))
+                    .foregroundStyle(progress > 0.55 ? Color.white : AppTheme.textPrimary)
+                    .contentTransition(.numericText())
+                    .shadow(
+                        color: progress > 0.55
+                            ? AppTheme.accentDark.opacity(0.55)
+                            : Color.black.opacity(0.08),
+                        radius: 3
+                    )
+                    .animation(.easeInOut(duration: 0.35), value: progress)
+
+                if isFinished {
+                    Text("Done!")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .transition(.opacity.combined(with: .scale))
+                }
+            }
+        }
+        // Clip everything (including the specular highlight) to the circle
+        .clipShape(Circle())
+        // Re-draw the rim on top of the clip so it isn't cut
+        .overlay(
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.88),
+                            AppTheme.accentLight.opacity(0.45),
+                            AppTheme.accentDark.opacity(0.35),
+                            Color.white.opacity(0.55)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 5
+                )
+        )
+    }
+}
+
+// MARK: - Glassy circle button background
+
+private struct GlassCircle: View {
+    let size: CGFloat
+    let isAccent: Bool
+
+    var body: some View {
+        ZStack {
+            // Base fill with glass gradient
+            Circle()
+                .fill(
+                    isAccent
+                    ? LinearGradient(
+                        colors: [AppTheme.accentLight, AppTheme.accentDark],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    : LinearGradient(
+                        colors: [Color.white.opacity(0.65), AppTheme.divider.opacity(0.90)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // Upper-half shine
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.45), Color.clear],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
+
+            // Rim
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: isAccent
+                            ? [Color.white.opacity(0.72), AppTheme.accent.opacity(0.22)]
+                            : [Color.white.opacity(0.90), AppTheme.divider.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+// MARK: - TimerPanelView
+
 struct TimerPanelView: View {
-    @StateObject private var timer = PomodoroTimer()
+    @ObservedObject private var timer = PomodoroTimer.shared
+    @ObservedObject private var focusStore = FocusTimeStore.shared
+
     @State private var customMinutes = ""
-    @State private var showCustom = false
     @State private var selectedPreset: Int? = 25
 
     var body: some View {
         VStack(spacing: 0) {
-            // Panel title
             HStack {
                 Text("Focus Timer")
                     .font(.system(size: 13, weight: .semibold))
@@ -29,36 +270,13 @@ struct TimerPanelView: View {
 
             Spacer()
 
-            // Clock ring
-            ZStack {
-                Circle()
-                    .stroke(AppTheme.divider, lineWidth: 6)
-                    .frame(width: 130, height: 130)
-
-                Circle()
-                    .trim(from: 0, to: timer.progress)
-                    .stroke(
-                        timer.isFinished ? AppTheme.accentDark : AppTheme.accent,
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                    )
-                    .frame(width: 130, height: 130)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.5), value: timer.progress)
-
-                VStack(spacing: 2) {
-                    Text(timer.timeString)
-                        .font(.system(size: 28, weight: .thin, design: .monospaced))
-                        .foregroundStyle(timer.isFinished ? AppTheme.accent : AppTheme.textPrimary)
-                        .contentTransition(.numericText())
-
-                    if timer.isFinished {
-                        Text("Done!")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .transition(.opacity.combined(with: .scale))
-                    }
-                }
-            }
+            // Glass clock
+            GlassTimerCircle(
+                progress: timer.progress,
+                isFinished: timer.isFinished,
+                timeString: timer.timeString,
+                isRunning: timer.isRunning
+            )
 
             Spacer().frame(height: 20)
 
@@ -69,28 +287,37 @@ struct TimerPanelView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(AppTheme.divider))
+                        .background(GlassCircle(size: 36, isAccent: false))
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
+                .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 2)
 
                 Button(action: timer.toggle) {
                     Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(.white)
                         .frame(width: 48, height: 48)
-                        .background(Circle().fill(AppTheme.accent))
+                        .background(GlassCircle(size: 48, isAccent: true))
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
+                .shadow(color: AppTheme.accent.opacity(0.38), radius: 8, x: 0, y: 4)
             }
 
-            Spacer().frame(height: 24)
+            // Today's focus time — inline below controls
+            let todaySecs = focusStore.todaySeconds()
+            Text(todaySecs > 0 ? "Today  \(formatFocusTime(todaySecs))" : "No focus time today")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+                .padding(.top, 10)
+
+            Spacer().frame(height: 20)
 
             Divider().background(AppTheme.divider)
 
-            // Presets
+            // Presets + always-visible custom input
             VStack(alignment: .leading, spacing: 8) {
                 Text("Presets")
                     .font(.system(size: 10, weight: .semibold))
@@ -104,52 +331,47 @@ struct TimerPanelView: View {
                             isSelected: selectedPreset == preset.minutes
                         ) {
                             selectedPreset = preset.minutes
-                            showCustom = false
                             timer.set(minutes: preset.minutes)
                         }
-                    }
-
-                    PresetButton(label: "Custom", isSelected: showCustom) {
-                        selectedPreset = nil
-                        showCustom = true
                     }
                 }
                 .padding(.horizontal, 12)
 
-                if showCustom {
-                    HStack(spacing: 6) {
-                        TextField("min", text: $customMinutes)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13))
-                            .frame(width: 50)
-                            .padding(6)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.contentBackground))
-                            .onSubmit { applyCustom() }
-
-                        Text("min")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.textTertiary)
-
-                        Button("Set") { applyCustom() }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .pointerCursor()
-                    }
-                    .padding(.horizontal, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                HStack(spacing: 8) {
+                    Text("Custom")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    TextField("min", text: $customMinutes)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .frame(width: 44)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(AppTheme.contentBackground))
+                        .onSubmit { applyCustom() }
+                    Text("min")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Button("Set") { applyCustom() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .pointerCursor()
                 }
+                .padding(.horizontal, 16)
             }
             .padding(.vertical, 12)
 
             Spacer()
         }
-        .animation(.easeInOut(duration: 0.15), value: showCustom)
     }
 
     private func applyCustom() {
-        guard let mins = Int(customMinutes), mins > 0, mins <= 999 else { return }
-        timer.set(minutes: mins)
+        guard let mins = Double(customMinutes), mins > 0, mins <= 999 else { return }
+        selectedPreset = nil
+        timer.set(seconds: mins * 60)
     }
 }
 
@@ -173,4 +395,14 @@ struct PresetButton: View {
         .buttonStyle(.plain)
         .pointerCursor()
     }
+}
+
+func formatFocusTime(_ seconds: Int) -> String {
+    if seconds <= 0 { return "—" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    let s = seconds % 60
+    if h > 0 { return "\(h)h \(m)m \(s)s" }
+    if m > 0 { return "\(m)m \(s)s" }
+    return "\(s)s"
 }

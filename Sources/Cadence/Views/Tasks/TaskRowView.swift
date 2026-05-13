@@ -10,14 +10,15 @@ struct TaskRowView: View {
 
     private var accessibilityLabel: String {
         var parts = [task.title]
+        let today = settings.currentDate
         if let day = task.dayDeadline {
-            parts.append("due \(day.dayLabel())")
+            parts.append("due \(day.dayLabel(today: today))")
         } else if let week = task.weekStart {
-            parts.append("due \(week.weekLabel(weekStartsOn: settings.weekStartsOn))")
+            parts.append("due \(week.weekLabel(weekStartsOn: settings.weekStartsOn, today: today))")
         } else if let month = task.monthStart {
-            parts.append("due \(month.monthLabel())")
+            parts.append("due \(month.monthLabel(today: today))")
         } else if let year = task.yearDeadline {
-            parts.append("due \(year)")
+            parts.append("due \(year.yearLabel(today: today))")
         }
         if let progress = task.checklistProgress {
             parts.append("\(progress.completed) of \(progress.total) checklist items complete")
@@ -83,14 +84,15 @@ struct TaskRowView: View {
 
     @ViewBuilder
     private var deadlineBadges: some View {
+        let today = settings.currentDate
         if let day = task.dayDeadline {
-            DeadlineBadge(label: day.dayLabel(), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
+            DeadlineBadge(label: day.dayLabel(today: today), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let week = task.weekStart {
-            DeadlineBadge(label: week.weekLabel(weekStartsOn: settings.weekStartsOn), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
+            DeadlineBadge(label: week.weekLabel(weekStartsOn: settings.weekStartsOn, today: today), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let month = task.monthStart {
-            DeadlineBadge(label: month.monthLabel(), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
+            DeadlineBadge(label: month.monthLabel(today: today), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         } else if let year = task.yearDeadline {
-            DeadlineBadge(label: String(year), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
+            DeadlineBadge(label: year.yearLabel(today: today), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         }
     }
 }
