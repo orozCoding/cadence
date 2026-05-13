@@ -76,13 +76,21 @@ final class TaskStore: ObservableObject {
         case .year:  oldLevelKey = tasks[idx].yearDeadline.map { TaskPeriod.year($0).storageKey }
         }
 
-        // No-op when the task is already in the exact target period.
+        // No-op only when the task is at exactly the target granularity — not just contained within it.
+        // A day-level task dropped on its parent week bucket must still clear the dayDeadline.
         let alreadyThere: Bool
         switch period {
-        case .day(let d):   alreadyThere = tasks[idx].dayDeadline.map  { $0.isSameDay(as: d) } == true
-        case .week(let s):  alreadyThere = tasks[idx].weekStart.map    { $0.isSameWeek(as: s, weekStartsOn: weekStartsOn) } == true
-        case .month(let s): alreadyThere = tasks[idx].monthStart.map   { $0.isSameMonth(as: s) } == true
-        case .year(let y):  alreadyThere = tasks[idx].yearDeadline == y
+        case .day(let d):
+            alreadyThere = tasks[idx].dayDeadline.map { $0.isSameDay(as: d) } == true
+        case .week(let s):
+            alreadyThere = tasks[idx].weekStart.map { $0.isSameWeek(as: s, weekStartsOn: weekStartsOn) } == true
+                && tasks[idx].dayDeadline == nil
+        case .month(let s):
+            alreadyThere = tasks[idx].monthStart.map { $0.isSameMonth(as: s) } == true
+                && tasks[idx].weekStart == nil && tasks[idx].dayDeadline == nil
+        case .year(let y):
+            alreadyThere = tasks[idx].yearDeadline == y
+                && tasks[idx].monthStart == nil && tasks[idx].weekStart == nil && tasks[idx].dayDeadline == nil
         }
         guard !alreadyThere else { return }
 

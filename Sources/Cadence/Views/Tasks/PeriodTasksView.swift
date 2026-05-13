@@ -94,6 +94,18 @@ struct PeriodTasksView: View {
                         dropTargetId = nil
                     }
                 }
+                // Clear draggedId when a drag is cancelled (user drops outside any valid target).
+                // dropTargetId transitions to nil when the last drop target is exited; a brief
+                // async check confirms no new target appeared before clearing the dimmed state.
+                .onChange(of: dropTargetId) { _, newTarget in
+                    guard newTarget == nil, draggedId != nil else { return }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(150))
+                        if dropTargetId == nil && !todoHeaderTargeted && !doneHeaderTargeted {
+                            draggedId = nil
+                        }
+                    }
+                }
             }
         }
     }
