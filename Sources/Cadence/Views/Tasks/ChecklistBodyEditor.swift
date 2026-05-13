@@ -317,12 +317,43 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         ts.setAttributedString(buildAttr(raw))
         let newLen = ts.length
 
-        if let convLine = conversionLine {
-            // Place cursor at the content area of the converted checkbox line.
-            tv.setSelectedRange(NSRange(location: min(lineContentStart(convLine, in: tv), newLen), length: 0))
+        if conversionLine != nil {
+            // `[]` (2 display chars) → `[FFFC]` (1 display char): shift cursor back by 1.
+            tv.setSelectedRange(NSRange(location: min(max(0, sel.location - 1), newLen), length: 0))
         } else {
             tv.setSelectedRange(NSRange(location: min(sel.location, newLen), length: 0))
         }
+        isRendering = false
+        tv.invalidateIntrinsicContentSize()
+    }
+
+    // MARK: End-editing cleanup — remove empty checkbox lines on blur
+
+    func textDidEndEditing(_ notification: Notification) {
+        guard let tv = notification.object as? BodyNSTextView,
+              let ts = tv.textStorage else { return }
+        let raw   = extractRaw(from: ts)
+        var lines = raw.components(separatedBy: "\n")
+
+        let isEmptyCheckbox: (String) -> Bool = { line in
+            (line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ")) &&
+            line.dropFirst(6).trimmingCharacters(in: .whitespaces).isEmpty
+        }
+
+        if lines.count > 1 {
+            let filtered = lines.filter { !isEmptyCheckbox($0) }
+            guard filtered.count != lines.count else { return }
+            lines = filtered.isEmpty ? [""] : filtered
+        } else if lines.count == 1, isEmptyCheckbox(lines[0]) {
+            lines[0] = ""
+        } else {
+            return
+        }
+
+        let newRaw = lines.joined(separator: "\n")
+        text = newRaw; committedText = newRaw
+        isRendering = true
+        ts.setAttributedString(buildAttr(newRaw))
         isRendering = false
         tv.invalidateIntrinsicContentSize()
     }
