@@ -51,6 +51,8 @@ struct PeriodTasksView: View {
                             .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: false)
+                                    // todos now reflects the change — stamp period sort keys
+                                    store.reorder(taskIds: todos.map(\.id), periodKey: sectionKey(isDone: false))
                                     draggedId = nil
                                     dropTargetId = nil
                                 }
@@ -66,6 +68,7 @@ struct PeriodTasksView: View {
                             .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: true)
+                                    store.reorder(taskIds: dones.map(\.id), periodKey: sectionKey(isDone: true))
                                     draggedId = nil
                                     dropTargetId = nil
                                 }
@@ -99,7 +102,18 @@ struct PeriodTasksView: View {
             TaskRowView(
                 task: task,
                 onTap: { withAnimation { selectedTask = task } },
-                onToggle: { store.toggle(task) }
+                onToggle: {
+                    // Toggle done status then stamp the destination section's sort keys
+                    // so the task lands at the end of its new section in this period view.
+                    let willBeDone = !task.isDone
+                    store.toggle(task)
+                    let destKey = sectionKey(isDone: willBeDone)
+                    // After toggle, todos/dones are recomputed from updated store state.
+                    store.reorder(
+                        taskIds: (willBeDone ? dones : todos).map(\.id),
+                        periodKey: destKey
+                    )
+                }
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 2)
