@@ -47,16 +47,26 @@ private struct GlassTimerCircle: View {
     let progress: CGFloat
     let isFinished: Bool
     let timeString: String
+    let isRunning: Bool
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1 / 30)) { context in
-            let elapsed = context.date.timeIntervalSinceReferenceDate
-            let phase   = CGFloat(elapsed.truncatingRemainder(dividingBy: 4.0)) / 4.0 * (.pi * 2)
-            glassContent(phase: phase)
+        waveContent
+            .frame(width: 130, height: 130)
+            .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
+    }
+
+    // Only drive the TimelineView (and its 30 fps redraws) while the timer is active.
+    @ViewBuilder
+    private var waveContent: some View {
+        if isRunning {
+            TimelineView(.periodic(from: .now, by: 1 / 30)) { context in
+                let elapsed = context.date.timeIntervalSinceReferenceDate
+                let phase   = CGFloat(elapsed.truncatingRemainder(dividingBy: 4.0)) / 4.0 * (.pi * 2)
+                glassContent(phase: phase)
+            }
+        } else {
+            glassContent(phase: 0)
         }
-        .frame(width: 130, height: 130)
-        // Soft drop shadow for the whole glass
-        .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
     }
 
     @ViewBuilder
@@ -260,7 +270,8 @@ struct TimerPanelView: View {
             GlassTimerCircle(
                 progress: timer.progress,
                 isFinished: timer.isFinished,
-                timeString: timer.timeString
+                timeString: timer.timeString,
+                isRunning: timer.isRunning
             )
 
             Spacer().frame(height: 20)
