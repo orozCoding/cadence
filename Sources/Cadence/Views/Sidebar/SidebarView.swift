@@ -42,7 +42,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Days", isExpanded: $daysExpanded) {
                             ForEach(days, id: \.self) { day in
                                 SidebarRow(
-                                    label: day.isSameDay(as: Date()) ? "Today" : day.dayLabel(),
+                                    label: day.dayLabel(),
                                     icon: "sun.max",
                                     isSelected: selection == .day(day)
                                 ) {
@@ -90,7 +90,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
                             ForEach(years, id: \.self) { year in
                                 SidebarRow(
-                                    label: String(year),
+                                    label: year.yearLabel(),
                                     icon: "archivebox",
                                     isSelected: selection == .year(year)
                                 ) {

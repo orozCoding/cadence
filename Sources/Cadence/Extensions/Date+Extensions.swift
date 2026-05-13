@@ -50,30 +50,79 @@ extension Date {
         startOfMonth(calendar: calendar) == other.startOfMonth(calendar: calendar)
     }
 
+    // Sidebar label: abbreviated month OK ("Monday, May 12"), relative labels for today/yesterday/tomorrow
+    func dayLabel() -> String {
+        let today = Date()
+        let cal = Calendar.current
+        if isSameDay(as: today) { return "Today" }
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: today)),
+           isSameDay(as: yesterday) { return "Yesterday" }
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: today)),
+           isSameDay(as: tomorrow) { return "Tomorrow" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEEE, MMM d"
+        return fmt.string(from: self)
+    }
+
+    // Center column label: full weekday and full month name, no abbreviations
+    func fullDayLabel() -> String {
+        let today = Date()
+        let cal = Calendar.current
+        if isSameDay(as: today) { return "Today" }
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: today)),
+           isSameDay(as: yesterday) { return "Yesterday" }
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: today)),
+           isSameDay(as: tomorrow) { return "Tomorrow" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEEE, MMMM d"
+        return fmt.string(from: self)
+    }
+
     func weekLabel(weekStartsOn: Weekday = .monday) -> String {
-        let start = startOfWeek(weekStartsOn: weekStartsOn)
-        var cal = Calendar.current
-        cal.firstWeekday = weekStartsOn.calendarValue
-        guard let end = cal.date(byAdding: .day, value: 6, to: start) else { return "" }
+        let today = Date()
+        let cal = Calendar.current
+        let thisWeekStart = today.startOfWeek(weekStartsOn: weekStartsOn)
+        let selfWeekStart = startOfWeek(weekStartsOn: weekStartsOn)
+        if selfWeekStart == thisWeekStart { return "This Week" }
+        if let last = cal.date(byAdding: .day, value: -7, to: thisWeekStart),
+           selfWeekStart == last { return "Last Week" }
+        if let next = cal.date(byAdding: .day, value: 7, to: thisWeekStart),
+           selfWeekStart == next { return "Next Week" }
+        var wcal = cal
+        wcal.firstWeekday = weekStartsOn.calendarValue
+        guard let end = wcal.date(byAdding: .day, value: 6, to: selfWeekStart) else { return "" }
         let startFmt = DateFormatter()
-        startFmt.dateFormat = "MMM d"
+        startFmt.dateFormat = "MMMM d"
         let endFmt = DateFormatter()
-        // Include month name if week crosses a month boundary
-        let crossesMonth = cal.component(.month, from: start) != cal.component(.month, from: end)
-        endFmt.dateFormat = crossesMonth ? "MMM d, yyyy" : "d, yyyy"
-        return "\(startFmt.string(from: start)) – \(endFmt.string(from: end))"
+        let crossesMonth = wcal.component(.month, from: selfWeekStart) != wcal.component(.month, from: end)
+        endFmt.dateFormat = crossesMonth ? "MMMM d, yyyy" : "d, yyyy"
+        return "\(startFmt.string(from: selfWeekStart)) – \(endFmt.string(from: end))"
     }
 
     func monthLabel() -> String {
+        let today = Date()
+        let cal = Calendar.current
+        if isSameMonth(as: today) { return "This Month" }
+        let thisMonthStart = today.startOfMonth()
+        if let last = cal.date(byAdding: .month, value: -1, to: thisMonthStart),
+           isSameMonth(as: last) { return "Last Month" }
+        if let next = cal.date(byAdding: .month, value: 1, to: thisMonthStart),
+           isSameMonth(as: next) { return "Next Month" }
         let fmt = DateFormatter()
         fmt.dateFormat = "MMMM yyyy"
         return fmt.string(from: self)
     }
+}
 
-    func dayLabel() -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "EEE, MMM d"
-        return fmt.string(from: self)
+extension Int {
+    func yearLabel() -> String {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        switch self {
+        case currentYear: return "This Year"
+        case currentYear - 1: return "Last Year"
+        case currentYear + 1: return "Next Year"
+        default: return String(self)
+        }
     }
 }
 

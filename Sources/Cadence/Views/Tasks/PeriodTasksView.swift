@@ -10,10 +10,10 @@ enum TaskPeriod: Equatable, Hashable {
 
     func titleFor(weekStartsOn: Weekday) -> String {
         switch self {
-        case .day(let d):   return d.isSameDay(as: Date()) ? "Today" : d.dayLabel()
+        case .day(let d):   return d.fullDayLabel()
         case .week(let s):  return s.weekLabel(weekStartsOn: weekStartsOn)
         case .month(let s): return s.monthLabel()
-        case .year(let y):  return String(y)
+        case .year(let y):  return y.yearLabel()
         }
     }
 }
