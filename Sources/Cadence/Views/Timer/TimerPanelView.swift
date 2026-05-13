@@ -28,11 +28,12 @@ private struct LiquidFill: Shape {
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.minX, y: waveY))
 
+        let step = max(rect.width / 60, 2)
         var x: CGFloat = 0
         while x <= rect.width {
             let y = waveY + sin((x / rect.width) * .pi * 3 + phase) * amplitude
             path.addLine(to: CGPoint(x: rect.minX + x, y: y))
-            x += 2
+            x += step
         }
 
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
@@ -49,10 +50,15 @@ private struct GlassTimerCircle: View {
     let timeString: String
     let isRunning: Bool
 
+    // Retains the last rendered wave phase so the surface doesn't snap to 0 on pause.
+    @State private var frozenPhase: CGFloat = 0
+
     var body: some View {
         waveContent
             .frame(width: 130, height: 130)
             .shadow(color: AppTheme.accentDark.opacity(0.22), radius: 12, x: 0, y: 6)
+            .accessibilityLabel("Timer")
+            .accessibilityValue(timeString)
     }
 
     // Only drive the TimelineView (and its 30 fps redraws) while the timer is active.
@@ -63,9 +69,12 @@ private struct GlassTimerCircle: View {
                 let elapsed = context.date.timeIntervalSinceReferenceDate
                 let phase   = CGFloat(elapsed.truncatingRemainder(dividingBy: 4.0)) / 4.0 * (.pi * 2)
                 glassContent(phase: phase)
+                    .onChange(of: phase) { newPhase in
+                        frozenPhase = newPhase
+                    }
             }
         } else {
-            glassContent(phase: 0)
+            glassContent(phase: frozenPhase)
         }
     }
 
@@ -111,22 +120,6 @@ private struct GlassTimerCircle: View {
                     )
                 )
 
-            // ── Glass rim ─────────────────────────────────────────────────
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.88),
-                            AppTheme.accentLight.opacity(0.45),
-                            AppTheme.accentDark.opacity(0.35),
-                            Color.white.opacity(0.55)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 5
-                )
-
             // ── Inner rim fine highlight ───────────────────────────────────
             Circle()
                 .stroke(Color.white.opacity(0.22), lineWidth: 1)
@@ -159,7 +152,7 @@ private struct GlassTimerCircle: View {
                             : Color.black.opacity(0.08),
                         radius: 3
                     )
-                    .animation(.easeInOut(duration: 0.35), value: progress > 0.55)
+                    .animation(.easeInOut(duration: 0.35), value: progress)
 
                 if isFinished {
                     Text("Done!")
