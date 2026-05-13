@@ -140,9 +140,9 @@ private final class BodyNSTextView: NSTextView {
         }
     }
 
-    // Fix [p2]: VoiceOver activate (e.g. VO+Space) toggles the nearest checkbox.
-    // Declared without 'override' — ObjC dynamic dispatch picks this up via NSAccessibility.
-    @objc func accessibilityActivate() -> Bool {
+    // Fix [p2]: VO+Space (accessibilityPerformPress) toggles the nearest checkbox.
+    // @objc without 'override' — ObjC dynamic dispatch picks this up via NSAccessibility.
+    override func accessibilityPerformPress() -> Bool {
         guard let ts = textStorage, let coordinator = bodyCoordinator else { return false }
         let sel = selectedRange()
         let positions = sel.location > 0 ? [sel.location, sel.location - 1] : [sel.location]
@@ -518,33 +518,44 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             if ns.character(at: i) == 0x0A { lineStart = i + 1; break }
         }
 
-        // Only intercept when the cursor is at the very start of a checkbox line
-        // and there is a previous line to merge into.
-        guard cursor == lineStart,
-              lineStart > 0,
-              lineStart < ts.length,
-              ns.character(at: lineStart) == 0xFFFC
-        else { return false }
+        // Only intercept for lines that start with a checkbox attachment.
+        guard lineStart < ts.length, ns.character(at: lineStart) == 0xFFFC else { return false }
+        let lineContentStart = lineStart + 1
+
+        // Intercept two positions:
+        //   cursor == lineStart        → would delete the '\n' above, leaving FFFC in prev line
+        //   cursor == lineContentStart → would delete the FFFC itself, silently stripping prefix
+        guard cursor == lineStart || cursor == lineContentStart else { return false }
 
         let raw = extractRaw(from: ts)
         var rawLines = raw.components(separatedBy: "\n")
         let li = lineIndex(for: lineStart, in: ts)
-        guard li > 0, li < rawLines.count else { return false }
+        guard li < rawLines.count else { return false }
 
         let checkboxLine = rawLines[li]
         let isCheckbox = checkboxLine.hasPrefix("- [ ] ") || checkboxLine.lowercased().hasPrefix("- [x] ")
         let content = isCheckbox ? String(checkboxLine.dropFirst(6)) : checkboxLine
-        rawLines[li - 1] += content
-        rawLines.remove(at: li)
+
+        let newCursor: Int
+        if cursor == lineStart && li > 0 {
+            // Merge: append content to previous line, remove current line.
+            rawLines[li - 1] += content
+            rawLines.remove(at: li)
+            // Cursor lands where the appended content begins (old '\n' position).
+            newCursor = lineStart - 1
+        } else {
+            // Strip checkbox prefix only (cursor at content start, or first-line case).
+            rawLines[li] = content
+            // Cursor stays at lineStart, which is now the start of the plain line.
+            newCursor = lineStart
+        }
 
         let newRaw = rawLines.joined(separator: "\n")
         text = newRaw; committedText = newRaw
         let newAttr = buildAttr(newRaw)
         isRendering = true
         ts.setAttributedString(newAttr)
-        // lineStart - 1 was the '\n' separator; in the new display that position is
-        // exactly where the appended content begins (end of the previous line).
-        tv.setSelectedRange(NSRange(location: min(lineStart - 1, ts.length), length: 0))
+        tv.setSelectedRange(NSRange(location: min(newCursor, ts.length), length: 0))
         isRendering = false
         tv.invalidateIntrinsicContentSize()
         return true
