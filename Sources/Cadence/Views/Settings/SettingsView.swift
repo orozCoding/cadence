@@ -49,6 +49,30 @@ struct SettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                 }
+
+                // Timer Sounds section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Timer Sounds")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Finish sound")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textPrimary)
+
+                        Picker("", selection: $settings.timerFinishSound) {
+                            ForEach(TimerFinishSound.allCases) { sound in
+                                Text(sound.label).tag(sound)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+                        .labelsHidden()
+                        .onChange(of: settings.timerFinishSound) { _, newSound in
+                            SoundManager.shared.playTimerFinished(sound: newSound)
+                        }
+                    }
+                }
             }
             .padding(24)
             .frame(maxWidth: 480, alignment: .leading)
