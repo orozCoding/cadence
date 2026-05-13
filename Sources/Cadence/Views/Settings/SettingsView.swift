@@ -141,8 +141,6 @@ struct SettingsView: View {
             .padding(24)
             .frame(maxWidth: 480, alignment: .leading)
             } // ScrollView
-
-            Spacer()
         }
     }
 }

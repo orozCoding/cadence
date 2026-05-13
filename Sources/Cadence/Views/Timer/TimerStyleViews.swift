@@ -82,6 +82,7 @@ struct TimerButtonBG: View {
 // MARK: - Style 1: Glassy liquid fill
 
 // Stores wave phase so it survives style-switch round-trips.
+@MainActor
 private final class GlassWaveState {
     static let shared = GlassWaveState()
     var phase: CGFloat = 0
@@ -128,9 +129,9 @@ struct GlassTimerCircle: View {
     let isRunning: Bool
     var isPreview: Bool = false
 
-    @State private var frozenPhase: CGFloat = GlassWaveState.shared.phase
+    @State private var frozenPhase: CGFloat = 0
     @State private var waveStartDate: Date = .now
-    @State private var phaseAtStart: CGFloat = GlassWaveState.shared.phase
+    @State private var phaseAtStart: CGFloat = 0
 
     var body: some View {
         waveContent
@@ -185,7 +186,7 @@ struct GlassTimerCircle: View {
     @ViewBuilder
     private var waveContent: some View {
         if isRunning {
-            TimelineView(.periodic(from: .now, by: 1 / 30)) { context in
+            TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
                 let elapsed = CGFloat(context.date.timeIntervalSince(waveStartDate))
                 let phase   = phaseAtStart + elapsed / 4.0 * (.pi * 2)
                 glassContent(phase: phase)
@@ -519,6 +520,7 @@ struct DotRingTimerCircle: View {
                 }
             }
         }
+        .drawingGroup()
         .frame(width: 130, height: 130)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
