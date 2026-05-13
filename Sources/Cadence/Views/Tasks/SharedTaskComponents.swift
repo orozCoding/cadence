@@ -226,7 +226,7 @@ struct URLEditSection: View {
                 }
             }
 
-            if !(urls.last?.isEmpty ?? true) {
+            if !(urls.last?.isEmpty ?? true) && urls.count < 10 {
                 Button(action: { urls.append(""); entryIds.append(UUID()) }) {
                     Label("Add URL", systemImage: "plus.circle.fill")
                         .font(.system(size: 12))
