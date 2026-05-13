@@ -1,8 +1,11 @@
 import Foundation
+import AppKit
 import Combine
 
 @MainActor
 final class PomodoroTimer: ObservableObject {
+    static let shared = PomodoroTimer()
+
     @Published var remaining: TimeInterval = 25 * 60
     @Published var total: TimeInterval = 25 * 60
     @Published var isRunning = false
@@ -19,8 +22,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(minutes: Int) {
+        set(seconds: TimeInterval(minutes * 60))
+    }
+
+    func set(seconds: TimeInterval) {
         pause()
-        total = TimeInterval(minutes * 60)
+        total = max(1, seconds.rounded())
         remaining = total
         isFinished = false
         SoundManager.shared.playTimerSetOrReset()
@@ -48,6 +55,7 @@ final class PomodoroTimer: ObservableObject {
     func pause() {
         isRunning = false
         cancellable = nil
+        FocusTimeStore.shared.flushIfNeeded()
     }
 
     func reset() {
@@ -58,6 +66,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func tick() {
+        FocusTimeStore.shared.addSecond()
         remaining = max(0, remaining - 1)
         if remaining == 0 {
             pause()
