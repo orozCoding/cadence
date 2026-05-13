@@ -42,9 +42,10 @@ private func serializeBodyLines(_ lines: [BodyLine]) -> String {
 // MARK: - ChecklistBodyEditor
 
 /// Renders a task body as a mix of interactive checkbox rows and plain-text lines.
-/// Typing `[]` in any plain-text line instantly converts it to an unchecked checkbox.
-/// Pressing Return on a non-empty checkbox inserts a new empty checkbox below.
-/// Pressing Return on an empty checkbox exits checkbox mode (converts to plain text).
+/// • Typing `[]` at the start of a line converts it to an unchecked checkbox.
+/// • Return on a non-empty checkbox inserts a new empty checkbox below.
+/// • Return on an empty checkbox exits checkbox mode (converts to plain text).
+/// • Empty checkbox rows are silently removed when focus leaves them.
 struct ChecklistBodyEditor: View {
     @Binding var text: String
 
@@ -63,8 +64,32 @@ struct ChecklistBodyEditor: View {
             }
         }
         .onChange(of: text) { _, newText in
-            if serializeBodyLines(lines) != newText {
-                lines = parseBodyLines(newText)
+            guard serializeBodyLines(lines) != newText else { return }
+            let newParsed = parseBodyLines(newText)
+            // Preserve UUID identity for same-type lines at the same position so
+            // ForEach doesn't destroy and recreate every row on an external reset.
+            lines = newParsed.enumerated().map { i, newLine in
+                guard i < lines.count else { return newLine }
+                switch (lines[i], newLine) {
+                case (.checkbox(let id, _, _), .checkbox(_, let c, let t)):
+                    return .checkbox(id: id, checked: c, text: t)
+                case (.plain(let id, _), .plain(_, let t)):
+                    return .plain(id: id, text: t)
+                default:
+                    return newLine
+                }
+            }
+        }
+        .onChange(of: focusedIndex) { old, _ in
+            // Remove empty checkbox rows the moment they lose focus.
+            guard let old = old, old < lines.count else { return }
+            if case .checkbox(_, _, let t) = lines[old], t.isEmpty, lines.count > 1 {
+                let newFocus = focusedIndex
+                lines.remove(at: old)
+                commit()
+                if let new = newFocus, new > old {
+                    Task { @MainActor in focusedIndex = new - 1 }
+                }
             }
         }
     }
@@ -85,22 +110,24 @@ struct ChecklistBodyEditor: View {
                 .buttonStyle(.plain)
                 .pointerCursor()
                 .accessibilityLabel({
-                    let label = checked ? checkedText(at: idx) : uncheckedText(at: idx)
+                    // Use raw text (no space-padding) so VoiceOver never says "space, checked"
+                    let rawText = checkboxItemText(at: idx)
                     let state = checked ? "checked" : "unchecked"
-                    return label.isEmpty ? state : "\(label), \(state)"
+                    return rawText.isEmpty ? state : "\(rawText), \(state)"
                 }())
                 .accessibilityHint("Toggle")
 
                 if checked {
-                    Text(checkedText(at: idx))
+                    Text(checkedDisplayText(at: idx))
                         .font(.system(size: 13))
                         .foregroundStyle(AppTheme.textTertiary)
                         .strikethrough(true, color: AppTheme.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture { toggleCheckbox(at: idx) }
-                        .accessibilityLabel(checkedText(at: idx))
+                        .accessibilityLabel(checkboxItemText(at: idx).isEmpty ? "Completed item" : checkboxItemText(at: idx))
                         .accessibilityValue("Completed")
+                        .accessibilityHint("Tap to uncheck")
                 } else {
                     TextField("", text: checkboxBinding(at: idx))
                         .textFieldStyle(.plain)
@@ -108,7 +135,7 @@ struct ChecklistBodyEditor: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .focused($focusedIndex, equals: idx)
                         .onSubmit { handleEnterOnCheckbox(at: idx) }
-                        .accessibilityLabel(uncheckedText(at: idx).isEmpty ? "Checklist item" : uncheckedText(at: idx))
+                        .accessibilityLabel(checkboxItemText(at: idx).isEmpty ? "Checklist item" : checkboxItemText(at: idx))
                         .accessibilityValue("Unchecked")
                 }
             }
@@ -126,14 +153,18 @@ struct ChecklistBodyEditor: View {
         }
     }
 
-    private func checkedText(at idx: Int) -> String {
-        guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
-        return t.isEmpty ? " " : t
-    }
+    // MARK: - Text helpers
 
-    private func uncheckedText(at idx: Int) -> String {
+    /// Returns the raw text of a checkbox line (no space-padding for layout).
+    private func checkboxItemText(at idx: Int) -> String {
         guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
         return t
+    }
+
+    /// Returns the checkbox text with a non-breaking space fallback for layout stability.
+    private func checkedDisplayText(at idx: Int) -> String {
+        let t = checkboxItemText(at: idx)
+        return t.isEmpty ? "\u{00A0}" : t
     }
 
     private func plainText(at idx: Int) -> String {
@@ -166,6 +197,8 @@ struct ChecklistBodyEditor: View {
                 let cleaned = String(newVal.dropFirst(2))
                 lines[idx] = .checkbox(id: UUID(), checked: false, text: cleaned)
                 commit()
+                // Clear then re-apply focus so SwiftUI recognises the ID change
+                focusedIndex = nil
                 Task { @MainActor in focusedIndex = idx }
                 return
             }
@@ -191,7 +224,9 @@ struct ChecklistBodyEditor: View {
             commit()
             Task { @MainActor in focusedIndex = idx }
         } else {
-            // Non-empty checkbox + Return → new empty checkbox below
+            // Non-empty checkbox + Return → new empty checkbox below.
+            // Note: SwiftUI TextField does not expose the cursor position, so the
+            // text is not split at the caret — this is a known TextFieldlimitation.
             lines.insert(.checkbox(id: UUID(), checked: false, text: ""), at: idx + 1)
             commit()
             Task { @MainActor in focusedIndex = idx + 1 }
@@ -213,17 +248,22 @@ struct ChecklistBodyEditor: View {
 // MARK: - CadenceTask checklist helpers
 
 extension CadenceTask {
-    /// Returns (completed, total) if the body contains any checkbox lines, otherwise nil.
+    /// Returns (completed, total) counting only checkboxes that have text content.
+    /// Bare `- [ ] ` markers with no label are excluded so the badge is not inflated
+    /// by placeholder rows created while typing.
     var checklistProgress: (completed: Int, total: Int)? {
         let all = body.components(separatedBy: "\n")
-        let total = all.filter { $0.hasPrefix("- [ ] ") || $0.lowercased().hasPrefix("- [x] ") }.count
+        let total = all.filter { line in
+            (line.hasPrefix("- [ ] ") && line.count > 6) ||
+            (line.lowercased().hasPrefix("- [x] ") && line.count > 6)
+        }.count
         guard total > 0 else { return nil }
-        let done = all.filter { $0.lowercased().hasPrefix("- [x] ") }.count
+        let done = all.filter { $0.lowercased().hasPrefix("- [x] ") && $0.count > 6 }.count
         return (done, total)
     }
 }
 
-// MARK: - Helpers
+// MARK: - Array safe subscript
 
 private extension Array {
     subscript(safe index: Int) -> Element? {
