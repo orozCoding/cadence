@@ -24,13 +24,6 @@ struct ContentView: View {
     @State private var selection: NavSelection? = .all
     @State private var centerContent: CenterContent = .list
 
-    // Discard guard for settings/focusTime navigation and folder switches
-    @State private var showNavigationDiscardAlert = false
-    @State private var navigationOnProceed: (() -> Void)? = nil
-    @State private var navigationOnCancel: (() -> Void)? = nil
-    @State private var isRevertingSelection = false   // guards onChange(of: selection)
-    @State private var isRevertingFolder = false      // guards onChange(of: activeFolder.id)
-
     var body: some View {
         HSplitView {
             SidebarView(selection: $selection)
@@ -72,45 +65,16 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        // Settings and Focus Time are full context switches — guard against silent draft loss
-        .onChange(of: selection) { oldSel, newSel in
-            guard !isRevertingSelection else { isRevertingSelection = false; return }
+        // Settings and Focus Time are full context switches — auto-save handles
+        // in-progress edits via onDisappear, so we navigate directly without a dialog.
+        .onChange(of: selection) { _, newSel in
             guard (newSel == .settings || newSel == .focusTime), centerContent != .list else { return }
-            isRevertingSelection = true
-            selection = oldSel ?? .all  // revert until user confirms
-            let dest = newSel ?? .all
-            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = dest; centerContent = .list } }
-            navigationOnCancel = {}
-            showNavigationDiscardAlert = true
+            withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list }
         }
-        // Folder switch also requires a discard guard
-        .onChange(of: folderStore.activeFolder.id) { oldID, _ in
-            guard !isRevertingFolder else { isRevertingFolder = false; return }
-            // Focus Time and Settings are global views — folder changes don't affect them.
+        // Folder switch: auto-save handles any in-progress edits via onDisappear.
+        .onChange(of: folderStore.activeFolder.id) { _, _ in
             if selection == .focusTime || selection == .settings { return }
-            guard centerContent != .list else {
-                withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
-                return
-            }
-            navigationOnProceed = { withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list } }
-            navigationOnCancel = {
-                guard let folder = folderStore.folders.first(where: { $0.id == oldID }) else { return }
-                isRevertingFolder = true
-                folderStore.setActive(folder)
-            }
-            showNavigationDiscardAlert = true
-        }
-        .confirmationDialog("Unsaved Changes", isPresented: $showNavigationDiscardAlert, titleVisibility: .visible) {
-            Button("Discard & Continue", role: .destructive) {
-                navigationOnProceed?()
-                navigationOnProceed = nil; navigationOnCancel = nil
-            }
-            Button("Keep Editing", role: .cancel) {
-                navigationOnCancel?()
-                navigationOnProceed = nil; navigationOnCancel = nil
-            }
-        } message: {
-            Text("Any unsaved changes will be lost.")
+            withAnimation(.easeInOut(duration: 0.18)) { selection = .all; centerContent = .list }
         }
     }
 
