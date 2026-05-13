@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -15,6 +16,7 @@ struct PeriodTasksView: View {
     @State private var dropAbove: Bool = true
     @State private var todoHeaderTargeted = false
     @State private var doneHeaderTargeted = false
+    @State private var mouseUpMonitor: Any?
 
     private var allTasks: [CadenceTask] {
         let fid = folderStore.activeFolder.id
@@ -104,6 +106,26 @@ struct PeriodTasksView: View {
                         if dropTargetId == nil && !todoHeaderTargeted && !doneHeaderTargeted {
                             draggedId = nil
                         }
+                    }
+                }
+                // Fallback for drags cancelled before entering any drop target: a mouse-up
+                // event means the drag session ended, so clear any stale dim state.
+                .onAppear {
+                    mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+                        if draggedId != nil {
+                            // Delay slightly so performDrop (which also clears draggedId) runs first.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                draggedId = nil
+                                dropTargetId = nil
+                            }
+                        }
+                        return event
+                    }
+                }
+                .onDisappear {
+                    if let monitor = mouseUpMonitor {
+                        NSEvent.removeMonitor(monitor)
+                        mouseUpMonitor = nil
                     }
                 }
             }
