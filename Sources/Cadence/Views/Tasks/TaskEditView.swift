@@ -288,6 +288,7 @@ struct TaskEditView: View {
         updated.weekStart    = newWeek
         updated.monthStart   = newMonth
         updated.yearDeadline = newYear
+        didSaveOnBack = true
         store.update(updated)
         onBack()
     }

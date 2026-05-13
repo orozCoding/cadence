@@ -24,6 +24,10 @@ struct TaskCreateView: View {
     // (goBack / save button) and .onDisappear both fire in the same session.
     @State private var taskSaved = false
 
+    // Captured at onAppear so a folder switch mid-edit cannot redirect the new task
+    // to a different folder (folderStore.activeFolder changes before onDisappear fires).
+    @State private var capturedFolderId: UUID? = nil
+
     // Undo/redo history for title + body — immediate push on first burst keystroke,
     // then debounced 1s; capped at 50 snapshots
     @State private var history: [(title: String, body: String)] = [("", "")]
@@ -220,6 +224,7 @@ struct TaskCreateView: View {
     // after goBack() or save() have already persisted the task.
     private func saveIfPossible() {
         guard !taskSaved, canSave else { return }
+        let folderId = capturedFolderId ?? folderStore.activeFolder.id
         let errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
@@ -229,7 +234,7 @@ struct TaskCreateView: View {
         )
         taskSaved = true
         let task = CadenceTask(
-            folderId: folderStore.activeFolder.id,
+            folderId: folderId,
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
             dayDeadline: (errors.isEmpty && enableDay) ? dayDate.noonLocal() : nil,
@@ -243,10 +248,11 @@ struct TaskCreateView: View {
     // MARK: - Explicit save (Add Task button)
 
     private func save() {
+        let folderId = capturedFolderId ?? folderStore.activeFolder.id
         let errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
@@ -254,7 +260,7 @@ struct TaskCreateView: View {
         guard errors.isEmpty else { return }
         taskSaved = true
         let task = CadenceTask(
-            folderId: folderStore.activeFolder.id,
+            folderId: folderId,
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
             dayDeadline: enableDay ? dayDate.noonLocal() : nil,
@@ -324,6 +330,7 @@ struct TaskCreateView: View {
     // MARK: - Prefill / Cascade
 
     private func prefill() {
+        capturedFolderId = folderStore.activeFolder.id
         let now = Date()
         let currentYear = Calendar.current.component(.year, from: now)
         switch prefillSelection {
