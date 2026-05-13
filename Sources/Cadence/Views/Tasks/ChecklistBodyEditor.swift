@@ -381,7 +381,9 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
               let tv = textView as? BodyNSTextView,
               let ts = tv.textStorage else { return false }
 
-        let cursor = tv.selectedRange().location
+        let sel    = tv.selectedRange()
+        let cursor = sel.location          // selection start (or plain cursor)
+        let selEnd = NSMaxRange(sel)       // selection end; used to delete selected text on split
         let ns     = ts.string as NSString
 
         // Find start of current line by scanning backwards for newline.
@@ -429,12 +431,15 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             tv.invalidateIntrinsicContentSize()
         } else {
             // Split content at cursor using UTF-16 offsets (NSTextView cursor is UTF-16).
-            // Using grapheme-based Swift String indexing would mis-split on emoji.
+            // When text is selected, before ends at sel.location and after begins at selEnd,
+            // matching standard Return semantics (selected text is deleted).
             // max(0, ...) clamps gracefully when cursor sits on the attachment glyph itself.
-            let utf16Offset   = max(0, min(cursor - contentStart, (displayContent as NSString).length))
-            let displayNS     = displayContent as NSString
-            let before        = displayNS.substring(to: utf16Offset)
-            let after         = displayNS.substring(from: utf16Offset)
+            let contentNS     = displayContent as NSString
+            let cLen          = contentNS.length
+            let beforeOffset  = max(0, min(cursor - contentStart, cLen))
+            let afterOffset   = max(0, min(selEnd  - contentStart, cLen))
+            let before        = contentNS.substring(to: beforeOffset)
+            let after         = contentNS.substring(from: afterOffset)
 
             let pfx = att.isChecked ? "- [x] " : "- [ ] "
             rawLines[li] = pfx + before
