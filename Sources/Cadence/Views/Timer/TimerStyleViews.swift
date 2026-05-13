@@ -135,9 +135,12 @@ struct GlassTimerCircle: View {
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
             .onDisappear {
-                // Persist current phase so re-appearing after a style switch continues smoothly.
-                let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
-                GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+                if isRunning {
+                    let elapsed = CGFloat(Date().timeIntervalSince(waveStartDate))
+                    GlassWaveState.shared.phase = phaseAtStart + elapsed / 4.0 * (.pi * 2)
+                } else {
+                    GlassWaveState.shared.phase = frozenPhase
+                }
             }
             .onChange(of: isRunning) { _, running in
                 if running {
