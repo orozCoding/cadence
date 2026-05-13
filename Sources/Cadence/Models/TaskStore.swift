@@ -72,14 +72,12 @@ final class TaskStore: ObservableObject {
     func moveToPeriod(taskId: UUID, period: TaskPeriod, weekStartsOn: Weekday = .monday) {
         guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
 
-        // Compute the old period-level key before mutating so we can prune stale sort entries.
-        let oldLevelKey: String?
-        switch period {
-        case .day:   oldLevelKey = tasks[idx].dayDeadline.map { TaskPeriod.day($0).storageKey }
-        case .week:  oldLevelKey = tasks[idx].weekStart.map  { TaskPeriod.week($0).storageKey }
-        case .month: oldLevelKey = tasks[idx].monthStart.map { TaskPeriod.month($0).storageKey }
-        case .year:  oldLevelKey = tasks[idx].yearDeadline.map { TaskPeriod.year($0).storageKey }
-        }
+        // Snapshot all period storage keys before mutations so we can detect which
+        // changed and prune them after — handles both same-level and cross-level moves.
+        let preDayKey  = tasks[idx].dayDeadline.map   { TaskPeriod.day($0).storageKey }
+        let preWeekKey = tasks[idx].weekStart.map     { TaskPeriod.week($0).storageKey }
+        let preMoKey   = tasks[idx].monthStart.map    { TaskPeriod.month($0).storageKey }
+        let preYearKey = tasks[idx].yearDeadline.map  { TaskPeriod.year($0).storageKey }
 
         // No-op only when the task is at exactly the target granularity — not just contained within it.
         // A day-level task dropped on its parent week bucket must still clear the dayDeadline.
@@ -134,22 +132,19 @@ final class TaskStore: ObservableObject {
             tasks[idx].dayDeadline = nil
         }
 
-        // Remove stale sort keys for the old same-level period and for all granularity
-        // levels cleared by this move (e.g., moving to week removes all day-level keys).
-        if let old = oldLevelKey {
-            tasks[idx].periodSortKeys.removeValue(forKey: "td:\(old)")
-            tasks[idx].periodSortKeys.removeValue(forKey: "dn:\(old)")
-        }
-        let clearedPrefixes: [String]
-        switch period {
-        case .day:   clearedPrefixes = []
-        case .week:  clearedPrefixes = ["td:d:", "dn:d:"]
-        case .month: clearedPrefixes = ["td:d:", "dn:d:", "td:w:", "dn:w:"]
-        case .year:  clearedPrefixes = ["td:d:", "dn:d:", "td:w:", "dn:w:", "td:m:", "dn:m:"]
-        }
-        if !clearedPrefixes.isEmpty {
-            tasks[idx].periodSortKeys = tasks[idx].periodSortKeys.filter { key, _ in
-                !clearedPrefixes.contains(where: { key.hasPrefix($0) })
+        // Remove sort keys for any period level that changed or was cleared by the move.
+        // Comparing pre/post snapshots covers all directions: same-level, finer-to-coarser,
+        // and coarser-to-finer (e.g., a day move that also changes the containing week).
+        let postDayKey  = tasks[idx].dayDeadline.map   { TaskPeriod.day($0).storageKey }
+        let postWeekKey = tasks[idx].weekStart.map     { TaskPeriod.week($0).storageKey }
+        let postMoKey   = tasks[idx].monthStart.map    { TaskPeriod.month($0).storageKey }
+        let postYearKey = tasks[idx].yearDeadline.map  { TaskPeriod.year($0).storageKey }
+
+        for (old, new) in [(preDayKey, postDayKey), (preWeekKey, postWeekKey),
+                           (preMoKey, postMoKey),   (preYearKey, postYearKey)] {
+            if let old, old != new {
+                tasks[idx].periodSortKeys.removeValue(forKey: "td:\(old)")
+                tasks[idx].periodSortKeys.removeValue(forKey: "dn:\(old)")
             }
         }
 
