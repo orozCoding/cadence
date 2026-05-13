@@ -19,7 +19,8 @@ private func parseBodyLines(_ body: String) -> [BodyLine] {
     return body.components(separatedBy: "\n").map { line in
         if line.hasPrefix("- [ ] ") {
             return .checkbox(id: UUID(), checked: false, text: String(line.dropFirst(6)))
-        } else if line.hasPrefix("- [x] ") {
+        } else if line.lowercased().hasPrefix("- [x] ") {
+            // Accept both [x] and [X] as checked markers
             return .checkbox(id: UUID(), checked: true, text: String(line.dropFirst(6)))
         } else {
             return .plain(id: UUID(), text: line)
@@ -83,8 +84,12 @@ struct ChecklistBodyEditor: View {
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
-                .accessibilityLabel(checked ? "Checked" : "Unchecked")
-                .accessibilityHint("Toggle checkbox")
+                .accessibilityLabel({
+                    let label = checked ? checkedText(at: idx) : uncheckedText(at: idx)
+                    let state = checked ? "checked" : "unchecked"
+                    return label.isEmpty ? state : "\(label), \(state)"
+                }())
+                .accessibilityHint("Toggle")
 
                 if checked {
                     Text(checkedText(at: idx))
@@ -116,6 +121,7 @@ struct ChecklistBodyEditor: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .focused($focusedIndex, equals: idx)
                 .onSubmit { handleEnterOnPlain(at: idx) }
+                .accessibilityLabel(plainText(at: idx).isEmpty ? "Description line" : plainText(at: idx))
                 .padding(.vertical, 2)
         }
     }
@@ -127,6 +133,11 @@ struct ChecklistBodyEditor: View {
 
     private func uncheckedText(at idx: Int) -> String {
         guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
+        return t
+    }
+
+    private func plainText(at idx: Int) -> String {
+        guard case .plain(_, let t) = lines[safe: idx] else { return "" }
         return t
     }
 
@@ -205,9 +216,9 @@ extension CadenceTask {
     /// Returns (completed, total) if the body contains any checkbox lines, otherwise nil.
     var checklistProgress: (completed: Int, total: Int)? {
         let all = body.components(separatedBy: "\n")
-        let total = all.filter { $0.hasPrefix("- [ ] ") || $0.hasPrefix("- [x] ") }.count
+        let total = all.filter { $0.hasPrefix("- [ ] ") || $0.lowercased().hasPrefix("- [x] ") }.count
         guard total > 0 else { return nil }
-        let done = all.filter { $0.hasPrefix("- [x] ") }.count
+        let done = all.filter { $0.lowercased().hasPrefix("- [x] ") }.count
         return (done, total)
     }
 }
