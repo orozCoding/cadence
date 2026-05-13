@@ -100,6 +100,30 @@ private final class BodyNSTextView: NSTextView {
         }
         super.mouseDown(with: event)
     }
+
+    // Fix [p2]: plain-text copy exports raw markdown, not U+FFFC attachment chars.
+    override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        guard let ts = textStorage, let coordinator = bodyCoordinator else {
+            return super.writeSelection(to: pboard, types: types)
+        }
+        let sel = selectedRange()
+        let rawSel = coordinator.extractRaw(from: ts, range: sel.length > 0 ? sel : NSRange(location: 0, length: ts.length))
+        pboard.clearContents()
+        pboard.setString(rawSel, forType: .string)
+        return true
+    }
+
+    // Fix [p2]: VoiceOver reads readable descriptions instead of the U+FFFC glyph.
+    override func accessibilityString(for range: NSRange) -> String? {
+        guard let ts = textStorage, let coordinator = bodyCoordinator else {
+            return super.accessibilityString(for: range)
+        }
+        let raw = coordinator.extractRaw(from: ts, range: range)
+        // Convert "- [ ] " / "- [x] " to human-readable AX labels.
+        return raw
+            .replacingOccurrences(of: "- [x] ", with: "✓ ", options: .caseInsensitive)
+            .replacingOccurrences(of: "- [ ] ", with: "□ ")
+    }
 }
 
 // MARK: - NSViewRepresentable
@@ -191,19 +215,24 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
     // Attachment chars (U+FFFC) are replaced with their "- [ ] " / "- [x] " prefixes.
 
     func extractRaw(from ts: NSTextStorage) -> String {
-        let ns  = ts.string as NSString
-        let len = ts.length
+        extractRaw(from: ts, range: NSRange(location: 0, length: ts.length))
+    }
+
+    func extractRaw(from ts: NSTextStorage, range: NSRange) -> String {
+        let ns     = ts.string as NSString
+        let len    = ts.length
+        let start  = max(0, range.location)
+        let end    = min(len, NSMaxRange(range))
         var result = ""
-        var i = 0
-        while i < len {
+        var i      = start
+        while i < end {
             let ch = ns.character(at: i)
             if ch == 0xFFFC {
                 if let att = ts.attribute(.attachment, at: i, effectiveRange: nil) as? CheckboxAttachment {
                     result += att.isChecked ? "- [x] " : "- [ ] "
                 }
                 i += 1
-            } else if ch >= 0xD800 && ch <= 0xDBFF && i + 1 < len {
-                // Surrogate pair (emoji etc.)
+            } else if ch >= 0xD800 && ch <= 0xDBFF && i + 1 < end {
                 result += ns.substring(with: NSRange(location: i, length: 2))
                 i += 2
             } else {
@@ -342,7 +371,15 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             rawLines[li] = ""
             let newRaw = rawLines.joined(separator: "\n")
             text = newRaw; committedText = newRaw
-            render(newRaw, to: tv)
+            // Fix [p3]: rebuild and explicitly place cursor on the new plain line
+            // (don't reuse the old offset which still referenced the attachment char).
+            let newAttr = buildAttr(newRaw)
+            isRendering = true
+            ts.setAttributedString(newAttr)
+            let newLinePos = displayLineStart(li, in: tv)
+            tv.setSelectedRange(NSRange(location: min(newLinePos, ts.length), length: 0))
+            isRendering = false
+            tv.invalidateIntrinsicContentSize()
         } else {
             // Split content at cursor; new line is always unchecked.
             let posInContent = max(0, min(cursor - contentStart, displayContent.count))
@@ -382,7 +419,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     /// Display position of the first char of `lineIdx` (0-based).
-    private func lineStart(_ lineIdx: Int, in tv: BodyNSTextView) -> Int {
+    private func displayLineStart(_ lineIdx: Int, in tv: BodyNSTextView) -> Int {
         guard let ts = tv.textStorage else { return 0 }
         let ns = ts.string as NSString
         var count = 0
@@ -397,7 +434,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
     /// For checkbox lines that's lineStart+1; for plain lines it's lineStart.
     private func lineContentStart(_ lineIdx: Int, in tv: BodyNSTextView) -> Int {
         guard let ts = tv.textStorage else { return 0 }
-        let start = lineStart(lineIdx, in: tv)
+        let start = displayLineStart(lineIdx, in: tv)
         if start < ts.length,
            (ts.string as NSString).character(at: start) == 0xFFFC {
             return start + 1
