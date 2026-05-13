@@ -130,8 +130,12 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        guard let mins = Double(customMinutes), mins > 0, mins <= 999 else { return }
-        selectedPreset = nil
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        guard let num = formatter.number(from: customMinutes),
+              num.doubleValue > 0, num.doubleValue <= 999 else { return }
+        let mins = num.doubleValue
+        selectedPreset = presets.first(where: { Double($0.minutes) == mins })?.minutes
         timer.set(seconds: mins * 60)
     }
 }
