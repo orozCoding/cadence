@@ -139,6 +139,23 @@ private final class BodyNSTextView: NSTextView {
             super.paste(sender)
         }
     }
+
+    // Fix [p2]: VoiceOver activate (e.g. VO+Space) toggles the nearest checkbox.
+    // Declared without 'override' — ObjC dynamic dispatch picks this up via NSAccessibility.
+    @objc func accessibilityActivate() -> Bool {
+        guard let ts = textStorage, let coordinator = bodyCoordinator else { return false }
+        let sel = selectedRange()
+        let positions = sel.location > 0 ? [sel.location, sel.location - 1] : [sel.location]
+        for pos in positions {
+            if pos < ts.length,
+               (ts.string as NSString).character(at: pos) == 0xFFFC,
+               let att = ts.attribute(.attachment, at: pos, effectiveRange: nil) as? CheckboxAttachment {
+                coordinator.toggleCheckbox(att, in: self)
+                return true
+            }
+        }
+        return false
+    }
 }
 
 // MARK: - NSViewRepresentable
@@ -389,12 +406,17 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         tv.invalidateIntrinsicContentSize()
     }
 
-    // MARK: Return key — maintain checklist line continuation
+    // MARK: Return / Backspace — maintain checklist line structure
 
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard commandSelector == #selector(NSResponder.insertNewline(_:)),
-              let tv = textView as? BodyNSTextView,
+        guard let tv = textView as? BodyNSTextView,
               let ts = tv.textStorage else { return false }
+
+        if commandSelector == #selector(NSResponder.deleteBackward(_:)) {
+            return handleBackspace(tv: tv, ts: ts)
+        }
+
+        guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
 
         let sel    = tv.selectedRange()
         let cursor = sel.location          // selection start (or plain cursor)
@@ -479,6 +501,52 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             isRendering = false
             tv.invalidateIntrinsicContentSize()
         }
+        return true
+    }
+
+    // MARK: Backspace — merge checkbox line into the one above it
+
+    private func handleBackspace(tv: BodyNSTextView, ts: NSTextStorage) -> Bool {
+        let sel = tv.selectedRange()
+        guard sel.length == 0 else { return false }
+        let cursor = sel.location
+        guard cursor > 0 else { return false }
+
+        let ns = ts.string as NSString
+        var lineStart = 0
+        for i in stride(from: cursor - 1, through: 0, by: -1) {
+            if ns.character(at: i) == 0x0A { lineStart = i + 1; break }
+        }
+
+        // Only intercept when the cursor is at the very start of a checkbox line
+        // and there is a previous line to merge into.
+        guard cursor == lineStart,
+              lineStart > 0,
+              lineStart < ts.length,
+              ns.character(at: lineStart) == 0xFFFC
+        else { return false }
+
+        let raw = extractRaw(from: ts)
+        var rawLines = raw.components(separatedBy: "\n")
+        let li = lineIndex(for: lineStart, in: ts)
+        guard li > 0, li < rawLines.count else { return false }
+
+        let checkboxLine = rawLines[li]
+        let isCheckbox = checkboxLine.hasPrefix("- [ ] ") || checkboxLine.lowercased().hasPrefix("- [x] ")
+        let content = isCheckbox ? String(checkboxLine.dropFirst(6)) : checkboxLine
+        rawLines[li - 1] += content
+        rawLines.remove(at: li)
+
+        let newRaw = rawLines.joined(separator: "\n")
+        text = newRaw; committedText = newRaw
+        let newAttr = buildAttr(newRaw)
+        isRendering = true
+        ts.setAttributedString(newAttr)
+        // lineStart - 1 was the '\n' separator; in the new display that position is
+        // exactly where the appended content begins (end of the previous line).
+        tv.setSelectedRange(NSRange(location: min(lineStart - 1, ts.length), length: 0))
+        isRendering = false
+        tv.invalidateIntrinsicContentSize()
         return true
     }
 
