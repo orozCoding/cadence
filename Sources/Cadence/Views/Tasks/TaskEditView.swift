@@ -256,15 +256,16 @@ struct TaskEditView: View {
         let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
         var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
         stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
-        guard errors.isEmpty else { return }
 
         var updated = currentTask
-        updated.title        = titleToSave
-        updated.body         = editedBody
-        updated.dayDeadline  = newDay
-        updated.weekStart    = newWeek
-        updated.monthStart   = newMonth
-        updated.yearDeadline = newYear
+        updated.title = titleToSave
+        updated.body  = editedBody
+        if errors.isEmpty {
+            updated.dayDeadline  = newDay
+            updated.weekStart    = newWeek
+            updated.monthStart   = newMonth
+            updated.yearDeadline = newYear
+        }
         store.update(updated)
     }
 

@@ -20,6 +20,10 @@ struct TaskCreateView: View {
     @State private var yearValue = Calendar.current.component(.year, from: Date())
     @State private var validationErrors: [String] = []
 
+    // Guards against duplicate store.add() calls when both an explicit save path
+    // (goBack / save button) and .onDisappear both fire in the same session.
+    @State private var taskSaved = false
+
     // Undo/redo history for title + body — immediate push on first burst keystroke,
     // then debounced 1s; capped at 50 snapshots
     @State private var history: [(title: String, body: String)] = [("", "")]
@@ -210,9 +214,20 @@ struct TaskCreateView: View {
         onBack()
     }
 
-    // Save the draft if title is non-empty and deadlines are valid; otherwise discard silently.
+    // Save the draft if title is non-empty and deadline validation passes.
+    // The taskSaved flag prevents a second store.add() when onDisappear fires
+    // after goBack() or save() have already persisted the task.
     private func saveIfPossible() {
-        guard canSave else { return }
+        guard !taskSaved, canSave else { return }
+        let errors = CadenceTask.validate(
+            day: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
+            year: enableYear ? yearValue : nil,
+            weekStartsOn: settings.weekStartsOn
+        )
+        guard errors.isEmpty else { return }
+        taskSaved = true
         let task = CadenceTask(
             folderId: folderStore.activeFolder.id,
             title: title.trimmingCharacters(in: .whitespaces),
@@ -237,7 +252,7 @@ struct TaskCreateView: View {
         )
         validationErrors = errors
         guard errors.isEmpty else { return }
-
+        taskSaved = true
         let task = CadenceTask(
             folderId: folderStore.activeFolder.id,
             title: title.trimmingCharacters(in: .whitespaces),
