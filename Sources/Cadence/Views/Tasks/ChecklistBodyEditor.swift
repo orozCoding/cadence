@@ -245,7 +245,7 @@ struct ChecklistBodyEditor: View {
 
     private func handleEnterOnCheckbox(at idx: Int) {
         guard case .checkbox(_, _, let t) = lines[safe: idx] else { return }
-        if t.isEmpty {
+        if t.trimmingCharacters(in: .whitespaces).isEmpty {
             // Empty checkbox + Return → exit checkbox mode
             lines[idx] = .plain(id: UUID(), text: "")
             commit()
