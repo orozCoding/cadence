@@ -143,7 +143,15 @@ func normalizeURL(_ raw: String) -> String {
     // a query string (e.g. example.com?next=foo:bar) is not mistaken for a scheme separator.
     let authEnd = s.firstIndex(where: { $0 == "/" || $0 == "?" || $0 == "#" }) ?? s.endIndex
     let authority = s[s.startIndex..<authEnd]
-    if let colon = authority.firstIndex(of: ":") {
+    // For IPv6 literals like [2001:db8::1]:3000 the colons inside the brackets
+    // must not be treated as a scheme separator; start searching after the ']'.
+    let colonSearchFrom: String.Index
+    if authority.hasPrefix("["), let bracket = authority.firstIndex(of: "]") {
+        colonSearchFrom = authority.index(after: bracket)
+    } else {
+        colonSearchFrom = authority.startIndex
+    }
+    if let colon = authority[colonSearchFrom...].firstIndex(of: ":") {
         let afterColon = authority[authority.index(after: colon)...]
         let portStr = String(afterColon.prefix(while: \.isNumber))
         let isPort = !portStr.isEmpty
@@ -158,6 +166,14 @@ func normalizeURL(_ raw: String) -> String {
 
 struct URLEditSection: View {
     @Binding var urls: [String]
+    // Stable per-row identities so SwiftUI doesn't remap TextField state
+    // (focus, cursor) when a middle entry is removed.
+    @State private var entryIds: [UUID]
+
+    init(urls: Binding<[String]>) {
+        self._urls = urls
+        self._entryIds = State(initialValue: urls.wrappedValue.map { _ in UUID() })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -165,7 +181,7 @@ struct URLEditSection: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
 
-            ForEach(Array(urls.enumerated()), id: \.offset) { i, _ in
+            ForEach(Array(zip(entryIds, urls.indices)), id: \.0) { _, i in
                 HStack(spacing: 8) {
                     Image(systemName: "globe")
                         .font(.system(size: 13))
@@ -181,9 +197,12 @@ struct URLEditSection: View {
 
                     if urls.count > 1 {
                         Button(action: {
-                            var next = urls
-                            next.remove(at: i)
-                            urls = next
+                            var nextUrls = urls
+                            var nextIds = entryIds
+                            nextUrls.remove(at: i)
+                            nextIds.remove(at: i)
+                            urls = nextUrls
+                            entryIds = nextIds
                         }) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 10, weight: .semibold))
@@ -197,7 +216,7 @@ struct URLEditSection: View {
             }
 
             if !(urls.last?.isEmpty ?? true) {
-                Button(action: { urls.append("") }) {
+                Button(action: { urls.append(""); entryIds.append(UUID()) }) {
                     Label("Add URL", systemImage: "plus.circle.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.accent)
