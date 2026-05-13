@@ -85,7 +85,8 @@ struct ChecklistBodyEditor: View {
         .onChange(of: focusedIndex) { old, new in
             // Clean up empty checkbox rows the moment they lose focus.
             guard let old = old, old < lines.count else { return }
-            guard case .checkbox(_, _, let t) = lines[old], t.isEmpty else { return }
+            guard case .checkbox(_, _, let t) = lines[old],
+                  t.trimmingCharacters(in: .whitespaces).isEmpty else { return }
             if lines.count > 1 {
                 // Multi-row: remove the empty checkbox entirely.
                 lines.remove(at: old)
@@ -100,7 +101,21 @@ struct ChecklistBodyEditor: View {
             }
         }
         .onChange(of: focusTrigger) { _, _ in
-            focusedIndex = lines.indices.last
+            // Focus the last line that has an editable text field.
+            // Checked rows are read-only Text views, so we skip them.
+            if let last = lines.indices.reversed().first(where: { idx in
+                switch lines[idx] {
+                case .checkbox(_, let checked, _): return !checked
+                case .plain: return true
+                }
+            }) {
+                focusedIndex = last
+            } else {
+                // All rows are checked — append an empty plain line so typing is possible.
+                lines.append(.plain(id: UUID(), text: ""))
+                commit()
+                Task { @MainActor in focusedIndex = lines.count - 1 }
+            }
         }
     }
 
