@@ -35,10 +35,10 @@ struct SidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     let fid = folderStore.activeFolder.id
-                    let today = Date().startOfDay()
-                    let currentWeekStart = Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
-                    let currentMonthStart = Date().startOfMonth()
-                    let currentYear = Calendar.current.component(.year, from: Date())
+                    let today = settings.currentDate
+                    let currentWeekStart = settings.currentDate.startOfWeek(weekStartsOn: settings.weekStartsOn)
+                    let currentMonthStart = settings.currentDate.startOfMonth()
+                    let currentYear = Calendar.current.component(.year, from: settings.currentDate)
 
                     // All Tasks + hide-past-done toggle
                     SidebarRow(label: "All Tasks", icon: "square.grid.2x2", isSelected: selection == .all) {
@@ -73,7 +73,7 @@ struct SidebarView: View {
                                 let dayTasks = store.tasks(forDay: day, folderId: fid)
                                 let incompleteCount = dayTasks.filter { !$0.isDone }.count
                                 SidebarPeriodRow(
-                                    label: day.isSameDay(as: Date()) ? "Today" : day.dayLabel(),
+                                    label: day.dayLabel(today: settings.currentDate),
                                     icon: "sun.max",
                                     isSelected: selection == .day(day),
                                     isPast: day < today,
@@ -100,7 +100,7 @@ struct SidebarView: View {
                                 let weekTasks = store.tasks(forWeek: weekStart, weekStartsOn: settings.weekStartsOn, folderId: fid)
                                 let incompleteCount = weekTasks.filter { !$0.isDone }.count
                                 SidebarPeriodRow(
-                                    label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn),
+                                    label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn, today: settings.currentDate),
                                     icon: "calendar",
                                     isSelected: selection == .week(weekStart),
                                     isPast: weekStart < currentWeekStart,
@@ -127,7 +127,7 @@ struct SidebarView: View {
                                 let monthTasks = store.tasks(forMonth: monthStart, folderId: fid)
                                 let incompleteCount = monthTasks.filter { !$0.isDone }.count
                                 SidebarPeriodRow(
-                                    label: monthStart.monthLabel(),
+                                    label: monthStart.monthLabel(today: settings.currentDate),
                                     icon: "calendar.badge.clock",
                                     isSelected: selection == .month(monthStart),
                                     isPast: monthStart < currentMonthStart,
@@ -154,7 +154,7 @@ struct SidebarView: View {
                                 let yearTasks = store.tasks(forYear: year, folderId: fid)
                                 let incompleteCount = yearTasks.filter { !$0.isDone }.count
                                 SidebarPeriodRow(
-                                    label: String(year),
+                                    label: year.yearLabel(today: settings.currentDate),
                                     icon: "archivebox",
                                     isSelected: selection == .year(year),
                                     isPast: year < currentYear,

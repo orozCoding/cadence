@@ -6,14 +6,14 @@ enum TaskPeriod: Equatable, Hashable {
     case month(Date)
     case year(Int)
 
-    var title: String { titleFor(weekStartsOn: .monday) }
+    var title: String { titleFor(weekStartsOn: .monday, today: Date()) }
 
-    func titleFor(weekStartsOn: Weekday) -> String {
+    func titleFor(weekStartsOn: Weekday, today: Date = Date()) -> String {
         switch self {
-        case .day(let d):   return d.isSameDay(as: Date()) ? "Today" : d.dayLabel()
-        case .week(let s):  return s.weekLabel(weekStartsOn: weekStartsOn)
-        case .month(let s): return s.monthLabel()
-        case .year(let y):  return String(y)
+        case .day(let d):   return d.fullDayLabel(today: today)
+        case .week(let s):  return s.weekLabel(weekStartsOn: weekStartsOn, today: today)
+        case .month(let s): return s.monthLabel(today: today)
+        case .year(let y):  return y.yearLabel(today: today)
         }
     }
 }
@@ -46,11 +46,11 @@ struct PeriodTasksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn), onNewTask: onNewTask)
+            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate), onNewTask: onNewTask)
             Divider().background(AppTheme.divider)
 
             if allTasks.isEmpty {
-                EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn)).\nClick + to add one.")
+                EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate)).\nClick + to add one.")
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
