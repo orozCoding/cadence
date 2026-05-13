@@ -53,6 +53,10 @@ struct TaskRowView: View {
 
             Spacer()
 
+            if let progress = task.checklistProgress {
+                ChecklistProgressBadge(completed: progress.completed, total: progress.total)
+            }
+
             deadlineBadges
         }
         .padding(.horizontal, 14)
@@ -85,6 +89,29 @@ struct TaskRowView: View {
         } else if let year = task.yearDeadline {
             DeadlineBadge(label: String(year), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         }
+    }
+}
+
+struct ChecklistProgressBadge: View {
+    let completed: Int
+    let total: Int
+
+    private var isComplete: Bool { completed == total }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "checklist")
+                .font(.system(size: 9, weight: .medium))
+            Text("\(completed)/\(total)")
+                .font(.system(size: 10, weight: .medium))
+        }
+        .foregroundStyle(isComplete ? AppTheme.accent : AppTheme.textTertiary)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isComplete ? AppTheme.accent.opacity(0.12) : AppTheme.divider)
+        )
     }
 }
 

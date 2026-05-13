@@ -76,19 +76,17 @@ struct NewTaskSheet: View {
                             .foregroundStyle(AppTheme.textTertiary)
                         ZStack(alignment: .topLeading) {
                             if body_.isEmpty {
-                                Text("Add more detail...")
+                                Text("Add detail… type [] for a checkbox")
                                     .font(.system(size: 13))
                                     .foregroundStyle(AppTheme.textTertiary)
-                                    .padding(.top, 10)
-                                    .padding(.leading, 11)
+                                    .padding(.top, 2)
+                                    .allowsHitTesting(false)
                             }
-                            TextEditor(text: $body_)
-                                .font(.system(size: 13))
+                            ChecklistBodyEditor(text: $body_)
                                 .frame(minHeight: 80)
-                                .scrollContentBackground(.hidden)
-                                .padding(6)
                                 .onChange(of: body_) { userHasInteracted = true }
                         }
+                        .padding(10)
                         .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
                     }
 

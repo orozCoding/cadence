@@ -90,12 +90,8 @@ struct TaskDetailSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .textFieldStyle(.plain)
 
-                    TextEditor(text: $editedBody)
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.textSecondary)
+                    ChecklistBodyEditor(text: $editedBody)
                         .frame(minHeight: 120)
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
 
                     Divider().background(AppTheme.divider)
 
