@@ -50,6 +50,23 @@ struct SettingsView: View {
                     }
                 }
 
+                // Dock section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Dock")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
+
+                    HStack {
+                        Text("Animate icon while timer runs")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        Toggle("", isOn: $settings.animateDockIcon)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+
                 // Timer Sounds section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Timer Sounds")
