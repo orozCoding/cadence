@@ -259,3 +259,34 @@ struct URLBadgeIcon: View {
         NSWorkspace.shared.open(u)
     }
 }
+
+struct URLOverflowBadge: View {
+    let urls: [String]
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: openAll) {
+            Text("+\(urls.count)")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(isHovered ? AppTheme.textSecondary : AppTheme.textTertiary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.divider.opacity(isHovered ? 0.75 : 0.5))
+                )
+        }
+        .buttonStyle(.plain)
+        .pointerCursor()
+        .onHover { isHovered = $0 }
+        .help("Open \(urls.count) more URL\(urls.count == 1 ? "" : "s")")
+        .accessibilityLabel("Open \(urls.count) more URL\(urls.count == 1 ? "" : "s")")
+    }
+
+    private func openAll() {
+        for url in urls {
+            guard let u = URL(string: normalizeURL(url)) else { continue }
+            NSWorkspace.shared.open(u)
+        }
+    }
+}

@@ -86,12 +86,7 @@ struct TaskRowView: View {
                     URLBadgeIcon(url: url)
                 }
                 if validUrls.count > 5 {
-                    Text("+\(validUrls.count - 5)")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(AppTheme.textTertiary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(AppTheme.divider.opacity(0.5)))
+                    URLOverflowBadge(urls: Array(validUrls.dropFirst(5)))
                 }
             }
         }

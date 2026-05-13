@@ -299,7 +299,7 @@ struct TaskEditView: View {
         updated.weekStart    = newWeek
         updated.monthStart   = newMonth
         updated.yearDeadline = newYear
-        updated.urls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+        updated.urls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty && URL(string: $0) != nil }
         store.update(updated)
         onBack()
     }

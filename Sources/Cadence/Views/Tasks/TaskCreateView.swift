@@ -260,7 +260,7 @@ struct TaskCreateView: View {
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             yearDeadline: enableYear ? yearValue : nil,
-            urls: urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
+            urls: urls.map { normalizeURL($0) }.filter { !$0.isEmpty && URL(string: $0) != nil }
         )
         store.add(task)
         onBack()
