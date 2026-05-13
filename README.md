@@ -93,7 +93,7 @@ To run Cadence as a standalone app (no Xcode open required), build a Release bin
 cd /Users/angelorozco/OrozCoding/repositories/cadence
 
 # build the app
-xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && cp -R dist/Cadence.app /Applications/Cadence.app
+xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && ditto dist/Cadence.app /Applications/Cadence.app
 ```
 
 After that, open it from Spotlight, Launchpad, or Finder like any other macOS app. Run the same command whenever you want to update after pulling new changes.
