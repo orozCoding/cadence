@@ -82,10 +82,14 @@ struct PeriodTasksView: View {
                     .padding(.vertical, 12)
                     .animation(.easeInOut(duration: 0.28), value: allTasks)
                 }
-                // When the dragged task leaves this period view (e.g. via a sidebar drop),
-                // clear stale drag state so no ghost highlight remains.
-                .onChange(of: allTasks) { _, newTasks in
-                    if let did = draggedId, !newTasks.contains(where: { $0.id == did }) {
+                // Clear stale drag state when the dragged task leaves or is modified by a sidebar drop.
+                // "Same-period" sidebar drops keep the task in allTasks but mutate it (periodSortKeys),
+                // so we also clear when the task's content changed while draggedId is still set.
+                .onChange(of: allTasks) { oldTasks, newTasks in
+                    guard let did = draggedId else { return }
+                    let stillPresent = newTasks.contains(where: { $0.id == did })
+                    let wasModified = oldTasks.first(where: { $0.id == did }) != newTasks.first(where: { $0.id == did })
+                    if !stillPresent || wasModified {
                         draggedId = nil
                         dropTargetId = nil
                     }
@@ -133,6 +137,18 @@ struct PeriodTasksView: View {
                     store: store
                 )
             )
+            .accessibilityAction(named: "Move Up") {
+                guard let idx = tasks.firstIndex(where: { $0.id == task.id }), idx > 0 else { return }
+                var ids = tasks.map(\.id)
+                ids.swapAt(idx, idx - 1)
+                store.reorder(taskIds: ids, periodKey: key)
+            }
+            .accessibilityAction(named: "Move Down") {
+                guard let idx = tasks.firstIndex(where: { $0.id == task.id }), idx < tasks.count - 1 else { return }
+                var ids = tasks.map(\.id)
+                ids.swapAt(idx, idx + 1)
+                store.reorder(taskIds: ids, periodKey: key)
+            }
             .transition(.opacity.combined(with: .move(edge: .top)))
 
             if dropTargetId == task.id && !dropAbove {
