@@ -109,101 +109,103 @@ struct TaskEditView: View {
 
             Divider().background(AppTheme.divider)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Title (large, editable)
-                    TextField("Task title", text: $editedTitle)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .textFieldStyle(.plain)
+            // Title — fixed height, always at top
+            TextField("Task title", text: $editedTitle)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
 
-                    // Content — no label, no background; italic muted placeholder
-                    ZStack(alignment: .topLeading) {
-                        if editedBody.isEmpty {
-                            Text("Add content...")
-                                .font(.system(size: 13).italic())
-                                .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                                .allowsHitTesting(false)
-                                .padding(.top, 2)
-                                .padding(.leading, 4)
-                        }
-                        TextEditor(text: $editedBody)
-                            .font(.system(size: 13))
-                            .frame(minHeight: 80)
-                            .scrollContentBackground(.hidden)
-                    }
-
-                    Divider().background(AppTheme.divider)
-
-                    // Deadlines
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Deadlines")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-
-                        DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                            // Allow keeping an existing overdue date; new picks are bounded to today.
-                            let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
-                            DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
-                                .labelsHidden()
-                                .accessibilityLabel("Day deadline")
-                                .onChange(of: dayDate) { cascadeFromDay() }
-                        }
-                        .onChange(of: enableDay) { cascadeAll() }
-
-                        DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
-                            let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
-                            DatePicker("Week deadline", selection: $weekDate,
-                                       in: weekMin...,
-                                       displayedComponents: .date)
-                                .labelsHidden()
-                                .onChange(of: weekDate) { cascadeFromWeek() }
-                        }
-                        .onChange(of: enableWeek) { cascadeAll() }
-
-                        DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
-                            let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
-                            DatePicker("Month deadline", selection: $monthDate,
-                                       in: monthMin...,
-                                       displayedComponents: .date)
-                                .labelsHidden()
-                                .onChange(of: monthDate) { cascadeFromMonth() }
-                        }
-                        .onChange(of: enableMonth) { cascadeAll() }
-
-                        DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
-                            let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
-                            Picker("Year deadline", selection: $yearValue) {
-                                ForEach(yearMin...(yearMin + 10), id: \.self) { y in
-                                    Text(String(y)).tag(y)
-                                }
-                            }
-                            .labelsHidden()
-                            .accessibilityLabel("Year deadline")
-                            .frame(width: 90)
-                        }
-                        .onChange(of: enableYear) { cascadeAll() }
-                    }
-
-                    if !validationErrors.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(validationErrors, id: \.self) { err in
-                                HStack(spacing: 6) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(AppTheme.destructive)
-                                    Text(err)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(AppTheme.destructive)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
-                    }
+            // Body — fills all remaining space; TextEditor's own scroll handles long text
+            ZStack(alignment: .topLeading) {
+                if editedBody.isEmpty {
+                    Text("Add content...")
+                        .font(.system(size: 13).italic())
+                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                        .allowsHitTesting(false)
+                        .padding(.top, 2)
+                        .padding(.leading, 28)
                 }
-                .padding(24)
+                TextEditor(text: $editedBody)
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 20)
             }
+            .frame(maxHeight: .infinity)
+
+            Divider().background(AppTheme.divider)
+
+            // Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Deadlines")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.textTertiary)
+
+                DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
+                    // Allow keeping an existing overdue date; new picks are bounded to today.
+                    let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
+                    DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
+                        .labelsHidden()
+                        .accessibilityLabel("Day deadline")
+                        .onChange(of: dayDate) { cascadeFromDay() }
+                }
+                .onChange(of: enableDay) { cascadeAll() }
+
+                DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
+                    let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
+                    DatePicker("Week deadline", selection: $weekDate,
+                               in: weekMin...,
+                               displayedComponents: .date)
+                        .labelsHidden()
+                        .onChange(of: weekDate) { cascadeFromWeek() }
+                }
+                .onChange(of: enableWeek) { cascadeAll() }
+
+                DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
+                    let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
+                    DatePicker("Month deadline", selection: $monthDate,
+                               in: monthMin...,
+                               displayedComponents: .date)
+                        .labelsHidden()
+                        .onChange(of: monthDate) { cascadeFromMonth() }
+                }
+                .onChange(of: enableMonth) { cascadeAll() }
+
+                DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
+                    let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
+                    Picker("Year deadline", selection: $yearValue) {
+                        ForEach(yearMin...(yearMin + 10), id: \.self) { y in
+                            Text(String(y)).tag(y)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Year deadline")
+                    .frame(width: 90)
+                }
+                .onChange(of: enableYear) { cascadeAll() }
+
+                if !validationErrors.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(validationErrors, id: \.self) { err in
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppTheme.destructive)
+                                Text(err)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(AppTheme.destructive)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
         .background(AppTheme.contentBackground)
         .confirmationDialog("Discard unsaved changes?", isPresented: $showDiscardAlert, titleVisibility: .visible) {

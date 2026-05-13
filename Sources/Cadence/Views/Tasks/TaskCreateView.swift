@@ -68,97 +68,101 @@ struct TaskCreateView: View {
 
             Divider().background(AppTheme.divider)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Title — no label, just a large prominent field
-                    TextField("Task title", text: $title)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .textFieldStyle(.plain)
-                        .onChange(of: title) { userHasInteracted = true }
+            // Title — fixed height, always at top
+            TextField("Task title", text: $title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
+                .onChange(of: title) { userHasInteracted = true }
 
-                    // Content — no label, no background; italic muted placeholder
-                    ZStack(alignment: .topLeading) {
-                        if body_.isEmpty {
-                            Text("Add content...")
-                                .font(.system(size: 13).italic())
-                                .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                                .allowsHitTesting(false)
-                                .padding(.top, 2)
-                                .padding(.leading, 4)
-                        }
-                        TextEditor(text: $body_)
-                            .font(.system(size: 13))
-                            .frame(minHeight: 80)
-                            .scrollContentBackground(.hidden)
-                            .onChange(of: body_) { userHasInteracted = true }
-                    }
-
-                    // Deadlines
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Deadlines")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textTertiary)
-
-                        DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                            DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
-                                .labelsHidden()
-                                .accessibilityLabel("Day deadline")
-                                .onChange(of: dayDate) { userHasInteracted = true; cascadeFromDay() }
-                        }
-                        .onChange(of: enableDay) { userHasInteracted = true; cascadeAll() }
-
-                        DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
-                            DatePicker("Week deadline", selection: $weekDate,
-                                       in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
-                                       displayedComponents: .date)
-                                .labelsHidden()
-                                .onChange(of: weekDate) { userHasInteracted = true; cascadeFromWeek() }
-                        }
-                        .onChange(of: enableWeek) { userHasInteracted = true; cascadeAll() }
-
-                        DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
-                            DatePicker("Month deadline", selection: $monthDate,
-                                       in: Date().startOfMonth()...,
-                                       displayedComponents: .date)
-                                .labelsHidden()
-                                .onChange(of: monthDate) { userHasInteracted = true; cascadeFromMonth() }
-                        }
-                        .onChange(of: enableMonth) { userHasInteracted = true; cascadeAll() }
-
-                        DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
-                            Picker("Year deadline", selection: $yearValue) {
-                                ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
-                                    Text(String(y)).tag(y)
-                                }
-                            }
-                            .labelsHidden()
-                            .accessibilityLabel("Year deadline")
-                            .frame(width: 90)
-                            .onChange(of: yearValue) { userHasInteracted = true }
-                        }
-                        .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
-                    }
-
-                    if !validationErrors.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(validationErrors, id: \.self) { err in
-                                HStack(spacing: 6) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(AppTheme.destructive)
-                                    Text(err)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(AppTheme.destructive)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
-                    }
+            // Body — fills all remaining space; TextEditor's own scroll handles long text
+            ZStack(alignment: .topLeading) {
+                if body_.isEmpty {
+                    Text("Add content...")
+                        .font(.system(size: 13).italic())
+                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                        .allowsHitTesting(false)
+                        .padding(.top, 2)
+                        .padding(.leading, 28)
                 }
-                .padding(24)
+                TextEditor(text: $body_)
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 20)
+                    .onChange(of: body_) { userHasInteracted = true }
             }
+            .frame(maxHeight: .infinity)
+
+            Divider().background(AppTheme.divider)
+
+            // Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Deadlines")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.textTertiary)
+
+                DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
+                    DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
+                        .labelsHidden()
+                        .accessibilityLabel("Day deadline")
+                        .onChange(of: dayDate) { userHasInteracted = true; cascadeFromDay() }
+                }
+                .onChange(of: enableDay) { userHasInteracted = true; cascadeAll() }
+
+                DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
+                    DatePicker("Week deadline", selection: $weekDate,
+                               in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
+                               displayedComponents: .date)
+                        .labelsHidden()
+                        .onChange(of: weekDate) { userHasInteracted = true; cascadeFromWeek() }
+                }
+                .onChange(of: enableWeek) { userHasInteracted = true; cascadeAll() }
+
+                DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
+                    DatePicker("Month deadline", selection: $monthDate,
+                               in: Date().startOfMonth()...,
+                               displayedComponents: .date)
+                        .labelsHidden()
+                        .onChange(of: monthDate) { userHasInteracted = true; cascadeFromMonth() }
+                }
+                .onChange(of: enableMonth) { userHasInteracted = true; cascadeAll() }
+
+                DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
+                    Picker("Year deadline", selection: $yearValue) {
+                        ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
+                            Text(String(y)).tag(y)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Year deadline")
+                    .frame(width: 90)
+                    .onChange(of: yearValue) { userHasInteracted = true }
+                }
+                .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
+
+                if !validationErrors.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(validationErrors, id: \.self) { err in
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppTheme.destructive)
+                                Text(err)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(AppTheme.destructive)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
         .background(AppTheme.contentBackground)
         .onAppear { prefill() }
