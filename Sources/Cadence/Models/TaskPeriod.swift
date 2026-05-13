@@ -6,8 +6,6 @@ enum TaskPeriod: Equatable, Hashable {
     case month(Date)
     case year(Int)
 
-    var title: String { titleFor(weekStartsOn: .monday, today: Date()) }
-
     func titleFor(weekStartsOn: Weekday, today: Date = Date()) -> String {
         switch self {
         case .day(let d):   return d.fullDayLabel(today: today)

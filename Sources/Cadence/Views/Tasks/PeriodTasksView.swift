@@ -51,7 +51,9 @@ struct PeriodTasksView: View {
                             .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: false)
-                                    store.reorder(taskIds: todos.map(\.id), periodKey: sectionKey(isDone: false))
+                                    // Re-read from store after mutation so the reordered list includes the moved task.
+                                    let updatedTodos = allTasks.filter { !$0.isDone }
+                                    store.reorder(taskIds: updatedTodos.map(\.id), periodKey: sectionKey(isDone: false))
                                     draggedId = nil
                                     dropTargetId = nil
                                 }
@@ -67,7 +69,9 @@ struct PeriodTasksView: View {
                             .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: true)
-                                    store.reorder(taskIds: dones.map(\.id), periodKey: sectionKey(isDone: true))
+                                    // Re-read from store after mutation so the reordered list includes the moved task.
+                                    let updatedDones = allTasks.filter { $0.isDone }
+                                    store.reorder(taskIds: updatedDones.map(\.id), periodKey: sectionKey(isDone: true))
                                     draggedId = nil
                                     dropTargetId = nil
                                 }
@@ -105,10 +109,9 @@ struct PeriodTasksView: View {
                     let willBeDone = !task.isDone
                     store.toggle(task)
                     let destKey = sectionKey(isDone: willBeDone)
-                    store.reorder(
-                        taskIds: (willBeDone ? dones : todos).map(\.id),
-                        periodKey: destKey
-                    )
+                    // Re-read from store after mutation to include the toggled task in the reorder.
+                    let destIds = allTasks.filter { willBeDone ? $0.isDone : !$0.isDone }.map(\.id)
+                    store.reorder(taskIds: destIds, periodKey: destKey)
                 }
             )
             .padding(.horizontal, 16)
