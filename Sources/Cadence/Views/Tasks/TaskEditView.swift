@@ -19,6 +19,7 @@ struct TaskEditView: View {
     @State private var yearValue: Int
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
+    @State private var bodyFocusTrigger = 0
 
     init(task: CadenceTask, onBack: @escaping () -> Void) {
         self.task = task
@@ -128,12 +129,17 @@ struct TaskEditView: View {
                             .allowsHitTesting(false)
                             .padding(.top, 2)
                     }
-                    ChecklistBodyEditor(text: $editedBody)
+                    ChecklistBodyEditor(text: $editedBody, focusTrigger: bodyFocusTrigger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 

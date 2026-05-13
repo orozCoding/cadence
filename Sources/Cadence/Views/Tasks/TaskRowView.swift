@@ -8,6 +8,14 @@ struct TaskRowView: View {
     @EnvironmentObject var settings: AppSettings
     @State private var isHovered = false
 
+    private var bodyPreview: String {
+        task.body.components(separatedBy: "\n").compactMap { line -> String? in
+            if line.hasPrefix("- [ ] ") { let t = String(line.dropFirst(6)); return t.isEmpty ? nil : t }
+            if line.lowercased().hasPrefix("- [x] ") { let t = String(line.dropFirst(6)); return t.isEmpty ? nil : t }
+            return line.isEmpty ? nil : line
+        }.joined(separator: " · ")
+    }
+
     private var accessibilityLabel: String {
         var parts = [task.title]
         let today = settings.currentDate
@@ -47,8 +55,8 @@ struct TaskRowView: View {
                     .strikethrough(task.isDone, color: AppTheme.textTertiary)
                     .animation(.easeInOut(duration: 0.2), value: task.isDone)
 
-                if !task.body.isEmpty {
-                    Text(task.body)
+                if !bodyPreview.isEmpty {
+                    Text(bodyPreview)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textTertiary)
                         .lineLimit(1)
@@ -77,7 +85,7 @@ struct TaskRowView: View {
         .pointerCursor()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
+        .accessibilityHint(bodyPreview.isEmpty ? "Open details" : bodyPreview)
         .accessibilityAction(.default, onTap)
         .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)
     }

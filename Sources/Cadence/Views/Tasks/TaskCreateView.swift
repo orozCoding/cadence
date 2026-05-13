@@ -21,6 +21,7 @@ struct TaskCreateView: View {
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
     @State private var userHasInteracted = false
+    @State private var bodyFocusTrigger = 0
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
     private var hasDraft: Bool {
@@ -88,13 +89,18 @@ struct TaskCreateView: View {
                             .allowsHitTesting(false)
                             .padding(.top, 2)
                     }
-                    ChecklistBodyEditor(text: $body_)
+                    ChecklistBodyEditor(text: $body_, focusTrigger: bodyFocusTrigger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onChange(of: body_) { userHasInteracted = true }
                 }
                 .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 

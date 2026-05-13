@@ -48,12 +48,14 @@ private func serializeBodyLines(_ lines: [BodyLine]) -> String {
 /// • Empty checkbox rows are silently removed when focus leaves them.
 struct ChecklistBodyEditor: View {
     @Binding var text: String
+    var focusTrigger: Int = 0
 
     @FocusState private var focusedIndex: Int?
     @State private var lines: [BodyLine]
 
-    init(text: Binding<String>) {
+    init(text: Binding<String>, focusTrigger: Int = 0) {
         self._text = text
+        self.focusTrigger = focusTrigger
         self._lines = State(initialValue: parseBodyLines(text.wrappedValue))
     }
 
@@ -96,6 +98,9 @@ struct ChecklistBodyEditor: View {
                 lines[0] = .plain(id: lines[0].id, text: "")
                 commit()
             }
+        }
+        .onChange(of: focusTrigger) { _, _ in
+            focusedIndex = lines.indices.last
         }
     }
 
@@ -260,12 +265,15 @@ extension CadenceTask {
     /// by placeholder rows created while typing.
     var checklistProgress: (completed: Int, total: Int)? {
         let all = body.components(separatedBy: "\n")
+        let hasText: (String, String) -> Bool = { line, prefix in
+            !line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces).isEmpty
+        }
         let total = all.filter { line in
-            (line.hasPrefix("- [ ] ") && line.count > 6) ||
-            (line.lowercased().hasPrefix("- [x] ") && line.count > 6)
+            (line.hasPrefix("- [ ] ") && hasText(line, "- [ ] ")) ||
+            (line.lowercased().hasPrefix("- [x] ") && hasText(line, "- [x] "))
         }.count
         guard total > 0 else { return nil }
-        let done = all.filter { $0.lowercased().hasPrefix("- [x] ") && $0.count > 6 }.count
+        let done = all.filter { $0.lowercased().hasPrefix("- [x] ") && hasText($0, "- [x] ") }.count
         return (done, total)
     }
 }
