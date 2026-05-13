@@ -40,28 +40,30 @@ struct PeriodTasksView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // To Do section
-                        if !todos.isEmpty {
-                            SectionHeader(label: "To Do", count: todos.count)
-                                .background(todoHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
-                                .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
-                                    loadTaskId(providers) { id in store.setDone(id, isDone: false) }
-                                    return true
+                        // To Do section — always rendered so it's a valid DnD target even when empty
+                        SectionHeader(label: "To Do", count: todos.count)
+                            .background(todoHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
+                            .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
+                                loadTaskId(providers) { id in
+                                    store.setDone(id, isDone: false)
+                                    draggedId = nil
                                 }
-                        }
+                                return true
+                            }
                         periodTaskRows(tasks: todos, isDoneSection: false)
 
-                        // Done section
-                        if !dones.isEmpty {
-                            SectionHeader(label: "Done", count: dones.count)
-                                .padding(.top, !todos.isEmpty ? 8 : 0)
-                                .background(doneHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
-                                .transition(.opacity)
-                                .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
-                                    loadTaskId(providers) { id in store.setDone(id, isDone: true) }
-                                    return true
+                        // Done section — always rendered so it's a valid DnD target even when empty
+                        SectionHeader(label: "Done", count: dones.count)
+                            .padding(.top, 8)
+                            .background(doneHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
+                            .transition(.opacity)
+                            .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
+                                loadTaskId(providers) { id in
+                                    store.setDone(id, isDone: true)
+                                    draggedId = nil
                                 }
-                        }
+                                return true
+                            }
                         periodTaskRows(tasks: dones, isDoneSection: true)
                     }
                     .padding(.vertical, 12)

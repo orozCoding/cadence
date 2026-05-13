@@ -59,14 +59,27 @@ final class TaskStore: ObservableObject {
         save()
     }
 
-    // Update the deadline for the given period level without touching other levels.
+    // Update the deadline for the given period level.
+    // Finer-grained levels (which may no longer fall inside the new period) are cleared
+    // to prevent persisting inconsistent deadline combinations.
     func moveToPeriod(taskId: UUID, period: TaskPeriod) {
         guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
         switch period {
-        case .day(let d):   tasks[idx].dayDeadline = d.noonLocal()
-        case .week(let s):  tasks[idx].weekStart = s
-        case .month(let s): tasks[idx].monthStart = s
-        case .year(let y):  tasks[idx].yearDeadline = y
+        case .day(let d):
+            tasks[idx].dayDeadline = d.noonLocal()
+            // Day is the finest grain — coarser levels (week/month/year) may still be valid
+        case .week(let s):
+            tasks[idx].weekStart = s
+            tasks[idx].dayDeadline = nil   // day may fall outside the new week
+        case .month(let s):
+            tasks[idx].monthStart = s
+            tasks[idx].weekStart = nil     // week may fall outside the new month
+            tasks[idx].dayDeadline = nil   // day may fall outside the new month
+        case .year(let y):
+            tasks[idx].yearDeadline = y
+            tasks[idx].monthStart = nil    // month may fall outside the new year
+            tasks[idx].weekStart = nil     // week may fall outside the new year
+            tasks[idx].dayDeadline = nil   // day may fall outside the new year
         }
         save()
     }
