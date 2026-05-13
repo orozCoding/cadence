@@ -50,9 +50,9 @@ extension Date {
         startOfMonth(calendar: calendar) == other.startOfMonth(calendar: calendar)
     }
 
-    // Sidebar label: abbreviated month OK ("Monday, May 12"), relative labels for today/yesterday/tomorrow
-    func dayLabel() -> String {
-        let today = Date()
+    // Sidebar label: abbreviated month OK ("Monday, May 12"), relative labels for today/yesterday/tomorrow.
+    // Pass settings.currentDate so SwiftUI re-renders when the day rolls over.
+    func dayLabel(today: Date = Date()) -> String {
         let cal = Calendar.current
         if isSameDay(as: today) { return "Today" }
         if let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: today)),
@@ -64,9 +64,9 @@ extension Date {
         return fmt.string(from: self)
     }
 
-    // Center column label: full weekday and full month name, no abbreviations
-    func fullDayLabel() -> String {
-        let today = Date()
+    // Center column label: full weekday and full month name, no abbreviations.
+    // Pass settings.currentDate so SwiftUI re-renders when the day rolls over.
+    func fullDayLabel(today: Date = Date()) -> String {
         let cal = Calendar.current
         if isSameDay(as: today) { return "Today" }
         if let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: today)),
@@ -78,8 +78,7 @@ extension Date {
         return fmt.string(from: self)
     }
 
-    func weekLabel(weekStartsOn: Weekday = .monday) -> String {
-        let today = Date()
+    func weekLabel(weekStartsOn: Weekday = .monday, today: Date = Date()) -> String {
         let cal = Calendar.current
         let thisWeekStart = today.startOfWeek(weekStartsOn: weekStartsOn)
         let selfWeekStart = startOfWeek(weekStartsOn: weekStartsOn)
@@ -99,8 +98,7 @@ extension Date {
         return "\(startFmt.string(from: selfWeekStart)) – \(endFmt.string(from: end))"
     }
 
-    func monthLabel() -> String {
-        let today = Date()
+    func monthLabel(today: Date = Date()) -> String {
         let cal = Calendar.current
         if isSameMonth(as: today) { return "This Month" }
         let thisMonthStart = today.startOfMonth()
@@ -115,8 +113,8 @@ extension Date {
 }
 
 extension Int {
-    func yearLabel() -> String {
-        let currentYear = Calendar.current.component(.year, from: Date())
+    func yearLabel(today: Date = Date()) -> String {
+        let currentYear = Calendar.current.component(.year, from: today)
         switch self {
         case currentYear: return "This Year"
         case currentYear - 1: return "Last Year"

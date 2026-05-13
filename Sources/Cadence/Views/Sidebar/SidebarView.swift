@@ -42,7 +42,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Days", isExpanded: $daysExpanded) {
                             ForEach(days, id: \.self) { day in
                                 SidebarRow(
-                                    label: day.dayLabel(),
+                                    label: day.dayLabel(today: settings.currentDate),
                                     icon: "sun.max",
                                     isSelected: selection == .day(day)
                                 ) {
@@ -58,7 +58,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Weeks", isExpanded: $weeksExpanded) {
                             ForEach(weeks, id: \.self) { weekStart in
                                 SidebarRow(
-                                    label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn),
+                                    label: weekStart.weekLabel(weekStartsOn: settings.weekStartsOn, today: settings.currentDate),
                                     icon: "calendar",
                                     isSelected: selection == .week(weekStart)
                                 ) {
@@ -74,7 +74,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Months", isExpanded: $monthsExpanded) {
                             ForEach(months, id: \.self) { monthStart in
                                 SidebarRow(
-                                    label: monthStart.monthLabel(),
+                                    label: monthStart.monthLabel(today: settings.currentDate),
                                     icon: "calendar.badge.clock",
                                     isSelected: selection == .month(monthStart)
                                 ) {
@@ -90,7 +90,7 @@ struct SidebarView: View {
                         SidebarSection(label: "Years", isExpanded: $yearsExpanded) {
                             ForEach(years, id: \.self) { year in
                                 SidebarRow(
-                                    label: year.yearLabel(),
+                                    label: year.yearLabel(today: settings.currentDate),
                                     icon: "archivebox",
                                     isSelected: selection == .year(year)
                                 ) {
