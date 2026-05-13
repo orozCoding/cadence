@@ -20,14 +20,12 @@ final class AppSettings: ObservableObject {
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
         }
-        NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: refreshDate)
-            .store(in: &cancellables)
-        NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: refreshDate)
-            .store(in: &cancellables)
+        for name in [Notification.Name.NSCalendarDayChanged, .NSSystemTimeZoneDidChange, .NSSystemClockDidChange] {
+            NotificationCenter.default.publisher(for: name)
+                .receive(on: DispatchQueue.main)
+                .sink(receiveValue: refreshDate)
+                .store(in: &cancellables)
+        }
     }
 
     private func save() {
