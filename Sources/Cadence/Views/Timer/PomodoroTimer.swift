@@ -1,8 +1,12 @@
 import Foundation
+import AppKit
 import Combine
+import UserNotifications
 
 @MainActor
 final class PomodoroTimer: ObservableObject {
+    static let shared = PomodoroTimer()
+
     @Published var remaining: TimeInterval = 25 * 60
     @Published var total: TimeInterval = 25 * 60
     @Published var isRunning = false
@@ -19,20 +23,35 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func set(minutes: Int) {
+        set(seconds: TimeInterval(minutes * 60))
+    }
+
+    func set(seconds: TimeInterval) {
         pause()
-        total = TimeInterval(minutes * 60)
+        total = max(1, seconds.rounded())
         remaining = total
         isFinished = false
+        SoundManager.shared.playTimerSetOrReset()
     }
 
     func toggle() {
-        isRunning ? pause() : start()
+        if isRunning {
+            SoundManager.shared.playTimerPause()
+            pause()
+        } else {
+            start()
+        }
     }
 
     func start() {
         guard remaining > 0 else { return }
+        // Request permission on first timer start so the prompt appears in context.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error { print("[Cadence] Notification auth error: \(error)") }
+        }
         isRunning = true
         isFinished = false
+        SoundManager.shared.playTimerStart()
         cancellable = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in self?.tick() }
@@ -41,19 +60,50 @@ final class PomodoroTimer: ObservableObject {
     func pause() {
         isRunning = false
         cancellable = nil
+        FocusTimeStore.shared.flushIfNeeded()
     }
 
     func reset() {
         pause()
         remaining = total
         isFinished = false
+        SoundManager.shared.playTimerSetOrReset()
     }
 
     private func tick() {
+        FocusTimeStore.shared.addSecond()
         remaining = max(0, remaining - 1)
         if remaining == 0 {
             pause()
             isFinished = true
+            SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
+            sendTimerFinishedNotification()
         }
+    }
+
+    private func sendTimerFinishedNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Time's Up!"
+        content.subtitle = formattedDuration(total)
+        // No notification sound — SoundManager already handles audio feedback.
+        content.sound = nil
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { print("[Cadence] Failed to schedule notification: \(error)") }
+        }
+    }
+
+    private func formattedDuration(_ seconds: TimeInterval) -> String {
+        let totalMinutes = Int(seconds) / 60
+        let remainingSeconds = Int(seconds) % 60
+        if remainingSeconds == 0 {
+            return totalMinutes == 1 ? "1-minute session complete" : "\(totalMinutes)-minute session complete"
+        }
+        return "\(totalMinutes) min \(remainingSeconds) sec session complete"
     }
 }

@@ -3,8 +3,8 @@ import UniformTypeIdentifiers
 
 struct PeriodTasksView: View {
     let period: TaskPeriod
-    @Binding var selectedTask: CadenceTask?
-    @Binding var showNewTask: Bool
+    let onTaskTap: (CadenceTask) -> Void
+    let onNewTask: () -> Void
 
     @EnvironmentObject var store: TaskStore
     @EnvironmentObject var settings: AppSettings
@@ -36,11 +36,11 @@ struct PeriodTasksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn), showNewTask: $showNewTask)
+            TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate), onNewTask: onNewTask)
             Divider().background(AppTheme.divider)
 
             if allTasks.isEmpty {
-                EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn)).\nClick + to add one.")
+                EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate)).\nClick + to add one.")
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -51,7 +51,6 @@ struct PeriodTasksView: View {
                             .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: false)
-                                    // todos now reflects the change — stamp period sort keys
                                     store.reorder(taskIds: todos.map(\.id), periodKey: sectionKey(isDone: false))
                                     draggedId = nil
                                     dropTargetId = nil
@@ -101,14 +100,11 @@ struct PeriodTasksView: View {
 
             TaskRowView(
                 task: task,
-                onTap: { withAnimation { selectedTask = task } },
+                onTap: { onTaskTap(task) },
                 onToggle: {
-                    // Toggle done status then stamp the destination section's sort keys
-                    // so the task lands at the end of its new section in this period view.
                     let willBeDone = !task.isDone
                     store.toggle(task)
                     let destKey = sectionKey(isDone: willBeDone)
-                    // After toggle, todos/dones are recomputed from updated store state.
                     store.reorder(
                         taskIds: (willBeDone ? dones : todos).map(\.id),
                         periodKey: destKey

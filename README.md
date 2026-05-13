@@ -76,6 +76,19 @@ Click **Settings** in the sidebar to choose whether the week starts on **Monday*
 
 ---
 
+## Installing or Updating the App
+
+To run Cadence as a standalone app (no Xcode open required), build a Release binary and drop it in `/Applications`:
+
+```bash
+cd /Users/angelorozco/OrozCoding/repositories/cadence
+xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && cp -R dist/Cadence.app /Applications/Cadence.app
+```
+
+After that, open it from Spotlight, Launchpad, or Finder like any other macOS app. Run the same command whenever you want to update after pulling new changes.
+
+---
+
 ## Data Storage
 
 All tasks are saved locally to `UserDefaults`. No cloud sync, no account required.
