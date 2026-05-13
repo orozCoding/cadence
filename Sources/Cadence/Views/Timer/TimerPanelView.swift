@@ -53,6 +53,7 @@ struct TimerPanelView: View {
                 .buttonStyle(.plain)
                 .pointerCursor()
                 .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 2)
+                .accessibilityLabel("Reset timer")
 
                 Button(action: timer.toggle) {
                     Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
@@ -65,6 +66,7 @@ struct TimerPanelView: View {
                 .pointerCursor()
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
                 .shadow(color: AppTheme.accent.opacity(0.38), radius: 8, x: 0, y: 4)
+                .accessibilityLabel(timer.isRunning ? "Pause timer" : (timer.isFinished ? "Start new session" : "Start timer"))
             }
 
             // Today's focus time
@@ -112,6 +114,7 @@ struct TimerPanelView: View {
                         .padding(.vertical, 4)
                         .background(RoundedRectangle(cornerRadius: 5).fill(AppTheme.contentBackground))
                         .onSubmit { applyCustom() }
+                        .accessibilityLabel("Custom duration in minutes")
                     Text("min")
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textTertiary)
@@ -160,6 +163,7 @@ struct PresetButton: View {
         }
         .buttonStyle(.plain)
         .pointerCursor()
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
