@@ -31,16 +31,27 @@ final class AppSettings: ObservableObject {
         didSet { save() }
     }
 
+    @Published var soundsMuted: Bool {
+        didSet {
+            save()
+            // Both AppSettings and SoundManager are @MainActor; this call is always on the main thread.
+            if soundsMuted { SoundManager.shared.stopAll() }
+        }
+    }
+
     private init() {
         let raw = UserDefaults.standard.integer(forKey: "weekStartsOn")
         weekStartsOn = Weekday(rawValue: raw) ?? .monday
 
         let soundRaw = UserDefaults.standard.string(forKey: "timerFinishSound") ?? ""
         timerFinishSound = TimerFinishSound(rawValue: soundRaw) ?? .standard
+
+        soundsMuted = UserDefaults.standard.bool(forKey: "soundsMuted")
     }
 
     private func save() {
         UserDefaults.standard.set(weekStartsOn.rawValue, forKey: "weekStartsOn")
         UserDefaults.standard.set(timerFinishSound.rawValue, forKey: "timerFinishSound")
+        UserDefaults.standard.set(soundsMuted, forKey: "soundsMuted")
     }
 }

@@ -18,19 +18,30 @@ final class SoundManager {
 
     private init() {}
 
+    func stopAll() {
+        player?.stop()
+        player = nil
+        systemSound?.stop()
+        systemSound = nil
+    }
+
     func playTimerStart() {
+        guard !AppSettings.shared.soundsMuted else { return }
         playBundled("timer_start")
     }
 
     func playTimerPause() {
+        guard !AppSettings.shared.soundsMuted else { return }
         playBundled("timer_pause")
     }
 
     func playTimerFinished(sound: TimerFinishSound) {
+        guard !AppSettings.shared.soundsMuted else { return }
         playBundled(sound.rawValue)
     }
 
     func playTimerSetOrReset() {
+        guard !AppSettings.shared.soundsMuted else { return }
         player?.stop()
         systemSound?.stop()
         systemSound = NSSound(named: "Tink")
