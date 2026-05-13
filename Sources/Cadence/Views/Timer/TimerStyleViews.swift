@@ -137,6 +137,13 @@ struct GlassTimerCircle: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
+            .onAppear {
+                guard !isPreview else { return }
+                let saved = GlassWaveState.shared.phase
+                frozenPhase   = saved
+                phaseAtStart  = saved
+                waveStartDate = .now
+            }
             .onDisappear {
                 guard !isPreview else { return }
                 if isRunning {
