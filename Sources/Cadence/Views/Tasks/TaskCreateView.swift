@@ -248,6 +248,7 @@ struct TaskCreateView: View {
     // MARK: - Explicit save (Add Task button)
 
     private func save() {
+        guard !taskSaved else { return }
         let folderId = capturedFolderId ?? folderStore.activeFolder.id
         let errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,

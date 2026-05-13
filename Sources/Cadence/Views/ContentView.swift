@@ -65,10 +65,10 @@ struct ContentView: View {
                 .background(AppTheme.panelBackground)
         }
         .frame(minWidth: 800, minHeight: 500)
-        // Settings and Focus Time are full context switches — auto-save handles
-        // in-progress edits via onDisappear, so we navigate directly without a dialog.
-        .onChange(of: selection) { _, newSel in
-            guard (newSel == .settings || newSel == .focusTime), centerContent != .list else { return }
+        // Any sidebar navigation while the editor is open closes it; onDisappear
+        // handles auto-save for the in-progress task.
+        .onChange(of: selection) { _, _ in
+            guard centerContent != .list else { return }
             withAnimation(.easeInOut(duration: 0.18)) { centerContent = .list }
         }
         // Folder switch: auto-save handles any in-progress edits via onDisappear.
