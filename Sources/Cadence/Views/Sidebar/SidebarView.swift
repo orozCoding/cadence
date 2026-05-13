@@ -238,8 +238,8 @@ struct SidebarView: View {
 
     private func loadAndMove(_ providers: [NSItemProvider], to period: TaskPeriod) {
         let weekStartsOn = settings.weekStartsOn
-        providers.first?.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
-            guard let str = item as? String, let id = UUID(uuidString: str) else { return }
+        _ = providers.first?.loadDataRepresentation(for: .cadenceTaskID) { data, _ in
+            guard let data, let str = String(data: data, encoding: .utf8), let id = UUID(uuidString: str) else { return }
             DispatchQueue.main.async {
                 store.moveToPeriod(taskId: id, period: period, weekStartsOn: weekStartsOn)
             }
@@ -475,7 +475,7 @@ struct SidebarPeriodRow: View {
                     .allowsHitTesting(false)
             }
         }
-        .onDrop(of: [UTType.plainText], isTargeted: $isTargeted) { providers in
+        .onDrop(of: [UTType.cadenceTaskID], isTargeted: $isTargeted) { providers in
             // Mirror the past-deadline guard from TaskCreateView/TaskEditView:
             // reject drops onto rows whose period is already in the past.
             guard !isPast else { return false }

@@ -48,7 +48,7 @@ struct PeriodTasksView: View {
                         // To Do section — always rendered so it's a valid DnD target even when empty
                         SectionHeader(label: "To Do", count: todos.count)
                             .background(todoHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
-                            .onDrop(of: [UTType.plainText], isTargeted: $todoHeaderTargeted) { providers in
+                            .onDrop(of: [UTType.cadenceTaskID], isTargeted: $todoHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: false)
                                     // Re-read from store after mutation so the reordered list includes the moved task.
@@ -66,7 +66,7 @@ struct PeriodTasksView: View {
                             .padding(.top, 8)
                             .background(doneHeaderTargeted ? AppTheme.accent.opacity(0.1) : Color.clear)
                             .transition(.opacity)
-                            .onDrop(of: [UTType.plainText], isTargeted: $doneHeaderTargeted) { providers in
+                            .onDrop(of: [UTType.cadenceTaskID], isTargeted: $doneHeaderTargeted) { providers in
                                 loadTaskId(providers) { id in
                                     store.setDone(id, isDone: true)
                                     // Re-read from store after mutation so the reordered list includes the moved task.
@@ -123,10 +123,16 @@ struct PeriodTasksView: View {
             .opacity(draggedId == task.id ? 0.4 : 1.0)
             .onDrag {
                 draggedId = task.id
-                return NSItemProvider(object: task.id.uuidString as NSString)
+                let provider = NSItemProvider()
+                let uuidData = task.id.uuidString.data(using: .utf8) ?? Data()
+                provider.registerDataRepresentation(for: .cadenceTaskID, visibility: .all) { completion in
+                    completion(uuidData, nil)
+                    return nil
+                }
+                return provider
             }
             .onDrop(
-                of: [UTType.plainText],
+                of: [UTType.cadenceTaskID],
                 delegate: TaskReorderDelegate(
                     targetTask: task,
                     sectionTasks: tasks,
@@ -158,8 +164,8 @@ struct PeriodTasksView: View {
     }
 
     private func loadTaskId(_ providers: [NSItemProvider], action: @escaping (UUID) -> Void) {
-        providers.first?.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
-            guard let str = item as? String, let id = UUID(uuidString: str) else { return }
+        _ = providers.first?.loadDataRepresentation(for: .cadenceTaskID) { data, _ in
+            guard let data, let str = String(data: data, encoding: .utf8), let id = UUID(uuidString: str) else { return }
             DispatchQueue.main.async { action(id) }
         }
     }

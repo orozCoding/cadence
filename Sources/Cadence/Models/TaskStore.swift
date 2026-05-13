@@ -66,6 +66,26 @@ final class TaskStore: ObservableObject {
     // - All dates are stored at noon-local to match the invariant used by NewTaskSheet.
     func moveToPeriod(taskId: UUID, period: TaskPeriod, weekStartsOn: Weekday = .monday) {
         guard let idx = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+
+        // Compute the old period-level key before mutating so we can prune stale sort entries.
+        let oldLevelKey: String?
+        switch period {
+        case .day:   oldLevelKey = tasks[idx].dayDeadline.map { TaskPeriod.day($0).storageKey }
+        case .week:  oldLevelKey = tasks[idx].weekStart.map  { TaskPeriod.week($0).storageKey }
+        case .month: oldLevelKey = tasks[idx].monthStart.map { TaskPeriod.month($0).storageKey }
+        case .year:  oldLevelKey = tasks[idx].yearDeadline.map { TaskPeriod.year($0).storageKey }
+        }
+
+        // No-op when the task is already in the exact target period.
+        let alreadyThere: Bool
+        switch period {
+        case .day(let d):   alreadyThere = tasks[idx].dayDeadline.map  { $0.isSameDay(as: d) } == true
+        case .week(let s):  alreadyThere = tasks[idx].weekStart.map    { $0.isSameWeek(as: s, weekStartsOn: weekStartsOn) } == true
+        case .month(let s): alreadyThere = tasks[idx].monthStart.map   { $0.isSameMonth(as: s) } == true
+        case .year(let y):  alreadyThere = tasks[idx].yearDeadline == y
+        }
+        guard !alreadyThere else { return }
+
         switch period {
         case .day(let d):
             tasks[idx].dayDeadline = d.noonLocal()
@@ -100,10 +120,16 @@ final class TaskStore: ObservableObject {
             tasks[idx].weekStart = nil
             tasks[idx].dayDeadline = nil
         }
+
+        // Remove the stale sort keys for the old period so the dictionary doesn't
+        // accumulate entries for every period the task has ever visited.
+        if let old = oldLevelKey {
+            tasks[idx].periodSortKeys.removeValue(forKey: "td:\(old)")
+            tasks[idx].periodSortKeys.removeValue(forKey: "dn:\(old)")
+        }
+
         // Stamp a sort key for the destination section so the task lands at the end
         // rather than falling back to global sortOrder and causing unexpected reshuffles.
-        // Use max(periodSortKeys[key] ?? sortOrder) across all tasks so the result
-        // is always higher than any task's effective sort value for this section.
         let prefix = tasks[idx].isDone ? "dn:" : "td:"
         let destKey = prefix + period.storageKey
         let maxEffective = tasks
