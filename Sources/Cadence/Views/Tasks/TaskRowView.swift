@@ -19,6 +19,9 @@ struct TaskRowView: View {
         } else if let year = task.yearDeadline {
             parts.append("due \(year)")
         }
+        if let progress = task.checklistProgress {
+            parts.append("\(progress.completed) of \(progress.total) checklist items complete")
+        }
         if task.isDone { parts.append("completed") }
         return parts.joined(separator: ", ")
     }

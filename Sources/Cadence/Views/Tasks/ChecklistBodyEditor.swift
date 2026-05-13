@@ -83,6 +83,8 @@ struct ChecklistBodyEditor: View {
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
+                .accessibilityLabel(checked ? "Checked" : "Unchecked")
+                .accessibilityHint("Toggle checkbox")
 
                 if checked {
                     Text(checkedText(at: idx))
@@ -92,6 +94,8 @@ struct ChecklistBodyEditor: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture { toggleCheckbox(at: idx) }
+                        .accessibilityLabel(checkedText(at: idx))
+                        .accessibilityValue("Completed")
                 } else {
                     TextField("", text: checkboxBinding(at: idx))
                         .textFieldStyle(.plain)
@@ -99,6 +103,8 @@ struct ChecklistBodyEditor: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .focused($focusedIndex, equals: idx)
                         .onSubmit { handleEnterOnCheckbox(at: idx) }
+                        .accessibilityLabel(uncheckedText(at: idx).isEmpty ? "Checklist item" : uncheckedText(at: idx))
+                        .accessibilityValue("Unchecked")
                 }
             }
             .padding(.vertical, 2)
@@ -117,6 +123,11 @@ struct ChecklistBodyEditor: View {
     private func checkedText(at idx: Int) -> String {
         guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
         return t.isEmpty ? " " : t
+    }
+
+    private func uncheckedText(at idx: Int) -> String {
+        guard case .checkbox(_, _, let t) = lines[safe: idx] else { return "" }
+        return t
     }
 
     // MARK: - Bindings
@@ -138,9 +149,10 @@ struct ChecklistBodyEditor: View {
             return t
         } set: { newVal in
             guard idx < lines.count else { return }
-            // [] anywhere in the line triggers a checkbox conversion
-            if newVal.contains("[]") {
-                let cleaned = newVal.replacingOccurrences(of: "[]", with: "")
+            // [] at the START of the line triggers a checkbox conversion,
+            // so prose like "array[idx]" is never accidentally converted.
+            if newVal.hasPrefix("[]") {
+                let cleaned = String(newVal.dropFirst(2))
                 lines[idx] = .checkbox(id: UUID(), checked: false, text: cleaned)
                 commit()
                 Task { @MainActor in focusedIndex = idx }
