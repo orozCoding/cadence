@@ -96,20 +96,9 @@ struct PeriodTasksView: View {
                         dropTargetId = nil
                     }
                 }
-                // Clear draggedId when a drag is cancelled (user drops outside any valid target).
-                // dropTargetId transitions to nil when the last drop target is exited; a brief
-                // async check confirms no new target appeared before clearing the dimmed state.
-                .onChange(of: dropTargetId) { _, newTarget in
-                    guard newTarget == nil, draggedId != nil else { return }
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(150))
-                        if dropTargetId == nil && !todoHeaderTargeted && !doneHeaderTargeted {
-                            draggedId = nil
-                        }
-                    }
-                }
-                // Fallback for drags cancelled before entering any drop target: a mouse-up
-                // event means the drag session ended, so clear any stale dim state.
+                // Mouse-up clears any stale drag dim: covers both "cancelled before any target"
+                // and "exited last target then released". The 50ms delay lets performDrop run
+                // first on successful drops so it sets draggedId=nil before we check here.
                 .onAppear {
                     mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
                         if draggedId != nil {

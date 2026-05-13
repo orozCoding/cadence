@@ -20,7 +20,12 @@ final class TaskStore: ObservableObject {
 
     func add(_ task: CadenceTask) {
         var t = task
-        t.sortOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
+        // Use max of ALL sort values (global sortOrder + all periodSortKeys) so the
+        // new task's sortOrder is always higher than any existing key, ensuring it
+        // appears at the bottom of every period view regardless of manual reorder history.
+        let maxPeriodKey = tasks.flatMap { Array($0.periodSortKeys.values) }.max() ?? -1
+        let maxSortOrder = tasks.map(\.sortOrder).max() ?? -1
+        t.sortOrder = max(maxPeriodKey, maxSortOrder) + 1
         tasks.append(t)
         save()
     }
@@ -129,11 +134,23 @@ final class TaskStore: ObservableObject {
             tasks[idx].dayDeadline = nil
         }
 
-        // Remove the stale sort keys for the old period so the dictionary doesn't
-        // accumulate entries for every period the task has ever visited.
+        // Remove stale sort keys for the old same-level period and for all granularity
+        // levels cleared by this move (e.g., moving to week removes all day-level keys).
         if let old = oldLevelKey {
             tasks[idx].periodSortKeys.removeValue(forKey: "td:\(old)")
             tasks[idx].periodSortKeys.removeValue(forKey: "dn:\(old)")
+        }
+        let clearedPrefixes: [String]
+        switch period {
+        case .day:   clearedPrefixes = []
+        case .week:  clearedPrefixes = ["td:d:", "dn:d:"]
+        case .month: clearedPrefixes = ["td:d:", "dn:d:", "td:w:", "dn:w:"]
+        case .year:  clearedPrefixes = ["td:d:", "dn:d:", "td:w:", "dn:w:", "td:m:", "dn:m:"]
+        }
+        if !clearedPrefixes.isEmpty {
+            tasks[idx].periodSortKeys = tasks[idx].periodSortKeys.filter { key, _ in
+                !clearedPrefixes.contains(where: { key.hasPrefix($0) })
+            }
         }
 
         // Stamp a sort key for the destination section so the task lands at the end
