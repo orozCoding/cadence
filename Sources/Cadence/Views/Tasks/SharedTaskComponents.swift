@@ -161,7 +161,14 @@ func normalizeURL(_ raw: String) -> String {
         let isPort = !portStr.isEmpty
             && afterColon.dropFirst(portStr.count).isEmpty
             && (Int(portStr) ?? 65536) <= 65535
-        if !isPort { return s }  // non-authority URI scheme — leave as-is
+        if !isPort {
+            // Treat this as a URI scheme (mailto:, tel:, spotify:, etc.) only when
+            // the part before the colon contains no dot.  No registered URI scheme
+            // name includes a dot, so a dot signals a hostname (e.g. example.com:abc)
+            // that should receive the https:// prefix instead.
+            let beforeColon = String(authority[colonSearchFrom..<colon])
+            if !beforeColon.contains(".") { return s }
+        }
     }
     return "https://" + s
 }
