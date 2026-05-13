@@ -56,20 +56,32 @@ struct SettingsView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.textTertiary)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Finish sound")
+                    HStack {
+                        Text("Mute all sounds")
                             .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        Toggle("", isOn: $settings.soundsMuted)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
 
-                        Picker("", selection: $settings.timerFinishSound) {
-                            ForEach(TimerFinishSound.allCases) { sound in
-                                Text(sound.label).tag(sound)
+                    if !settings.soundsMuted {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Finish sound")
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppTheme.textPrimary)
+
+                            Picker("", selection: $settings.timerFinishSound) {
+                                ForEach(TimerFinishSound.allCases) { sound in
+                                    Text(sound.label).tag(sound)
+                                }
                             }
-                        }
-                        .pickerStyle(.radioGroup)
-                        .labelsHidden()
-                        .onChange(of: settings.timerFinishSound) { _, newSound in
-                            SoundManager.shared.playTimerFinished(sound: newSound)
+                            .pickerStyle(.radioGroup)
+                            .labelsHidden()
+                            .onChange(of: settings.timerFinishSound) { _, newSound in
+                                SoundManager.shared.playTimerFinished(sound: newSound)
+                            }
                         }
                     }
                 }
