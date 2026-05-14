@@ -480,8 +480,12 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             // max(0, ...) clamps gracefully when cursor sits on the attachment glyph itself.
             let contentNS     = displayContent as NSString
             let cLen          = contentNS.length
-            let beforeOffset  = max(0, min(cursor - contentStart, cLen))
-            let afterOffset   = max(0, min(selEnd  - contentStart, cLen))
+            // Clamp to contentStart — cursor can equal lineStart (on the FFFC glyph)
+            // which would give a negative offset; treat it as "beginning of content".
+            let splitCursor   = max(cursor, contentStart)
+            let splitSelEnd   = max(selEnd,  contentStart)
+            let beforeOffset  = min(splitCursor - contentStart, cLen)
+            let afterOffset   = min(splitSelEnd  - contentStart, cLen)
             let before        = contentNS.substring(to: beforeOffset)
             let after         = contentNS.substring(from: afterOffset)
 
