@@ -85,13 +85,18 @@ private final class BodyNSTextView: NSTextView {
         ]
     }
 
+    // One line-height of breathing room below the last glyph so the cursor is
+    // never clipped immediately after inserting a new line (before SwiftUI
+    // updates the frame for the new content size).
+    static let bottomPad: CGFloat = 20
+
     override var intrinsicContentSize: NSSize {
         guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
         lm.ensureLayout(for: tc)
         var rect = lm.usedRect(for: tc)
         let extra = lm.extraLineFragmentRect
         if !extra.isNull && !extra.isEmpty { rect = rect.union(extra) }
-        return NSSize(width: NSView.noIntrinsicMetric, height: max(rect.height, 16))
+        return NSSize(width: NSView.noIntrinsicMetric, height: max(rect.height, 16) + Self.bottomPad)
     }
 
     override func didChangeText() {
@@ -208,6 +213,13 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
 
     func updateNSView(_ tv: BodyNSTextView, context: Context) {
         let c = context.coordinator
+        // Re-apply the container width every update so word-wrap takes effect
+        // immediately on each keystroke (widthTracksTextView only fires on AppKit
+        // frame-resize events, which SwiftUI bypasses by setting the frame directly).
+        let w = c.lastLayoutWidth > 0 ? c.lastLayoutWidth : tv.frame.width
+        if w > 0, let tc = tv.textContainer, tc.containerSize.width != w {
+            tc.containerSize = CGSize(width: w, height: .greatestFiniteMagnitude)
+        }
         if c.committedText != text { c.render(text, to: tv, participateInUndo: false) }
         if focusTrigger > c.lastFocusTrigger {
             c.lastFocusTrigger = focusTrigger
@@ -222,12 +234,13 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView tv: BodyNSTextView, context: Context) -> CGSize? {
         guard let w = proposal.width, w > 0,
               let lm = tv.layoutManager, let tc = tv.textContainer else { return nil }
+        context.coordinator.lastLayoutWidth = w
         tc.containerSize = CGSize(width: w, height: .greatestFiniteMagnitude)
         lm.ensureLayout(for: tc)
         var rect = lm.usedRect(for: tc)
         let extra = lm.extraLineFragmentRect
         if !extra.isNull && !extra.isEmpty { rect = rect.union(extra) }
-        return CGSize(width: w, height: max(rect.height, 16))
+        return CGSize(width: w, height: max(rect.height, 16) + BodyNSTextView.bottomPad)
     }
 }
 
@@ -237,6 +250,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
     @Binding var text: String
     var lastFocusTrigger = 0
     var committedText    = ""
+    var lastLayoutWidth: CGFloat = 0
     private var isRendering = false
 
     init(text: Binding<String>) {
