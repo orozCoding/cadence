@@ -172,8 +172,13 @@ func normalizeURL(_ raw: String) -> String {
             && afterColon.dropFirst(portStr.count).isEmpty
             && (Int(portStr) ?? 65536) <= 65535
         if !isPort {
-            // Treat this as a URI scheme (mailto:, tel:, spotify:, etc.) only when
-            // the part before the colon contains no dot.  No registered URI scheme
+            // Empty afterColon with a path/query after the authority means this is
+            // a URI scheme followed by a hierarchical or path component
+            // (e.g. com.example.app:/oauth, http:/page). Leave such inputs as-is
+            // rather than prepending https://.
+            if afterColon.isEmpty && authEnd < s.endIndex { return s }
+            // Treat as URI scheme (mailto:, tel:, spotify:, etc.) only when the
+            // part before the colon contains no dot.  No registered URI scheme
             // name includes a dot, so a dot signals a hostname (e.g. example.com:abc)
             // that should receive the https:// prefix instead.
             let beforeColon = String(authority[colonSearchFrom..<colon])
