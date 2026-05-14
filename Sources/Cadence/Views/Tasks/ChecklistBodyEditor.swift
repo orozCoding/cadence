@@ -73,6 +73,16 @@ private final class BodyNSTextView: NSTextView {
         isAutomaticQuoteSubstitutionEnabled  = false
         isAutomaticTextReplacementEnabled    = false
         delegate = coordinator
+
+        // Seed typing attributes so plain text in an empty line inherits AppTheme,
+        // not AppKit defaults (Helvetica 12pt / black).
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byWordWrapping
+        typingAttributes = [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor(AppTheme.textSecondary),
+            .paragraphStyle: para
+        ]
     }
 
     override var intrinsicContentSize: NSSize {
@@ -363,8 +373,16 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             // Check if the display structure is out of sync with the raw text.
             // This catches pasted checkbox syntax (including "- [X] " capital X)
             // that arrived as plain characters without attachment rendering.
-            let newAttr = buildAttr(raw)
-            if newAttr.string != ts.string {
+            // Use a lightweight string comparison (no NSImage creation) to guard
+            // the expensive full buildAttr rebuild.
+            let expectedDisplay = raw.components(separatedBy: "\n").map { line -> String in
+                if line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ") {
+                    return "\u{FFFC}" + String(line.dropFirst(6))
+                }
+                return line
+            }.joined(separator: "\n")
+            if expectedDisplay != ts.string {
+                let newAttr = buildAttr(raw)
                 isRendering = true
                 ts.setAttributedString(newAttr)
                 tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
