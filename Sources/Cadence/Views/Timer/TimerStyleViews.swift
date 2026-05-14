@@ -620,6 +620,9 @@ struct RadiateTimerCircle: View {
     let isRunning: Bool
     var inverted: Bool = false
 
+    // Tracks accumulated rotation so pause/resume continues from the same angle.
+    @State private var rotationOffset: TimeInterval = 0
+    @State private var rotationResumeDate: Date = .now
     @State private var frozenAngle: CGFloat = 0
 
     private let spokeCount = 60
@@ -630,8 +633,8 @@ struct RadiateTimerCircle: View {
         ZStack {
             if isRunning {
                 TimelineView(.periodic(from: .now, by: 1.0 / 20.0)) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
-                    spokeCanvas(rotAngle: CGFloat(t * 8.0 * .pi / 180.0))
+                    let elapsed = rotationOffset + context.date.timeIntervalSince(rotationResumeDate)
+                    spokeCanvas(rotAngle: CGFloat(elapsed * 8.0 * .pi / 180.0))
                 }
             } else {
                 spokeCanvas(rotAngle: frozenAngle)
@@ -655,8 +658,11 @@ struct RadiateTimerCircle: View {
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
         .onChange(of: isRunning) { _, newVal in
-            if !newVal {
-                frozenAngle = CGFloat(Date().timeIntervalSinceReferenceDate * 8.0 * .pi / 180.0)
+            if newVal {
+                rotationResumeDate = .now
+            } else {
+                rotationOffset += Date().timeIntervalSince(rotationResumeDate)
+                frozenAngle = CGFloat(rotationOffset * 8.0 * .pi / 180.0)
             }
         }
     }
