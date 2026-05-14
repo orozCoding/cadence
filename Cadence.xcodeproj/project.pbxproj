@@ -22,6 +22,7 @@
 		B000004E /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002E /* TaskRowView.swift */; };
 		B000004F /* PomodoroTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000002F /* PomodoroTimer.swift */; };
 		B0000050 /* TimerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000030 /* TimerPanelView.swift */; };
+		B0000080 /* TimerStyleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000081 /* TimerStyleViews.swift */; };
 		B0000051 /* View+Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000031 /* View+Cursor.swift */; };
 		B0000052 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000032 /* Folder.swift */; };
 		B0000053 /* FolderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000033 /* FolderStore.swift */; };
@@ -30,6 +31,7 @@
 		B0000056 /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000036 /* TaskEditView.swift */; };
 		B0000057 /* FocusTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000037 /* FocusTimeView.swift */; };
 		B0000058 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0000038 /* Assets.xcassets */; };
+		B0000059 /* ChecklistBodyEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000039 /* ChecklistBodyEditor.swift */; };
 		B0000070 /* timer_start.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000060 /* timer_start.mp3 */; };
 		B0000071 /* timer_pause.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000061 /* timer_pause.mp3 */; };
 		B0000072 /* timer_finished.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000062 /* timer_finished.mp3 */; };
@@ -57,6 +59,7 @@
 		B000002E /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
 		B000002F /* PomodoroTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTimer.swift; sourceTree = "<group>"; };
 		B0000030 /* TimerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPanelView.swift; sourceTree = "<group>"; };
+		B0000081 /* TimerStyleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerStyleViews.swift; sourceTree = "<group>"; };
 		B0000031 /* View+Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Cursor.swift"; sourceTree = "<group>"; };
 		B0000032 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		B0000033 /* FolderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderStore.swift; sourceTree = "<group>"; };
@@ -65,6 +68,7 @@
 		B0000036 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
 		B0000037 /* FocusTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTimeView.swift; sourceTree = "<group>"; };
 		B0000038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B0000039 /* ChecklistBodyEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistBodyEditor.swift; sourceTree = "<group>"; };
 		B0000060 /* timer_start.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_start.mp3; sourceTree = "<group>"; };
 		B0000061 /* timer_pause.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_pause.mp3; sourceTree = "<group>"; };
 		B0000062 /* timer_finished.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished.mp3; sourceTree = "<group>"; };
@@ -214,6 +218,7 @@
 				B000002B /* PeriodTasksView.swift */,
 				B000002C /* SharedTaskComponents.swift */,
 				B000002E /* TaskRowView.swift */,
+				B0000039 /* ChecklistBodyEditor.swift */,
 				B0000035 /* TaskCreateView.swift */,
 				B0000036 /* TaskEditView.swift */,
 			);
@@ -225,6 +230,7 @@
 			children = (
 				B000002F /* PomodoroTimer.swift */,
 				B0000030 /* TimerPanelView.swift */,
+				B0000081 /* TimerStyleViews.swift */,
 			);
 			path = Timer;
 			sourceTree = "<group>";
@@ -317,8 +323,10 @@
 				B000004B /* PeriodTasksView.swift in Sources */,
 				B000004C /* SharedTaskComponents.swift in Sources */,
 				B000004E /* TaskRowView.swift in Sources */,
+				B0000059 /* ChecklistBodyEditor.swift in Sources */,
 				B000004F /* PomodoroTimer.swift in Sources */,
 				B0000050 /* TimerPanelView.swift in Sources */,
+				B0000080 /* TimerStyleViews.swift in Sources */,
 				B0000051 /* View+Cursor.swift in Sources */,
 				B0000052 /* Folder.swift in Sources */,
 				B0000053 /* FolderStore.swift in Sources */,

@@ -8,6 +8,14 @@ struct TaskRowView: View {
     @EnvironmentObject var settings: AppSettings
     @State private var isHovered = false
 
+    private var bodyPreview: String {
+        task.body.components(separatedBy: "\n").compactMap { line -> String? in
+            if line.hasPrefix("- [ ] ") { let t = String(line.dropFirst(6)); return t.isEmpty ? nil : t }
+            if line.lowercased().hasPrefix("- [x] ") { let t = String(line.dropFirst(6)); return t.isEmpty ? nil : t }
+            return line.isEmpty ? nil : line
+        }.joined(separator: " · ")
+    }
+
     private var accessibilityLabel: String {
         var parts = [task.title]
         let today = settings.currentDate
@@ -19,6 +27,9 @@ struct TaskRowView: View {
             parts.append("due \(month.monthLabel(today: today))")
         } else if let year = task.yearDeadline {
             parts.append("due \(year.yearLabel(today: today))")
+        }
+        if let progress = task.checklistProgress {
+            parts.append("\(progress.completed) of \(progress.total) checklist items complete")
         }
         if task.isDone { parts.append("completed") }
         return parts.joined(separator: ", ")
@@ -35,7 +46,6 @@ struct TaskRowView: View {
             }
             .buttonStyle(.plain)
             .pointerCursor()
-            .accessibilityLabel(task.isDone ? "Mark as To Do" : "Mark as Done")
 
             // Title + body
             VStack(alignment: .leading, spacing: 2) {
@@ -45,8 +55,8 @@ struct TaskRowView: View {
                     .strikethrough(task.isDone, color: AppTheme.textTertiary)
                     .animation(.easeInOut(duration: 0.2), value: task.isDone)
 
-                if !task.body.isEmpty {
-                    Text(task.body)
+                if !bodyPreview.isEmpty {
+                    Text(bodyPreview)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textTertiary)
                         .lineLimit(1)
@@ -54,6 +64,10 @@ struct TaskRowView: View {
             }
 
             Spacer()
+
+            if let progress = task.checklistProgress {
+                ChecklistProgressBadge(completed: progress.completed, total: progress.total)
+            }
 
             deadlineBadges
 
@@ -71,9 +85,9 @@ struct TaskRowView: View {
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
         .pointerCursor()
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(task.body.isEmpty ? "Open details" : task.body)
+        .accessibilityHint(bodyPreview.isEmpty ? "Open details" : bodyPreview)
         .accessibilityAction(.default, onTap)
         .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)
     }
@@ -106,6 +120,29 @@ struct TaskRowView: View {
         } else if let year = task.yearDeadline {
             DeadlineBadge(label: year.yearLabel(today: today), color: task.isDone ? AppTheme.textTertiary : AppTheme.accentLight)
         }
+    }
+}
+
+struct ChecklistProgressBadge: View {
+    let completed: Int
+    let total: Int
+
+    private var isComplete: Bool { completed == total }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "checklist")
+                .font(.system(size: 9, weight: .medium))
+            Text("\(completed)/\(total)")
+                .font(.system(size: 10, weight: .medium))
+        }
+        .foregroundStyle(isComplete ? AppTheme.accent : AppTheme.textTertiary)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isComplete ? AppTheme.accent.opacity(0.12) : AppTheme.divider)
+        )
     }
 }
 

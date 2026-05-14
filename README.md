@@ -28,6 +28,14 @@ A focused macOS productivity app combining a hierarchical to-do list with a Pomo
 
 That's it — no simulators, no provisioning needed.
 
+You can also simply open the `Cadence.xcodeproj` from the terminal while being on the project/worktree directory:
+
+```bash
+open Cadence.xcodeproj
+```
+
+Then run the app from Xcode's toolbar or pressing **⌘R**.
+
 ---
 
 ## App Overview
@@ -81,8 +89,11 @@ Click **Settings** in the sidebar to choose whether the week starts on **Monday*
 To run Cadence as a standalone app (no Xcode open required), build a Release binary and drop it in `/Applications`:
 
 ```bash
+# cd to the project directory e.g.
 cd /Users/angelorozco/OrozCoding/repositories/cadence
-xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && cp -R dist/Cadence.app /Applications/Cadence.app
+
+# build the app
+xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && ditto dist/Cadence.app /Applications/Cadence.app
 ```
 
 After that, open it from Spotlight, Launchpad, or Finder like any other macOS app. Run the same command whenever you want to update after pulling new changes.

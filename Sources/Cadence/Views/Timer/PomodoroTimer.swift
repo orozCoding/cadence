@@ -13,13 +13,19 @@ final class PomodoroTimer: ObservableObject {
     @Published var isFinished = false
 
     private var cancellable: AnyCancellable?
+    private var resumeDate: Date = .now
+    private var remainingAtResume: TimeInterval = 25 * 60
+    private var lastTickDate: Date = .now
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
     var timeString: String {
-        let m = Int(remaining) / 60
-        let s = Int(remaining) % 60
-        return String(format: "%02d:%02d", m, s)
+        // Finished: always show 00:00.
+        // Running/paused: ceil so the display stays at N until a full second has elapsed,
+        // and guard ≥ 1 so a sub-second fractional remainder never shows 00:00 prematurely.
+        if isFinished { return "00:00" }
+        let totalSecs = max(1, Int(ceil(remaining)))
+        return String(format: "%02d:%02d", totalSecs / 60, totalSecs % 60)
     }
 
     func set(minutes: Int) {
@@ -35,6 +41,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func toggle() {
+        if isFinished {
+            remaining = total
+            isFinished = false
+            start()
+            return
+        }
         if isRunning {
             SoundManager.shared.playTimerPause()
             pause()
@@ -49,6 +61,9 @@ final class PomodoroTimer: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
             if let error { print("[Cadence] Notification auth error: \(error)") }
         }
+        resumeDate = .now
+        remainingAtResume = remaining
+        lastTickDate = .now
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -58,6 +73,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func pause() {
+        if isRunning {
+            let elapsed = Date().timeIntervalSince(resumeDate)
+            remaining = max(0, remainingAtResume - elapsed)
+        }
         isRunning = false
         cancellable = nil
         FocusTimeStore.shared.flushIfNeeded()
@@ -71,8 +90,16 @@ final class PomodoroTimer: ObservableObject {
     }
 
     private func tick() {
-        FocusTimeStore.shared.addSecond()
-        remaining = max(0, remaining - 1)
+        let now = Date()
+        let tickElapsed = now.timeIntervalSince(lastTickDate)
+        lastTickDate = now
+        // Cap at 2s per tick so Mac sleep gaps don't inflate focus stats.
+        // Floor (Int truncation) slightly under-credits when the 1s publisher fires late,
+        // but that is preferable to over-crediting, and the drift is < 1s per tick.
+        let focusSeconds = min(Int(tickElapsed), 2)
+        for _ in 0..<focusSeconds { FocusTimeStore.shared.addSecond() }
+        let elapsed = now.timeIntervalSince(resumeDate)
+        remaining = max(0, remainingAtResume - elapsed)
         if remaining == 0 {
             pause()
             isFinished = true
