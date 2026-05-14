@@ -347,6 +347,7 @@ struct URLEditSection: View {
 struct URLBadgeIcon: View {
     let url: String
     @State private var isHovered = false
+    @State private var showPopover = false
 
     var body: some View {
         Button(action: openInBrowser) {
@@ -363,15 +364,27 @@ struct URLBadgeIcon: View {
         }
         .buttonStyle(.plain)
         .pointerCursor()
-        .onHover { isHovered = $0 }
-        .popover(isPresented: $isHovered, arrowEdge: .bottom) {
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                // Delay prevents the popover from flashing when the mouse passes over quickly.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if isHovered { showPopover = true }
+                }
+            } else {
+                showPopover = false
+            }
+        }
+        .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             Text(url)
                 .font(.system(size: 11))
                 .foregroundStyle(AppTheme.textPrimary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .frame(maxWidth: 280)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 220, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
         }
         .accessibilityLabel("Open URL: \(url)")
     }
