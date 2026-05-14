@@ -103,7 +103,11 @@ private final class BodyNSTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         let pt = convert(event.locationInWindow, from: nil)
         if let lm = layoutManager, let tc = textContainer, let ts = textStorage {
-            let idx = lm.characterIndex(for: pt, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
+            // Convert to text-container coordinates (subtract the inset that offsets
+            // the container within the text view's bounds).
+            let containerPt = NSPoint(x: pt.x - textContainerInset.width,
+                                      y: pt.y - textContainerInset.height)
+            let idx = lm.characterIndex(for: containerPt, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
             if idx < ts.length,
                (ts.string as NSString).character(at: idx) == 0xFFFC,
                let att = ts.attribute(.attachment, at: idx, effectiveRange: nil) as? CheckboxAttachment {
@@ -204,7 +208,7 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
 
     func updateNSView(_ tv: BodyNSTextView, context: Context) {
         let c = context.coordinator
-        if c.committedText != text { c.render(text, to: tv) }
+        if c.committedText != text { c.render(text, to: tv, participateInUndo: false) }
         if focusTrigger > c.lastFocusTrigger {
             c.lastFocusTrigger = focusTrigger
             DispatchQueue.main.async {
@@ -314,10 +318,19 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
 
     // MARK: Apply render (full rebuild)
 
-    func render(_ raw: String, to tv: BodyNSTextView) {
+    // `participateInUndo`: pass false for external binding updates (updateNSView) so that
+    // programmatic state sync does not pollute the undo stack.
+    func render(_ raw: String, to tv: BodyNSTextView, participateInUndo: Bool = true) {
         isRendering = true
+        let newAttr = buildAttr(raw)
         let sel = tv.selectedRange()
-        tv.textStorage?.setAttributedString(buildAttr(raw))
+        let fullRange = NSRange(location: 0, length: tv.textStorage?.length ?? 0)
+        // shouldChangeText/didChangeText integrates with NSTextView's undo machinery.
+        // Even though we call setAttributedString (not replaceCharacters), calling
+        // this pair causes AppKit to save the before-state and register an undo action.
+        if participateInUndo { _ = tv.shouldChangeText(in: fullRange, replacementString: newAttr.string) }
+        tv.textStorage?.setAttributedString(newAttr)
+        if participateInUndo { tv.didChangeText() } // fires textDidChange but isRendering guards re-entry
         let newLen = tv.textStorage?.length ?? 0
         tv.setSelectedRange(NSRange(location: min(sel.location, newLen), length: 0))
         committedText = raw
