@@ -8,14 +8,15 @@ private let presets: [(label: String, minutes: Int)] = [
 ]
 
 struct TimerPanelView: View {
-    @StateObject private var timer = PomodoroTimer()
+    @ObservedObject private var timer      = PomodoroTimer.shared
+    @ObservedObject private var settings   = AppSettings.shared
+    @ObservedObject private var focusStore = FocusTimeStore.shared
+
     @State private var customMinutes = ""
-    @State private var showCustom = false
     @State private var selectedPreset: Int? = 25
 
     var body: some View {
         VStack(spacing: 0) {
-            // Panel title
             HStack {
                 Text("Focus Timer")
                     .font(.system(size: 13, weight: .semibold))
@@ -29,36 +30,15 @@ struct TimerPanelView: View {
 
             Spacer()
 
-            // Clock ring
-            ZStack {
-                Circle()
-                    .stroke(AppTheme.divider, lineWidth: 6)
-                    .frame(width: 130, height: 130)
-
-                Circle()
-                    .trim(from: 0, to: timer.progress)
-                    .stroke(
-                        timer.isFinished ? AppTheme.accentDark : AppTheme.accent,
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                    )
-                    .frame(width: 130, height: 130)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.5), value: timer.progress)
-
-                VStack(spacing: 2) {
-                    Text(timer.timeString)
-                        .font(.system(size: 28, weight: .thin, design: .monospaced))
-                        .foregroundStyle(timer.isFinished ? AppTheme.accent : AppTheme.textPrimary)
-                        .contentTransition(.numericText())
-
-                    if timer.isFinished {
-                        Text("Done!")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .transition(.opacity.combined(with: .scale))
-                    }
-                }
-            }
+            // Timer clock — style and direction driven by settings
+            TimerClockView(
+                style: settings.timerStyle,
+                progress: CGFloat(timer.progress),
+                isFinished: timer.isFinished,
+                timeString: timer.timeString,
+                isRunning: timer.isRunning,
+                inverted: settings.timerDirection == .inverted
+            )
 
             Spacer().frame(height: 20)
 
@@ -69,28 +49,39 @@ struct TimerPanelView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(AppTheme.divider))
+                        .background(TimerButtonBG(style: settings.timerStyle, size: 36, isAccent: false))
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
+                .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 2)
+                .accessibilityLabel("Reset timer")
 
                 Button(action: timer.toggle) {
                     Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(.white)
                         .frame(width: 48, height: 48)
-                        .background(Circle().fill(AppTheme.accent))
+                        .background(TimerButtonBG(style: settings.timerStyle, size: 48, isAccent: true))
                 }
                 .buttonStyle(.plain)
                 .pointerCursor()
                 .animation(.easeInOut(duration: 0.12), value: timer.isRunning)
+                .shadow(color: AppTheme.accent.opacity(0.38), radius: 8, x: 0, y: 4)
+                .accessibilityLabel(timer.isRunning ? "Pause timer" : (timer.isFinished ? "Start new session" : "Start timer"))
             }
 
-            Spacer().frame(height: 24)
+            // Today's focus time
+            let todaySecs = focusStore.todaySeconds()
+            Text(todaySecs > 0 ? "Today  \(formatFocusTime(todaySecs))" : "No focus time today")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+                .padding(.top, 10)
+
+            Spacer().frame(height: 20)
 
             Divider().background(AppTheme.divider)
 
-            // Presets
+            // Presets + custom input
             VStack(alignment: .leading, spacing: 8) {
                 Text("Presets")
                     .font(.system(size: 10, weight: .semibold))
@@ -104,52 +95,56 @@ struct TimerPanelView: View {
                             isSelected: selectedPreset == preset.minutes
                         ) {
                             selectedPreset = preset.minutes
-                            showCustom = false
                             timer.set(minutes: preset.minutes)
                         }
-                    }
-
-                    PresetButton(label: "Custom", isSelected: showCustom) {
-                        selectedPreset = nil
-                        showCustom = true
                     }
                 }
                 .padding(.horizontal, 12)
 
-                if showCustom {
-                    HStack(spacing: 6) {
-                        TextField("min", text: $customMinutes)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13))
-                            .frame(width: 50)
-                            .padding(6)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.contentBackground))
-                            .onSubmit { applyCustom() }
-
-                        Text("min")
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.textTertiary)
-
-                        Button("Set") { applyCustom() }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .pointerCursor()
-                    }
-                    .padding(.horizontal, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                HStack(spacing: 8) {
+                    Text("Custom")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    TextField("min", text: $customMinutes)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .frame(width: 44)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(AppTheme.contentBackground))
+                        .onSubmit { applyCustom() }
+                        .accessibilityLabel("Custom duration in minutes")
+                    Text("min")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Button("Set") { applyCustom() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .pointerCursor()
                 }
+                .padding(.horizontal, 16)
             }
             .padding(.vertical, 12)
 
             Spacer()
         }
-        .animation(.easeInOut(duration: 0.15), value: showCustom)
+        .onDisappear {
+            if timer.isRunning { timer.pause() }
+        }
     }
 
     private func applyCustom() {
-        guard let mins = Int(customMinutes), mins > 0, mins <= 999 else { return }
-        timer.set(minutes: mins)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = .current
+        guard let num = formatter.number(from: customMinutes),
+              num.doubleValue > 0, num.doubleValue <= 999 else { return }
+        let mins = num.doubleValue
+        selectedPreset = presets.first(where: { Double($0.minutes) == mins })?.minutes
+        timer.set(seconds: mins * 60)
     }
 }
 
@@ -172,5 +167,16 @@ struct PresetButton: View {
         }
         .buttonStyle(.plain)
         .pointerCursor()
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
+
+func formatFocusTime(_ seconds: Int) -> String {
+    if seconds <= 0 { return "—" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    let s = seconds % 60
+    if h > 0 { return "\(h)h \(m)m \(s)s" }
+    if m > 0 { return "\(m)m \(s)s" }
+    return "\(s)s"
 }
