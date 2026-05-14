@@ -94,8 +94,7 @@ struct TaskRowView: View {
 
     @ViewBuilder
     private var urlBadges: some View {
-        // URLs are normalized at save time; URL(string:) check is sufficient here.
-        let validUrls = task.urls.filter { !$0.isEmpty && URL(string: $0) != nil }
+        let validUrls = task.urls.filter { !$0.isEmpty && isSaveableURL(normalizeURL($0)) }
         if !validUrls.isEmpty {
             HStack(spacing: 3) {
                 ForEach(Array(validUrls.prefix(5).enumerated()), id: \.offset) { _, url in

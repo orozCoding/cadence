@@ -284,13 +284,13 @@ struct TaskEditView: View {
         var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
         stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
 
-        // Auto-save preserves mid-edit URLs as raw text so a transient typo doesn't erase the slot.
-        // Valid URLs are normalized; invalid ones are kept verbatim until the user fixes them.
+        // Auto-save persists only valid normalized URLs. Invalid/partial rows stay in editedUrls
+        // SwiftUI state so the user can keep typing without losing the slot in the UI.
         let normalizedUrls = editedUrls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return nil }
             let normalized = normalizeURL(trimmed)
-            return isSaveableURL(normalized) ? normalized : trimmed
+            return isSaveableURL(normalized) ? normalized : nil
         }
 
         var updated = currentTask

@@ -249,12 +249,12 @@ struct TaskCreateView: View {
             weekStartsOn: settings.weekStartsOn
         )
         taskSaved = true
-        // Preserve mid-edit URLs as raw text so a transient typo doesn't erase the slot.
+        // Dismiss-path save: persist only valid normalized URLs so the model stays clean.
         let normalizedUrls = urls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return nil }
             let normalized = normalizeURL(trimmed)
-            return isSaveableURL(normalized) ? normalized : trimmed
+            return isSaveableURL(normalized) ? normalized : nil
         }
         let task = CadenceTask(
             folderId: folderId,
