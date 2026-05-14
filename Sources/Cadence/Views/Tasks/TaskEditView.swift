@@ -18,8 +18,21 @@ struct TaskEditView: View {
     @State private var monthDate: Date
     @State private var yearValue: Int
     @State private var validationErrors: [String] = []
-    @State private var showDiscardAlert = false
+
+    // Debounced auto-save — cancelled and restarted on every change
+    @State private var autoSaveTask: Task<Void, Never>? = nil
+
+    // Guards against a second store.update() when onDisappear fires after goBack() already saved.
+    @State private var didSaveOnBack = false
+
     @State private var bodyFocusTrigger = 0
+
+    // Undo/redo history for title + body — immediate push on first burst keystroke,
+    // then debounced 1s; capped at 50 snapshots
+    @State private var history: [(title: String, body: String)] = []
+    @State private var historyIndex: Int = 0
+    @State private var historySnapshotTask: Task<Void, Never>? = nil
+    @State private var editBurstActive = false
 
     init(task: CadenceTask, onBack: @escaping () -> Void) {
         self.task = task
@@ -34,37 +47,23 @@ struct TaskEditView: View {
         _weekDate    = State(initialValue: task.weekStart ?? Date())
         _monthDate   = State(initialValue: task.monthStart ?? Date())
         _yearValue   = State(initialValue: task.yearDeadline ?? Calendar.current.component(.year, from: Date()))
+        _history     = State(initialValue: [(title: task.title, body: task.body)])
     }
 
     private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
     private var canSave: Bool { !trimmedTitle.isEmpty }
+    private var canUndo: Bool { historyIndex > 0 }
+    private var canRedo: Bool { historyIndex < history.count - 1 }
 
-    // Live version reflects any isDone toggles made while this view is open.
     private var currentTask: CadenceTask {
         store.tasks.first(where: { $0.id == task.id }) ?? task
-    }
-
-    private var hasUnsavedChanges: Bool {
-        if trimmedTitle != task.title || editedBody != task.body { return true }
-        if enableDay != (task.dayDeadline != nil) { return true }
-        if enableWeek != (task.weekStart != nil) { return true }
-        if enableMonth != (task.monthStart != nil) { return true }
-        if enableYear != (task.yearDeadline != nil) { return true }
-        if enableDay, let orig = task.dayDeadline, !dayDate.isSameDay(as: orig) { return true }
-        // Use raw date comparison: weekDate is initialized from task.weekStart, so a matching
-        // day means the user never moved the picker (avoids false positives if weekStartsOn changes).
-        if enableWeek, let orig = task.weekStart, !weekDate.isSameDay(as: orig) { return true }
-        if enableMonth, let orig = task.monthStart,
-           monthDate.startOfMonth().noonLocal() != orig { return true }
-        if enableYear, yearValue != task.yearDeadline { return true }
-        return false
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Top bar
             HStack {
-                Button(action: tryBack) {
+                Button(action: goBack) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 13, weight: .medium))
@@ -91,9 +90,37 @@ struct TaskEditView: View {
                 .buttonStyle(.plain)
                 .pointerCursor()
 
+                HStack(spacing: 2) {
+                    Button(action: performUndo) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 12))
+                            .foregroundStyle(canUndo ? AppTheme.textSecondary : AppTheme.textTertiary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .disabled(!canUndo)
+                    .help("Undo")
+
+                    Button(action: performRedo) {
+                        Image(systemName: "arrow.uturn.forward")
+                            .font(.system(size: 12))
+                            .foregroundStyle(canRedo ? AppTheme.textSecondary : AppTheme.textTertiary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .disabled(!canRedo)
+                    .help("Redo")
+                }
+
                 Spacer()
 
-                Button(action: save) {
+                Button(action: {
+                    autoSaveTask?.cancel()
+                    historySnapshotTask?.cancel()
+                    save()
+                }) {
                     Text("Save")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
@@ -152,14 +179,13 @@ struct TaskEditView: View {
                     .foregroundStyle(AppTheme.textTertiary)
 
                 DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                    // Allow keeping an existing overdue date; new picks are bounded to today.
                     let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
                     DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
                         .labelsHidden()
                         .accessibilityLabel("Day deadline")
-                        .onChange(of: dayDate) { cascadeFromDay() }
+                        .onChange(of: dayDate) { cascadeFromDay(); scheduleAutoSave() }
                 }
-                .onChange(of: enableDay) { cascadeAll() }
+                .onChange(of: enableDay) { cascadeAll(); scheduleAutoSave() }
 
                 DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
                     let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
@@ -167,9 +193,9 @@ struct TaskEditView: View {
                                in: weekMin...,
                                displayedComponents: .date)
                         .labelsHidden()
-                        .onChange(of: weekDate) { cascadeFromWeek() }
+                        .onChange(of: weekDate) { cascadeFromWeek(); scheduleAutoSave() }
                 }
-                .onChange(of: enableWeek) { cascadeAll() }
+                .onChange(of: enableWeek) { cascadeAll(); scheduleAutoSave() }
 
                 DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
                     let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
@@ -177,9 +203,9 @@ struct TaskEditView: View {
                                in: monthMin...,
                                displayedComponents: .date)
                         .labelsHidden()
-                        .onChange(of: monthDate) { cascadeFromMonth() }
+                        .onChange(of: monthDate) { cascadeFromMonth(); scheduleAutoSave() }
                 }
-                .onChange(of: enableMonth) { cascadeAll() }
+                .onChange(of: enableMonth) { cascadeAll(); scheduleAutoSave() }
 
                 DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
                     let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
@@ -191,8 +217,9 @@ struct TaskEditView: View {
                     .labelsHidden()
                     .accessibilityLabel("Year deadline")
                     .frame(width: 90)
+                    .onChange(of: yearValue) { scheduleAutoSave() }
                 }
-                .onChange(of: enableYear) { cascadeAll() }
+                .onChange(of: enableYear) { cascadeAll(); scheduleAutoSave() }
 
                 if !validationErrors.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
@@ -215,17 +242,118 @@ struct TaskEditView: View {
             .padding(.vertical, 16)
         }
         .background(AppTheme.contentBackground)
-        .confirmationDialog("Discard unsaved changes?", isPresented: $showDiscardAlert, titleVisibility: .visible) {
-            Button("Discard", role: .destructive) { onBack() }
-            Button("Keep Editing", role: .cancel) {}
+        .onChange(of: editedTitle) { _, _ in
+            scheduleAutoSave()
+            scheduleHistorySnapshot()
+        }
+        .onChange(of: editedBody) { _, _ in
+            scheduleAutoSave()
+            scheduleHistorySnapshot()
+        }
+        .onDisappear {
+            // Sidebar navigation bypasses the Back button — save immediately on disappear.
+            // Skip if goBack() already saved to avoid a redundant store.update().
+            autoSaveTask?.cancel()
+            historySnapshotTask?.cancel()
+            if !didSaveOnBack { saveNow() }
         }
     }
 
-    // MARK: - Logic
+    // MARK: - Save
 
-    private func tryBack() {
-        if hasUnsavedChanges { showDiscardAlert = true } else { onBack() }
+    // Auto-save: persists silently; falls back to latest persisted title if field is blank.
+    // Skips if validation errors remain after stripping overdue-but-unchanged deadlines.
+    private func saveNow() {
+        let titleToSave = trimmedTitle.isEmpty ? currentTask.title : trimmedTitle
+        let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
+        var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
+        stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
+
+        var updated = currentTask
+        updated.title = titleToSave
+        updated.body  = editedBody
+        if errors.isEmpty {
+            validationErrors = []
+            updated.dayDeadline  = newDay
+            updated.weekStart    = newWeek
+            updated.monthStart   = newMonth
+            updated.yearDeadline = newYear
+        }
+        store.update(updated)
     }
+
+    // Explicit Save button: validates with UI feedback, saves and goes back.
+    private func save() {
+        let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
+        var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
+        stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
+        validationErrors = errors
+        guard errors.isEmpty else { return }
+
+        var updated = currentTask
+        updated.title        = trimmedTitle
+        updated.body         = editedBody
+        updated.dayDeadline  = newDay
+        updated.weekStart    = newWeek
+        updated.monthStart   = newMonth
+        updated.yearDeadline = newYear
+        didSaveOnBack = true
+        store.update(updated)
+        onBack()
+    }
+
+    private func goBack() {
+        autoSaveTask?.cancel()
+        historySnapshotTask?.cancel()
+        didSaveOnBack = true
+        saveNow()
+        onBack()
+    }
+
+    private func scheduleAutoSave() {
+        autoSaveTask?.cancel()
+        autoSaveTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 1_500_000_000)
+                saveNow()
+            } catch {}
+        }
+    }
+
+    // MARK: - Deadline helpers
+
+    private func computeDeadlines() -> (day: Date?, week: Date?, month: Date?, year: Int?) {
+        let newDay = enableDay ? dayDate.noonLocal() : nil
+        let newWeek: Date?
+        if enableWeek {
+            if let orig = task.weekStart, weekDate.isSameDay(as: orig) {
+                newWeek = orig
+            } else {
+                newWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal()
+            }
+        } else {
+            newWeek = nil
+        }
+        let newMonth = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
+        let newYear  = enableYear  ? yearValue : nil
+        return (newDay, newWeek, newMonth, newYear)
+    }
+
+    private func buildValidationErrors(day: Date?, week: Date?, month: Date?, year: Int?) -> [String] {
+        CadenceTask.validate(
+            day: day, weekStart: week, monthStart: month, year: year,
+            weekStartsOn: settings.weekStartsOn
+        )
+    }
+
+    private func stripPastErrors(from errors: inout [String], day: Date?, week: Date?, month: Date?, year: Int?) {
+        if day   == task.dayDeadline  { errors.removeAll { $0 == "Day deadline cannot be in the past." } }
+        if task.weekStart != nil && weekDate.isSameDay(as: task.weekStart!) { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
+        if month == task.monthStart   { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
+        if year  == task.yearDeadline { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
+    }
+
+    // MARK: - Cascade
 
     private func cascadeAll() {
         let cal = Calendar.current
@@ -256,46 +384,61 @@ struct TaskEditView: View {
     private func cascadeFromWeek()  { cascadeAll() }
     private func cascadeFromMonth() { cascadeAll() }
 
-    private func save() {
-        let newDay   = enableDay   ? dayDate.noonLocal() : nil
-        // If the user never moved the week picker (weekDate matches the original stored date),
-        // preserve the original value exactly to prevent drift if weekStartsOn changed mid-session.
-        let newWeek: Date?
-        if enableWeek {
-            if let orig = task.weekStart, weekDate.isSameDay(as: orig) {
-                newWeek = orig
-            } else {
-                newWeek = weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal()
-            }
-        } else {
-            newWeek = nil
+    // MARK: - History
+
+    private func scheduleHistorySnapshot() {
+        // Truncate redo and reset burst when state diverges from the history cursor
+        // (typing after undo). After undo/redo the state matches the cursor, so this is
+        // a no-op on the onChange fired by performUndo/performRedo themselves.
+        let cursor = history[historyIndex]
+        if (cursor.title != editedTitle || cursor.body != editedBody) && historyIndex < history.count - 1 {
+            history = Array(history[0...historyIndex])
+            editBurstActive = false
         }
-        let newMonth = enableMonth ? monthDate.startOfMonth().noonLocal() : nil
-        let newYear  = enableYear  ? yearValue : nil
 
-        // Run full validation (including cross-level ordering) with actual values,
-        // then strip past-date errors for deadline values unchanged from the original
-        // so overdue tasks remain editable without forced rescheduling.
-        var errors = CadenceTask.validate(
-            day: newDay, weekStart: newWeek, monthStart: newMonth, year: newYear,
-            weekStartsOn: settings.weekStartsOn
-        )
-        if newDay   == task.dayDeadline   { errors.removeAll { $0 == "Day deadline cannot be in the past." } }
-        // weekDate is initialized to task.weekStart; if the user never moved the picker the raw date is unchanged.
-        if task.weekStart != nil && weekDate.isSameDay(as: task.weekStart!) { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
-        if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
-        if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
-        validationErrors = errors
-        guard errors.isEmpty else { return }
+        if !editBurstActive {
+            editBurstActive = true
+            pushSnapshot()
+        }
+        historySnapshotTask?.cancel()
+        historySnapshotTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                editBurstActive = false
+                pushSnapshot()
+            } catch {}
+        }
+    }
 
-        var updated = currentTask
-        updated.title = trimmedTitle
-        updated.body = editedBody
-        updated.dayDeadline  = newDay
-        updated.weekStart    = newWeek
-        updated.monthStart   = newMonth
-        updated.yearDeadline = newYear
-        store.update(updated)
-        onBack()
+    private func pushSnapshot() {
+        let current = history[historyIndex]
+        guard current.title != editedTitle || current.body != editedBody else { return }
+        if historyIndex < history.count - 1 {
+            history = Array(history[0...historyIndex])
+        }
+        history.append((title: editedTitle, body: editedBody))
+        historyIndex = history.count - 1
+        if history.count > 50 {
+            history.removeFirst()
+            historyIndex -= 1
+        }
+    }
+
+    private func performUndo() {
+        guard canUndo else { return }
+        editBurstActive = true
+        historyIndex -= 1
+        let snap = history[historyIndex]
+        editedTitle = snap.title
+        editedBody = snap.body
+    }
+
+    private func performRedo() {
+        guard canRedo else { return }
+        editBurstActive = true
+        historyIndex += 1
+        let snap = history[historyIndex]
+        editedTitle = snap.title
+        editedBody = snap.body
     }
 }
