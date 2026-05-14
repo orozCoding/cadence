@@ -189,10 +189,14 @@ func normalizeURL(_ raw: String) -> String {
             }
             return s
         }
-        // Port heuristic runs first: purely-numeric afterColon within valid range = host:port.
+        // Known non-web URI schemes whose "opaque part" is all-numeric (e.g. tel:911, sms:1234).
+        // Check these before the port heuristic so they are not mangled into https://tel:911.
+        let knownNonWebSchemes: Set<String> = ["tel", "sms", "fax", "callto", "xmpp"]
+        if knownNonWebSchemes.contains(bcLower) { return s }
+
+        // Port heuristic: purely-numeric afterColon within valid range = host:port.
         // This ensures single-label intranet hosts (buildbox:8080, jenkins:3000/path) are
         // correctly prefixed with https:// rather than silently stored as opaque URIs.
-        // Trade-off: bare-digit tel: URIs (tel:1234) also match, but tel:+1-555 does not.
         let portStr = String(afterColon.prefix(while: \.isNumber))
         let isPort = !portStr.isEmpty
             && afterColon.dropFirst(portStr.count).isEmpty

@@ -248,15 +248,13 @@ struct TaskCreateView: View {
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
-        let urlErrors = urls.compactMap { raw -> String? in
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
-            return "Invalid URL: \(trimmed)"
-        }
         taskSaved = true
-        let normalizedUrls = urlErrors.isEmpty
-            ? urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
-            : []
+        // Keep valid URLs; silently drop invalid ones so text edits are never lost.
+        let normalizedUrls = urls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, isSaveableURL(normalizeURL(trimmed)) else { return nil }
+            return normalizeURL(trimmed)
+        }
         let task = CadenceTask(
             folderId: folderId,
             title: title.trimmingCharacters(in: .whitespaces),
