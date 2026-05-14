@@ -65,8 +65,14 @@ private final class BodyNSTextView: NSTextView {
         drawsBackground = false
         isVerticallyResizable   = true
         isHorizontallyResizable = false
-        autoresizingMask = [.width]
-        textContainer?.widthTracksTextView = true
+        // Do NOT set autoresizingMask or widthTracksTextView here.
+        // autoresizingMask = [.width] would let AppKit expand the frame to the full
+        // hosting-container width (wider than SwiftUI's proposed width), which in turn
+        // widens the text container and breaks word-wrap during typing.
+        // widthTracksTextView = true (without an NSScrollView) has the same side-effect.
+        // Instead, setFrameSize syncs the container width explicitly whenever SwiftUI
+        // updates the frame, giving us full control with no AppKit interference.
+        textContainer?.widthTracksTextView = false
         textContainer?.lineFragmentPadding = 0
         isAutomaticSpellingCorrectionEnabled = false
         isAutomaticDashSubstitutionEnabled   = false
@@ -237,13 +243,6 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
 
     func updateNSView(_ tv: BodyNSTextView, context: Context) {
         let c = context.coordinator
-        // Re-apply the container width every update so word-wrap takes effect
-        // immediately on each keystroke (widthTracksTextView only fires on AppKit
-        // frame-resize events, which SwiftUI bypasses by setting the frame directly).
-        let w = c.lastLayoutWidth > 0 ? c.lastLayoutWidth : tv.frame.width
-        if w > 0, let tc = tv.textContainer, tc.containerSize.width != w {
-            tc.containerSize = CGSize(width: w, height: .greatestFiniteMagnitude)
-        }
         if c.committedText != text { c.render(text, to: tv, participateInUndo: false) }
         if focusTrigger > c.lastFocusTrigger {
             c.lastFocusTrigger = focusTrigger
