@@ -77,12 +77,19 @@ final class PomodoroTimer: ObservableObject {
 
     func pause() {
         if isRunning {
-            let elapsed = Date().timeIntervalSince(resumeDate)
+            let now = Date()
+            // Flush in-flight time since the last tick before discarding the accumulator
+            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
+            let wholeSeconds = Int(focusAccumulator)
+            if wholeSeconds > 0 {
+                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
+            }
+            let elapsed = now.timeIntervalSince(resumeDate)
             remaining = max(0, remainingAtResume - elapsed)
         }
+        focusAccumulator = 0
         isRunning = false
         cancellable = nil
-        focusAccumulator = 0
         FocusTimeStore.shared.flushIfNeeded()
     }
 
