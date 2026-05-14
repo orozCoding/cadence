@@ -133,6 +133,13 @@ func normalizeURL(_ raw: String) -> String {
     // RFC 3986 scheme chars: ALPHA / DIGIT / "+" / "-" / "."
     let possibleScheme = s.prefix(while: { $0.isLetter || $0.isNumber || $0 == "+" || $0 == "-" || $0 == "." })
     if !possibleScheme.isEmpty && s[possibleScheme.endIndex...].hasPrefix("://") { return s }
+    // Bare email address (localpart@domain, no scheme) → mailto:
+    // Only fires when @ appears before the first '/' so path-based @-signs (e.g. /user/@handle) are ignored.
+    let firstSlash = s.firstIndex(of: "/")
+    if let at = s.firstIndex(of: "@"), firstSlash == nil || at < firstSlash {
+        let afterAt = s[s.index(after: at)...]
+        if afterAt.contains(".") { return "mailto:" + s }
+    }
     let lower = s.lowercased()
     // Loopback addresses → http. Match at hostname boundary so localhost.run
     // or 127.0.0.1.example.com are not misclassified.
@@ -193,6 +200,13 @@ func normalizeURL(_ raw: String) -> String {
             // name includes a dot, so a dot signals a hostname (e.g. example.com:abc)
             // that should receive the https:// prefix instead.
             let beforeColon = String(authority[colonSearchFrom..<colon])
+            let bcLower = beforeColon.lowercased()
+            // http:example.com and https:example.com (no slashes) are typos;
+            // repair by inserting the missing // and preserving the path/query.
+            if bcLower == "http" || bcLower == "https" {
+                let pathSuffix = authEnd < s.endIndex ? String(s[authEnd...]) : ""
+                return bcLower + "://" + String(afterColon) + pathSuffix
+            }
             if !beforeColon.contains(".") { return s }
         }
     }
