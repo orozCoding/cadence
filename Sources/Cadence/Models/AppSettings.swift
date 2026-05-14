@@ -79,6 +79,9 @@ final class AppSettings: ObservableObject {
     @Published var timerDirection: TimerDirection {
         didSet { save() }
     }
+    @Published var animateDockIcon: Bool {
+        didSet { save() }
+    }
     @Published var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
     private var cancellables = Set<AnyCancellable>()
@@ -96,6 +99,8 @@ final class AppSettings: ObservableObject {
         let directionRaw = UserDefaults.standard.string(forKey: "timerDirection") ?? ""
         timerDirection = TimerDirection(rawValue: directionRaw) ?? .original
 
+        animateDockIcon = UserDefaults.standard.object(forKey: "animateDockIcon") as? Bool ?? true
+
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
         }
@@ -112,5 +117,6 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(timerFinishSound.rawValue, forKey: "timerFinishSound")
         UserDefaults.standard.set(timerStyle.rawValue, forKey: "timerStyle")
         UserDefaults.standard.set(timerDirection.rawValue, forKey: "timerDirection")
+        UserDefaults.standard.set(animateDockIcon, forKey: "animateDockIcon")
     }
 }

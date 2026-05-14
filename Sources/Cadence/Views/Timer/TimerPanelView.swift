@@ -131,6 +131,9 @@ struct TimerPanelView: View {
 
             Spacer()
         }
+        .onDisappear {
+            if timer.isRunning { timer.pause() }
+        }
     }
 
     private func applyCustom() {

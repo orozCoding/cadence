@@ -19,19 +19,33 @@ struct TaskCreateView: View {
     @State private var monthDate = Date()
     @State private var yearValue = Calendar.current.component(.year, from: Date())
     @State private var validationErrors: [String] = []
-    @State private var showDiscardAlert = false
-    @State private var userHasInteracted = false
+
+    // Guards against duplicate store.add() calls when both an explicit save path
+    // (goBack / save button) and .onDisappear both fire in the same session.
+    @State private var taskSaved = false
+
+    // Captured at onAppear so a folder switch mid-edit cannot redirect the new task
+    // to a different folder (folderStore.activeFolder changes before onDisappear fires).
+    @State private var capturedFolderId: UUID? = nil
+
+    @State private var bodyFocusTrigger = 0
+
+    // Undo/redo history for title + body — immediate push on first burst keystroke,
+    // then debounced 1s; capped at 50 snapshots
+    @State private var history: [(title: String, body: String)] = [("", "")]
+    @State private var historyIndex: Int = 0
+    @State private var historySnapshotTask: Task<Void, Never>? = nil
+    @State private var editBurstActive = false
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var hasDraft: Bool {
-        userHasInteracted && (!title.isEmpty || !body_.isEmpty || enableDay || enableWeek || enableMonth || enableYear)
-    }
+    private var canUndo: Bool { historyIndex > 0 }
+    private var canRedo: Bool { historyIndex < history.count - 1 }
 
     var body: some View {
         VStack(spacing: 0) {
             // Top bar
             HStack {
-                Button(action: tryBack) {
+                Button(action: goBack) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 13, weight: .medium))
@@ -48,6 +62,30 @@ struct TaskCreateView: View {
                 Text("New Task")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
+
+                HStack(spacing: 2) {
+                    Button(action: performUndo) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 12))
+                            .foregroundStyle(canUndo ? AppTheme.textSecondary : AppTheme.textTertiary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .disabled(!canUndo)
+                    .help("Undo")
+
+                    Button(action: performRedo) {
+                        Image(systemName: "arrow.uturn.forward")
+                            .font(.system(size: 12))
+                            .foregroundStyle(canRedo ? AppTheme.textSecondary : AppTheme.textTertiary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .disabled(!canRedo)
+                    .help("Redo")
+                }
 
                 Spacer()
 
@@ -76,24 +114,30 @@ struct TaskCreateView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
                 .padding(.bottom, 12)
-                .onChange(of: title) { userHasInteracted = true }
+                .onChange(of: title) { _, _ in scheduleHistorySnapshot() }
 
-            // Body — fills all remaining space; TextEditor's own scroll handles long text
-            ZStack(alignment: .topLeading) {
-                if body_.isEmpty {
-                    Text("Add content...")
-                        .font(.system(size: 13).italic())
-                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                        .allowsHitTesting(false)
-                        .padding(.top, 2)
-                        .padding(.leading, 28)
+            // Body — fills all remaining space; ChecklistBodyEditor handles checkboxes and plain text
+            ScrollView {
+                ZStack(alignment: .topLeading) {
+                    if body_.isEmpty {
+                        Text("Add content… type [] for a checklist item")
+                            .font(.system(size: 13).italic())
+                            .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                            .allowsHitTesting(false)
+                            .padding(.top, 2)
+                    }
+                    ChecklistBodyEditor(text: $body_, focusTrigger: bodyFocusTrigger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onChange(of: body_) { _, _ in scheduleHistorySnapshot() }
                 }
-                TextEditor(text: $body_)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 20)
-                    .onChange(of: body_) { userHasInteracted = true }
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 
@@ -109,27 +153,27 @@ struct TaskCreateView: View {
                     DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
                         .labelsHidden()
                         .accessibilityLabel("Day deadline")
-                        .onChange(of: dayDate) { userHasInteracted = true; cascadeFromDay() }
+                        .onChange(of: dayDate) { cascadeFromDay() }
                 }
-                .onChange(of: enableDay) { userHasInteracted = true; cascadeAll() }
+                .onChange(of: enableDay) { cascadeAll() }
 
                 DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
                     DatePicker("Week deadline", selection: $weekDate,
                                in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
                                displayedComponents: .date)
                         .labelsHidden()
-                        .onChange(of: weekDate) { userHasInteracted = true; cascadeFromWeek() }
+                        .onChange(of: weekDate) { cascadeFromWeek() }
                 }
-                .onChange(of: enableWeek) { userHasInteracted = true; cascadeAll() }
+                .onChange(of: enableWeek) { cascadeAll() }
 
                 DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
                     DatePicker("Month deadline", selection: $monthDate,
                                in: Date().startOfMonth()...,
                                displayedComponents: .date)
                         .labelsHidden()
-                        .onChange(of: monthDate) { userHasInteracted = true; cascadeFromMonth() }
+                        .onChange(of: monthDate) { cascadeFromMonth() }
                 }
-                .onChange(of: enableMonth) { userHasInteracted = true; cascadeAll() }
+                .onChange(of: enableMonth) { cascadeAll() }
 
                 DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
                     Picker("Year deadline", selection: $yearValue) {
@@ -140,9 +184,8 @@ struct TaskCreateView: View {
                     .labelsHidden()
                     .accessibilityLabel("Year deadline")
                     .frame(width: 90)
-                    .onChange(of: yearValue) { userHasInteracted = true }
                 }
-                .onChange(of: enableYear) { userHasInteracted = true; cascadeAll() }
+                .onChange(of: enableYear) { cascadeAll() }
 
                 if !validationErrors.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
@@ -166,19 +209,137 @@ struct TaskCreateView: View {
         }
         .background(AppTheme.contentBackground)
         .onAppear { prefill() }
-        .confirmationDialog("Discard this draft?", isPresented: $showDiscardAlert, titleVisibility: .visible) {
-            Button("Discard", role: .destructive) { onBack() }
-            Button("Keep Editing", role: .cancel) {}
+        .onDisappear {
+            // Sidebar navigation bypasses Back — auto-save if title is filled.
+            historySnapshotTask?.cancel()
+            saveIfPossible()
         }
     }
 
-    // MARK: - Logic
+    // MARK: - Navigation
 
-    private func tryBack() {
-        if hasDraft { showDiscardAlert = true } else { onBack() }
+    // Back button: auto-save if title is filled, then go back.
+    // Explicit discard is gone — the Back button is now the "close without explicit save" path.
+    private func goBack() {
+        historySnapshotTask?.cancel()
+        saveIfPossible()
+        onBack()
     }
 
+    // Save the draft if title is non-empty. If deadline validation fails, the task
+    // is saved without deadlines so text edits are never silently discarded.
+    // The taskSaved flag prevents a second store.add() when onDisappear fires
+    // after goBack() or save() have already persisted the task.
+    private func saveIfPossible() {
+        guard !taskSaved, canSave else { return }
+        let folderId = capturedFolderId ?? folderStore.activeFolder.id
+        let errors = CadenceTask.validate(
+            day: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
+            year: enableYear ? yearValue : nil,
+            weekStartsOn: settings.weekStartsOn
+        )
+        taskSaved = true
+        let task = CadenceTask(
+            folderId: folderId,
+            title: title.trimmingCharacters(in: .whitespaces),
+            body: body_,
+            dayDeadline: (errors.isEmpty && enableDay) ? dayDate.noonLocal() : nil,
+            weekStart: (errors.isEmpty && enableWeek) ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: (errors.isEmpty && enableMonth) ? monthDate.startOfMonth().noonLocal() : nil,
+            yearDeadline: (errors.isEmpty && enableYear) ? yearValue : nil
+        )
+        store.add(task)
+    }
+
+    // MARK: - Explicit save (Add Task button)
+
+    private func save() {
+        guard !taskSaved else { return }
+        let folderId = capturedFolderId ?? folderStore.activeFolder.id
+        let errors = CadenceTask.validate(
+            day: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
+            year: enableYear ? yearValue : nil,
+            weekStartsOn: settings.weekStartsOn
+        )
+        validationErrors = errors
+        guard errors.isEmpty else { return }
+        taskSaved = true
+        let task = CadenceTask(
+            folderId: folderId,
+            title: title.trimmingCharacters(in: .whitespaces),
+            body: body_,
+            dayDeadline: enableDay ? dayDate.noonLocal() : nil,
+            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
+            yearDeadline: enableYear ? yearValue : nil
+        )
+        store.add(task)
+        onBack()
+    }
+
+    // MARK: - History
+
+    private func scheduleHistorySnapshot() {
+        let cursor = history[historyIndex]
+        if (cursor.title != title || cursor.body != body_) && historyIndex < history.count - 1 {
+            history = Array(history[0...historyIndex])
+            editBurstActive = false
+        }
+
+        if !editBurstActive {
+            editBurstActive = true
+            pushSnapshot()
+        }
+        historySnapshotTask?.cancel()
+        historySnapshotTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                editBurstActive = false
+                pushSnapshot()
+            } catch {}
+        }
+    }
+
+    private func pushSnapshot() {
+        let current = history[historyIndex]
+        guard current.title != title || current.body != body_ else { return }
+        if historyIndex < history.count - 1 {
+            history = Array(history[0...historyIndex])
+        }
+        history.append((title: title, body: body_))
+        historyIndex = history.count - 1
+        if history.count > 50 {
+            history.removeFirst()
+            historyIndex -= 1
+        }
+    }
+
+    private func performUndo() {
+        guard canUndo else { return }
+        editBurstActive = true
+        historyIndex -= 1
+        let snap = history[historyIndex]
+        title = snap.title
+        body_ = snap.body
+    }
+
+    private func performRedo() {
+        guard canRedo else { return }
+        editBurstActive = true
+        historyIndex += 1
+        let snap = history[historyIndex]
+        title = snap.title
+        body_ = snap.body
+    }
+
+    // MARK: - Prefill / Cascade
+
     private func prefill() {
+        capturedFolderId = folderStore.activeFolder.id
         let now = Date()
         let currentYear = Calendar.current.component(.year, from: now)
         switch prefillSelection {
@@ -228,28 +389,4 @@ struct TaskCreateView: View {
     private func cascadeFromDay()   { cascadeAll() }
     private func cascadeFromWeek()  { cascadeAll() }
     private func cascadeFromMonth() { cascadeAll() }
-
-    private func save() {
-        let errors = CadenceTask.validate(
-            day: enableDay ? dayDate.noonLocal() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth() : nil,
-            year: enableYear ? yearValue : nil,
-            weekStartsOn: settings.weekStartsOn
-        )
-        validationErrors = errors
-        guard errors.isEmpty else { return }
-
-        let task = CadenceTask(
-            folderId: folderStore.activeFolder.id,
-            title: title.trimmingCharacters(in: .whitespaces),
-            body: body_,
-            dayDeadline: enableDay ? dayDate.noonLocal() : nil,
-            weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
-            yearDeadline: enableYear ? yearValue : nil
-        )
-        store.add(task)
-        onBack()
-    }
 }
