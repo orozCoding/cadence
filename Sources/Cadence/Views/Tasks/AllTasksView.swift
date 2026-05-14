@@ -33,8 +33,6 @@ struct AllTasksView: View {
     }
 
     private var folderTaskCount: Int { store.tasks.filter { $0.folderId == folderStore.activeFolder.id }.count }
-    private var pendingCount: Int    { ordered.filter { !$0.isDone }.count }
-    private var doneCount: Int       { ordered.count - pendingCount }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,32 +52,11 @@ struct AllTasksView: View {
                 EmptyStateView(message: "No tasks in \(folderStore.activeFolder.name).\nClick + to add your first task.")
                     .frame(maxHeight: .infinity)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if pendingCount > 0 {
-                            SectionHeader(label: "To Do", count: pendingCount)
-                        }
-
-                        ForEach(ordered) { task in
-                            if task.id == ordered.first(where: { $0.isDone })?.id {
-                                SectionHeader(label: "Done", count: doneCount)
-                                    .padding(.top, pendingCount > 0 ? 8 : 0)
-                                    .transition(.opacity)
-                            }
-
-                            TaskRowView(
-                                task: task,
-                                onTap: { withAnimation { selectedTask = task } },
-                                onToggle: { store.toggle(task) }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 2)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
-                    }
-                    .padding(.vertical, 12)
-                    .animation(.easeInOut(duration: 0.28), value: ordered.map(\.id))
-                }
+                TaskListView(
+                    tasks: ordered,
+                    onTap: { task in withAnimation { selectedTask = task } },
+                    onToggle: { task in store.toggle(task) }
+                )
             }
         }
     }
