@@ -134,11 +134,13 @@ func normalizeURL(_ raw: String) -> String {
     let possibleScheme = s.prefix(while: { $0.isLetter || $0.isNumber || $0 == "+" || $0 == "-" || $0 == "." })
     if !possibleScheme.isEmpty && s[possibleScheme.endIndex...].hasPrefix("://") { return s }
     // Bare email address (localpart@domain, no scheme) → mailto:
-    // Only fires when @ appears before the first '/' so path-based @-signs (e.g. /user/@handle) are ignored.
+    // Fires when @ appears before the first '/' (so path @-signs like /@handle are ignored)
+    // and the local part contains no colon (which would indicate user:pass credentials).
+    // No dot requirement so single-label domains (user@localhost, user@buildbox) are covered.
     let firstSlash = s.firstIndex(of: "/")
     if let at = s.firstIndex(of: "@"), firstSlash == nil || at < firstSlash {
-        let afterAt = s[s.index(after: at)...]
-        if afterAt.contains(".") { return "mailto:" + s }
+        let localPart = String(s[..<at])
+        if !localPart.contains(":") { return "mailto:" + s }
     }
     let lower = s.lowercased()
     // Loopback addresses → http. Match at hostname boundary so localhost.run
