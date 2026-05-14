@@ -20,10 +20,12 @@ final class PomodoroTimer: ObservableObject {
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
     var timeString: String {
-        let totalSecs = Int(ceil(remaining))
-        let m = totalSecs / 60
-        let s = totalSecs % 60
-        return String(format: "%02d:%02d", m, s)
+        // Finished: always show 00:00.
+        // Running/paused: ceil so the display stays at N until a full second has elapsed,
+        // and guard ≥ 1 so a sub-second fractional remainder never shows 00:00 prematurely.
+        if isFinished { return "00:00" }
+        let totalSecs = max(1, Int(ceil(remaining)))
+        return String(format: "%02d:%02d", totalSecs / 60, totalSecs % 60)
     }
 
     func set(minutes: Int) {

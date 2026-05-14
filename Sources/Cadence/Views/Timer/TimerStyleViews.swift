@@ -670,13 +670,13 @@ struct RadiateTimerCircle: View {
     private func spokeCanvas(rotAngle: CGFloat) -> some View {
         Canvas { ctx, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let effectiveP = inverted ? (1 - progress) : progress
 
             for i in 0..<spokeCount {
                 let fi = CGFloat(i)
                 let spokeAngle = fi / CGFloat(spokeCount) * 2 * .pi - .pi / 2 + rotAngle
                 let spokeFrac  = fi / CGFloat(spokeCount)
-                let lit = spokeFrac < effectiveP
+                // Inverted: fill CCW from 12 (high-index spokes light up first)
+                let lit = inverted ? (spokeFrac > 1 - progress) : (spokeFrac < progress)
 
                 let x1 = center.x + cos(spokeAngle) * innerR
                 let y1 = center.y + sin(spokeAngle) * innerR
