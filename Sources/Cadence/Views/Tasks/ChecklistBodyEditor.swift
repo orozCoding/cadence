@@ -172,7 +172,19 @@ private final class BodyNSTextView: NSTextView {
     // inserted character inherits the correct style (e.g. strikethrough on
     // a checked line) rather than stale or default attributes.
     func syncTypingAttributes() {
-        guard let ts = textStorage, ts.length > 0 else { return }
+        guard let ts = textStorage else { return }
+        if ts.length == 0 {
+            // Empty storage: reset to AppTheme defaults so the next typed character
+            // doesn't inherit stale strikethrough or tertiary-colour attributes.
+            let para = NSMutableParagraphStyle()
+            para.lineBreakMode = .byWordWrapping
+            typingAttributes = [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: NSColor(AppTheme.textSecondary),
+                .paragraphStyle: para
+            ]
+            return
+        }
         let pos = selectedRange().location
         // When cursor is at end-of-document, borrow attributes from the last char.
         let attrPos = pos < ts.length ? pos : ts.length - 1
@@ -182,11 +194,8 @@ private final class BodyNSTextView: NSTextView {
     // Force plain-text-only paste so that rich-text pastes from external sources
     // don't introduce foreign attributes that bypass our AppTheme normalization.
     override func paste(_ sender: Any?) {
-        if let plain = NSPasteboard.general.string(forType: .string) {
-            insertText(plain, replacementRange: selectedRange())
-        } else {
-            super.paste(sender)
-        }
+        guard let plain = NSPasteboard.general.string(forType: .string) else { return }
+        insertText(plain, replacementRange: selectedRange())
     }
 
     // Fix [p2]: VO+Space (accessibilityPerformPress) toggles the checkbox on the current line.
@@ -346,6 +355,22 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     // MARK: Apply render (full rebuild)
+
+    // Registers a paired undo/redo action for structural rebuilds (Return, Backspace,
+    // ForwardDelete) that call setAttributedString directly.  Because those handlers
+    // return true to intercept the command, AppKit creates no undo entry of its own.
+    // Using undoManager directly saves and restores the full raw text so that
+    // subsequent render() calls rebuild the correct attributed string (including
+    // attachment objects) rather than relying on AppKit's plain-text replaceCharacters undo.
+    private func registerStructuralUndo(tv: BodyNSTextView, oldRaw: String, newRaw: String) {
+        tv.undoManager?.registerUndo(withTarget: self) { [weak tv] coordinator in
+            guard let tv = tv else { return }
+            // Register the corresponding redo action before applying the restore.
+            coordinator.registerStructuralUndo(tv: tv, oldRaw: newRaw, newRaw: oldRaw)
+            coordinator.text = oldRaw
+            coordinator.render(oldRaw, to: tv, participateInUndo: false)
+        }
+    }
 
     // `participateInUndo`: pass false for external binding updates (updateNSView) so that
     // programmatic state sync does not pollute the undo stack.
@@ -553,6 +578,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             // Empty checkbox → exit checkbox mode (convert to plain text line).
             rawLines[li] = ""
             let newRaw = rawLines.joined(separator: "\n")
+            registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
             text = newRaw; committedText = newRaw
             // Fix [p3]: rebuild and explicitly place cursor on the new plain line
             // (don't reuse the old offset which still referenced the attachment char).
@@ -584,6 +610,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             rawLines[li] = pfx + before
             rawLines.insert("- [ ] " + after, at: li + 1)
             let newRaw = rawLines.joined(separator: "\n")
+            registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
             text = newRaw; committedText = newRaw
 
             let newAttr = buildAttr(newRaw)
@@ -647,6 +674,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         }
 
         let newRaw = rawLines.joined(separator: "\n")
+        registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
         text = newRaw; committedText = newRaw
         let newAttr = buildAttr(newRaw)
         isRendering = true
@@ -677,6 +705,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         // Strip the checkbox prefix and render as a plain text line.
         rawLines[li] = String(line.dropFirst(6))
         let newRaw = rawLines.joined(separator: "\n")
+        registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
         text = newRaw; committedText = newRaw
         isRendering = true
         ts.setAttributedString(buildAttr(newRaw))
