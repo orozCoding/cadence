@@ -25,6 +25,8 @@ struct TaskEditView: View {
     // Guards against a second store.update() when onDisappear fires after goBack() already saved.
     @State private var didSaveOnBack = false
 
+    @State private var bodyFocusTrigger = 0
+
     // Undo/redo history for title + body — immediate push on first burst keystroke,
     // then debounced 1s; capped at 50 snapshots
     @State private var history: [(title: String, body: String)] = []
@@ -144,21 +146,27 @@ struct TaskEditView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 12)
 
-            // Body — fills all remaining space
-            ZStack(alignment: .topLeading) {
-                if editedBody.isEmpty {
-                    Text("Add content...")
-                        .font(.system(size: 13).italic())
-                        .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
-                        .allowsHitTesting(false)
-                        .padding(.top, 2)
-                        .padding(.leading, 28)
+            // Body — fills all remaining space; ChecklistBodyEditor handles checkboxes and plain text
+            ScrollView {
+                ZStack(alignment: .topLeading) {
+                    if editedBody.isEmpty {
+                        Text("Add content… type [] for a checklist item")
+                            .font(.system(size: 13).italic())
+                            .foregroundStyle(AppTheme.textTertiary.opacity(0.7))
+                            .allowsHitTesting(false)
+                            .padding(.top, 2)
+                    }
+                    ChecklistBodyEditor(text: $editedBody, focusTrigger: bodyFocusTrigger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                TextEditor(text: $editedBody)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+                .background(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { bodyFocusTrigger += 1 }
+                )
             }
             .frame(maxHeight: .infinity)
 
