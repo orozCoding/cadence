@@ -249,7 +249,6 @@ struct TaskCreateView: View {
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
-        let normalizedUrls = urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         // Report the user's original input in error messages, not the normalized form.
         errors += urls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,6 +257,7 @@ struct TaskCreateView: View {
         }
         validationErrors = errors
         guard errors.isEmpty else { return }
+        let normalizedUrls = urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
 
         let task = CadenceTask(
             folderId: folderStore.activeFolder.id,

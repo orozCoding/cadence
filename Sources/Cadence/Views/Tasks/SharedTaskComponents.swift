@@ -138,7 +138,7 @@ func normalizeURL(_ raw: String) -> String {
     // and the local part contains no colon (which would indicate user:pass credentials).
     // No dot requirement so single-label domains (user@localhost, user@buildbox) are covered.
     let firstSlash = s.firstIndex(of: "/")
-    if let at = s.firstIndex(of: "@"), firstSlash == nil || at < firstSlash! {
+    if let at = s.firstIndex(of: "@"), firstSlash == nil || at < (firstSlash ?? s.endIndex) {
         let localPart = String(s[..<at])
         if !localPart.contains(":") { return "mailto:" + s }
     }
@@ -180,32 +180,35 @@ func normalizeURL(_ raw: String) -> String {
         let afterColon = authority[authority.index(after: colon)...]
         let beforeColon = String(authority[colonSearchFrom..<colon])
         let bcLower = beforeColon.lowercased()
-        // All-letter beforeColon = URI scheme name (tel:, sms:, spotify:, http:, etc.).
-        // Check this BEFORE the port heuristic so "tel:1234" isn't misread as host:port.
-        // RFC 3986 §3.1: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
-        // We're already past the leading-scheme check above, so beforeColon has no "://",
-        // meaning any all-letter token here is unambiguously a URI scheme.
-        if !beforeColon.isEmpty && beforeColon.allSatisfy(\.isLetter) {
+        // Empty afterColon + path/query after authority = scheme with single-slash path
+        // (e.g. com.example.app:/oauth). Leave non-web deep links as-is; repair http:/https:.
+        if afterColon.isEmpty && authEnd < s.endIndex {
             if bcLower == "http" || bcLower == "https" {
-                if afterColon.isEmpty && authEnd < s.endIndex {
-                    // http:/host → http://host (single-slash typo)
-                    let pathStart = s.index(after: authEnd)
-                    return bcLower + "://" + String(s[pathStart...])
-                }
-                // http:example.com or https:example.com (missing slashes)
-                let pathSuffix = authEnd < s.endIndex ? String(s[authEnd...]) : ""
-                return bcLower + "://" + String(afterColon) + pathSuffix
+                let pathStart = s.index(after: authEnd)
+                return bcLower + "://" + String(s[pathStart...])
             }
-            // tel:, sms:, spotify:, com.example.app: (actually starts with letters), etc.
             return s
         }
-        // beforeColon contains dots or digits: hostname or IPv4 territory.
+        // Port heuristic runs first: purely-numeric afterColon within valid range = host:port.
+        // This ensures single-label intranet hosts (buildbox:8080, jenkins:3000/path) are
+        // correctly prefixed with https:// rather than silently stored as opaque URIs.
+        // Trade-off: bare-digit tel: URIs (tel:1234) also match, but tel:+1-555 does not.
         let portStr = String(afterColon.prefix(while: \.isNumber))
         let isPort = !portStr.isEmpty
             && afterColon.dropFirst(portStr.count).isEmpty
             && (Int(portStr) ?? 65536) <= 65535
         if !isPort {
-            // A dot in beforeColon means it's a hostname like example.com:abc — prepend https://.
+            if !beforeColon.isEmpty && beforeColon.allSatisfy(\.isLetter) {
+                // All-letter, non-port afterColon = URI scheme (tel:+1234, spotify:track, etc.)
+                if bcLower == "http" || bcLower == "https" {
+                    let pathSuffix = authEnd < s.endIndex ? String(s[authEnd...]) : ""
+                    return bcLower + "://" + String(afterColon) + pathSuffix
+                }
+                return s
+            }
+            // beforeColon has dots/digits: hostname territory.
+            // A dot means it's a hostname (example.com:abc) — fall through to prepend https://.
+            // No dot and no valid port: unknown opaque form — leave as-is.
             if !beforeColon.contains(".") { return s }
         }
     }
@@ -216,9 +219,11 @@ func normalizeURL(_ raw: String) -> String {
 // Rejects http/https with an empty host, which URL(string:) accepts but browsers reject.
 func isSaveableURL(_ normalized: String) -> Bool {
     guard let u = URL(string: normalized) else { return false }
-    if let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-        return !(u.host?.isEmpty ?? true)
-    }
+    let scheme = u.scheme?.lowercased() ?? ""
+    // Reject execution/data schemes — URL(string:) accepts them but NSWorkspace won't open them.
+    if scheme == "javascript" || scheme == "data" { return false }
+    // Reject http/https with empty host (e.g. "https://") — valid URL but browsers refuse it.
+    if scheme == "http" || scheme == "https" { return !(u.host?.isEmpty ?? true) }
     return true
 }
 
@@ -329,6 +334,8 @@ struct URLEditSection: View {
             // (avoids zip silently dropping rows when counts diverge).
             while entryIds.count < count { entryIds.append(UUID()) }
             if entryIds.count > count { entryIds = Array(entryIds.prefix(count)) }
+            // Guarantee at least one row so the Add URL button is always reachable.
+            if count == 0 { urls.append(""); entryIds.append(UUID()) }
         }
     }
 }

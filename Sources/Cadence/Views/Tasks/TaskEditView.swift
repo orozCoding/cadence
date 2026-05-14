@@ -291,7 +291,6 @@ struct TaskEditView: View {
         if task.weekStart != nil && weekDate.isSameDay(as: task.weekStart!) { errors.removeAll { $0 == "Week deadline cannot be in the past." } }
         if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
         if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
-        let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         errors += editedUrls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
@@ -299,6 +298,7 @@ struct TaskEditView: View {
         }
         validationErrors = errors
         guard errors.isEmpty else { return }
+        let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
 
         var updated = currentTask
         updated.title = trimmedTitle
