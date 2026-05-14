@@ -7,7 +7,7 @@ import UserNotifications
 final class PomodoroTimer: ObservableObject {
     static let shared = PomodoroTimer()
 
-    @Published var remaining: TimeInterval = 25 * 60
+    @Published private(set) var remaining: TimeInterval = 25 * 60
     @Published var total: TimeInterval = 25 * 60
     @Published var isRunning = false
     @Published var isFinished = false
@@ -16,6 +16,8 @@ final class PomodoroTimer: ObservableObject {
     private var resumeDate: Date = .now
     private var remainingAtResume: TimeInterval = 25 * 60
     private var lastTickDate: Date = .now
+    // Sub-second carry-over: prevents credit loss when ticks fire early (<1 s intervals)
+    private var focusAccumulator: TimeInterval = 0
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -64,6 +66,7 @@ final class PomodoroTimer: ObservableObject {
         resumeDate = .now
         remainingAtResume = remaining
         lastTickDate = .now
+        focusAccumulator = 0
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -74,9 +77,17 @@ final class PomodoroTimer: ObservableObject {
 
     func pause() {
         if isRunning {
-            let elapsed = Date().timeIntervalSince(resumeDate)
+            let now = Date()
+            // Flush in-flight time since the last tick before discarding the accumulator
+            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
+            let wholeSeconds = Int(focusAccumulator)
+            if wholeSeconds > 0 {
+                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
+            }
+            let elapsed = now.timeIntervalSince(resumeDate)
             remaining = max(0, remainingAtResume - elapsed)
         }
+        focusAccumulator = 0
         isRunning = false
         cancellable = nil
         FocusTimeStore.shared.flushIfNeeded()
@@ -93,16 +104,21 @@ final class PomodoroTimer: ObservableObject {
         let now = Date()
         let tickElapsed = now.timeIntervalSince(lastTickDate)
         lastTickDate = now
-        // Cap at 2s per tick so Mac sleep gaps don't inflate focus stats.
-        // Floor (Int truncation) slightly under-credits when the 1s publisher fires late,
-        // but that is preferable to over-crediting, and the drift is < 1s per tick.
-        let focusSeconds = min(Int(tickElapsed), 2)
-        for _ in 0..<focusSeconds { FocusTimeStore.shared.addSecond() }
+        // Accumulate elapsed time (capped at 2 s to ignore sleep gaps).
+        // Using an accumulator instead of Int truncation prevents credit loss when
+        // the publisher fires slightly early (< 1 s) — e.g. two 0.6 s ticks correctly
+        // credit 1 second rather than 0+0 = 0.
+        focusAccumulator += min(tickElapsed, 2)
+        let wholeSeconds = Int(focusAccumulator)
+        if wholeSeconds > 0 {
+            for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
+            focusAccumulator -= TimeInterval(wholeSeconds)
+        }
         let elapsed = now.timeIntervalSince(resumeDate)
         remaining = max(0, remainingAtResume - elapsed)
         if remaining == 0 {
+            isFinished = true   // set before pause() so no subscriber sees isRunning=false + isFinished=false
             pause()
-            isFinished = true
             SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
             sendTimerFinishedNotification()
         }
