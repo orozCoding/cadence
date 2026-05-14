@@ -93,8 +93,9 @@ final class PomodoroTimer: ObservableObject {
         let now = Date()
         let tickElapsed = now.timeIntervalSince(lastTickDate)
         lastTickDate = now
-        // Cap focus-time credit at 2s per tick so Mac sleep gaps don't inflate focus stats.
-        // Use floor (Int truncation) to avoid over-crediting when timer fires slightly late.
+        // Cap at 2s per tick so Mac sleep gaps don't inflate focus stats.
+        // Floor (Int truncation) slightly under-credits when the 1s publisher fires late,
+        // but that is preferable to over-crediting, and the drift is < 1s per tick.
         let focusSeconds = min(Int(tickElapsed), 2)
         for _ in 0..<focusSeconds { FocusTimeStore.shared.addSecond() }
         let elapsed = now.timeIntervalSince(resumeDate)

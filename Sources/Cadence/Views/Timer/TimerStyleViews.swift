@@ -446,21 +446,18 @@ struct OrbitTimerCircle: View {
                 ctx.stroke(corePath, with: .color(Color.white.opacity(0.70)),
                            style: StrokeStyle(lineWidth: 2, lineCap: .round))
 
-                // Noisy sparks along the tail (seeded on progress)
+                // Noisy sparks along the tail (seeded on progress); all math in Double
                 for i in 0..<12 {
-                    let fi = CGFloat(i)
+                    let fi = Double(i)
                     let t  = fi / 12.0   // 0–1 along tail
-                    // Interpolate angle from tip (endA) back toward start (startA)
-                    let sparkAngle = endA - (endA - startA) * Double(t)
-                    // Pseudo-random radius variance seeded by index + progress
+                    let sparkAngle = endA - (endA - startA) * t
                     let noise  = sin(fi * 7.3 + Double(progress) * 31.4) * 5.0
-                    let sparkR = R + noise
-                    let sx     = center.x + cos(sparkAngle) * sparkR
-                    let sy     = center.y + sin(sparkAngle) * sparkR
+                    let sparkR = Double(R) + noise
+                    let sx     = Double(center.x) + cos(sparkAngle) * sparkR
+                    let sy     = Double(center.y) + sin(sparkAngle) * sparkR
                     let sparkSize = (1 - t) * 3.5 + 0.5
                     let alpha  = (1 - t) * 0.85
 
-                    // Color: hot white near tip, orange-ish at tail
                     let sparkColor = t < 0.3
                         ? Color.white.opacity(alpha)
                         : AppTheme.accent.opacity(alpha * 0.7)
@@ -548,24 +545,27 @@ struct PulseTimerCircle: View {
         return 0.4 + p * 2.2  // 0.4–2.6 rings/sec
     }
 
+    // Phase is accumulated per-frame rather than derived from `t * ringSpeed` so that
+    // changes in ringSpeed (one per timer tick) don't cause visible phase jumps.
+    @State private var accumulatedPhase: Double = 0
+    @State private var phaseAnchorDate: Date = .now
+    @State private var lastRingSpeed: Double = 0.4
+
     var body: some View {
         ZStack {
-            // Static track ring
             Circle()
                 .stroke(AppTheme.divider.opacity(0.4), lineWidth: 1.5)
                 .frame(width: 110, height: 110)
 
             if isRunning {
                 TimelineView(.animation) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
-                    pulseRings(t: t)
+                    let dt = context.date.timeIntervalSince(phaseAnchorDate)
+                    pulseRings(phase: accumulatedPhase + dt * lastRingSpeed)
                 }
             } else {
-                // Use progress as phase seed so paused appearance varies with session state
-                pulseRings(t: Double(inverted ? 1 - progress : progress))
+                pulseRings(phase: accumulatedPhase)
             }
 
-            // Center dot
             Circle()
                 .fill(AppTheme.accent)
                 .frame(width: 8, height: 8)
@@ -588,24 +588,45 @@ struct PulseTimerCircle: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
+        .onAppear {
+            phaseAnchorDate = .now
+            lastRingSpeed = ringSpeed
+        }
+        .onChange(of: isRunning) { _, newVal in
+            let now = Date()
+            let elapsed = now.timeIntervalSince(phaseAnchorDate)
+            accumulatedPhase = (accumulatedPhase + elapsed * lastRingSpeed)
+                .truncatingRemainder(dividingBy: 1.0)
+            phaseAnchorDate = now
+            if newVal { lastRingSpeed = ringSpeed }
+        }
+        .onChange(of: progress) { _, _ in
+            // Commit phase at old speed before ringSpeed changes
+            let now = Date()
+            let elapsed = now.timeIntervalSince(phaseAnchorDate)
+            accumulatedPhase = (accumulatedPhase + elapsed * lastRingSpeed)
+                .truncatingRemainder(dividingBy: 1.0)
+            phaseAnchorDate = now
+            lastRingSpeed = ringSpeed
+        }
     }
 
     @ViewBuilder
-    private func pulseRings(t: Double) -> some View {
+    private func pulseRings(phase: Double) -> some View {
         let maxR: CGFloat = 55
         let minR: CGFloat = 4
         let ringCount = 4
 
         ForEach(0..<ringCount, id: \.self) { i in
-            let phase = (t * ringSpeed + Double(i) / Double(ringCount))
+            let p = (phase + Double(i) / Double(ringCount))
                 .truncatingRemainder(dividingBy: 1.0)
             // Inverted: rings contract inward (implosion); original: expand outward
-            let scale  = inverted ? CGFloat(1.0 - phase) : CGFloat(phase)
+            let scale  = inverted ? CGFloat(1.0 - p) : CGFloat(p)
             let radius = minR + scale * (maxR - minR)
-            let opacity = Double(1.0 - phase)          // fades on same trajectory
+            let opacity = Double(1.0 - p)
             let lineW: CGFloat = inverted
-                ? (1.0 + scale * 1.0)    // thicker when large
-                : (2.0 - scale * 1.0)    // thinner as it expands
+                ? (1.0 + scale * 1.0)
+                : (2.0 - scale * 1.0)
 
             Circle()
                 .stroke(AppTheme.accent.opacity(opacity * 0.75), lineWidth: max(0.5, lineW))
@@ -678,8 +699,9 @@ struct RadiateTimerCircle: View {
                 let fi = CGFloat(i)
                 let spokeAngle = fi / CGFloat(spokeCount) * 2 * .pi - .pi / 2 + rotAngle
                 let spokeFrac  = fi / CGFloat(spokeCount)
-                // Inverted: fill CCW from 12 (high-index spokes light up first)
-                let lit = inverted ? (spokeFrac > 1 - progress) : (spokeFrac < progress)
+                // Inverted: fill CCW from 12 (high-index spokes light up first).
+                // >= ensures spoke 0 lights up when progress reaches 1.
+                let lit = inverted ? (spokeFrac >= 1 - progress) : (spokeFrac < progress)
 
                 let x1 = center.x + cos(spokeAngle) * innerR
                 let y1 = center.y + sin(spokeAngle) * innerR

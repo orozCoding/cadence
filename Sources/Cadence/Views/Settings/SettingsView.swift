@@ -162,7 +162,8 @@ struct SettingsView: View {
                     .accessibilityRepresentation {
                         Picker("Timer style", selection: $settings.timerStyle) {
                             ForEach(TimerStyle.allCases) { style in
-                                Text(style.label).tag(style)
+                                // Include description so VoiceOver reads "Glassy, Liquid glass fill"
+                                Text("\(style.label), \(style.description)").tag(style)
                             }
                         }
                     }
