@@ -253,7 +253,7 @@ struct TaskCreateView: View {
         // Report the user's original input in error messages, not the normalized form.
         errors += urls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, URL(string: normalizeURL(trimmed)) == nil else { return nil }
+            guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
             return "Invalid URL: \(trimmed)"
         }
         validationErrors = errors

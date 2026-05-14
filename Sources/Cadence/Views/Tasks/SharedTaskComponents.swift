@@ -138,7 +138,7 @@ func normalizeURL(_ raw: String) -> String {
     // and the local part contains no colon (which would indicate user:pass credentials).
     // No dot requirement so single-label domains (user@localhost, user@buildbox) are covered.
     let firstSlash = s.firstIndex(of: "/")
-    if let at = s.firstIndex(of: "@"), firstSlash == nil || at < firstSlash {
+    if let at = s.firstIndex(of: "@"), firstSlash == nil || at < firstSlash! {
         let localPart = String(s[..<at])
         if !localPart.contains(":") { return "mailto:" + s }
     }
@@ -159,7 +159,7 @@ func normalizeURL(_ raw: String) -> String {
     let octets = hostPart.split(separator: ".").compactMap { Int($0) }
     if octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) {
         let (a, b) = (octets[0], octets[1])
-        if a == 10 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168) || (a == 169 && b == 254) {
+        if a == 10 || a == 127 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168) || (a == 169 && b == 254) {
             return "http://" + s
         }
     }
@@ -178,41 +178,48 @@ func normalizeURL(_ raw: String) -> String {
     }
     if let colon = authority[colonSearchFrom...].firstIndex(of: ":") {
         let afterColon = authority[authority.index(after: colon)...]
+        let beforeColon = String(authority[colonSearchFrom..<colon])
+        let bcLower = beforeColon.lowercased()
+        // All-letter beforeColon = URI scheme name (tel:, sms:, spotify:, http:, etc.).
+        // Check this BEFORE the port heuristic so "tel:1234" isn't misread as host:port.
+        // RFC 3986 §3.1: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+        // We're already past the leading-scheme check above, so beforeColon has no "://",
+        // meaning any all-letter token here is unambiguously a URI scheme.
+        if !beforeColon.isEmpty && beforeColon.allSatisfy(\.isLetter) {
+            if bcLower == "http" || bcLower == "https" {
+                if afterColon.isEmpty && authEnd < s.endIndex {
+                    // http:/host → http://host (single-slash typo)
+                    let pathStart = s.index(after: authEnd)
+                    return bcLower + "://" + String(s[pathStart...])
+                }
+                // http:example.com or https:example.com (missing slashes)
+                let pathSuffix = authEnd < s.endIndex ? String(s[authEnd...]) : ""
+                return bcLower + "://" + String(afterColon) + pathSuffix
+            }
+            // tel:, sms:, spotify:, com.example.app: (actually starts with letters), etc.
+            return s
+        }
+        // beforeColon contains dots or digits: hostname or IPv4 territory.
         let portStr = String(afterColon.prefix(while: \.isNumber))
         let isPort = !portStr.isEmpty
             && afterColon.dropFirst(portStr.count).isEmpty
             && (Int(portStr) ?? 65536) <= 65535
         if !isPort {
-            // Empty afterColon with a path/query after the authority means this is
-            // a URI scheme followed by a hierarchical or path component
-            // (e.g. com.example.app:/oauth). Leave non-web schemes as-is.
-            // http:/ and https:/ are typos — fall through so they are not silently
-            // preserved as malformed URLs.
-            if afterColon.isEmpty && authEnd < s.endIndex {
-                let schemeName = String(authority[colonSearchFrom..<colon]).lowercased()
-                if schemeName == "http" || schemeName == "https" {
-                    // Repair single-slash typo: http:/host → http://host
-                    let pathStart = s.index(after: authEnd)
-                    return schemeName + "://" + String(s[pathStart...])
-                }
-                return s
-            }
-            // Treat as URI scheme (mailto:, tel:, spotify:, etc.) only when the
-            // part before the colon contains no dot.  No registered URI scheme
-            // name includes a dot, so a dot signals a hostname (e.g. example.com:abc)
-            // that should receive the https:// prefix instead.
-            let beforeColon = String(authority[colonSearchFrom..<colon])
-            let bcLower = beforeColon.lowercased()
-            // http:example.com and https:example.com (no slashes) are typos;
-            // repair by inserting the missing // and preserving the path/query.
-            if bcLower == "http" || bcLower == "https" {
-                let pathSuffix = authEnd < s.endIndex ? String(s[authEnd...]) : ""
-                return bcLower + "://" + String(afterColon) + pathSuffix
-            }
+            // A dot in beforeColon means it's a hostname like example.com:abc — prepend https://.
             if !beforeColon.contains(".") { return s }
         }
     }
     return "https://" + s
+}
+
+// Returns true when the (already-normalized) URL string is safe to save / open.
+// Rejects http/https with an empty host, which URL(string:) accepts but browsers reject.
+func isSaveableURL(_ normalized: String) -> Bool {
+    guard let u = URL(string: normalized) else { return false }
+    if let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+        return !(u.host?.isEmpty ?? true)
+    }
+    return true
 }
 
 // MARK: - URL Components
@@ -249,7 +256,7 @@ struct URLEditSection: View {
                     .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
 
                 if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   URL(string: normalizeURL(urls[i])) != nil {
+                   isSaveableURL(normalizeURL(urls[i])) {
                     Button(action: {
                         let normalized = normalizeURL(urls[i])
                         guard let u = URL(string: normalized) else { return }

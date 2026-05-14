@@ -294,7 +294,7 @@ struct TaskEditView: View {
         let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         errors += editedUrls.compactMap { raw -> String? in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, URL(string: normalizeURL(trimmed)) == nil else { return nil }
+            guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
             return "Invalid URL: \(trimmed)"
         }
         validationErrors = errors
