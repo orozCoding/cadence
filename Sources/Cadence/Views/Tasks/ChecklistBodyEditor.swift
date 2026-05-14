@@ -150,19 +150,23 @@ private final class BodyNSTextView: NSTextView {
         }
     }
 
-    // Fix [p2]: VO+Space (accessibilityPerformPress) toggles the nearest checkbox.
-    // @objc without 'override' — ObjC dynamic dispatch picks this up via NSAccessibility.
+    // Fix [p2]: VO+Space (accessibilityPerformPress) toggles the checkbox on the current line.
+    // Scans back to the line start so it works regardless of caret position within the line.
     override func accessibilityPerformPress() -> Bool {
         guard let ts = textStorage, let coordinator = bodyCoordinator else { return false }
         let sel = selectedRange()
-        let positions = sel.location > 0 ? [sel.location, sel.location - 1] : [sel.location]
-        for pos in positions {
-            if pos < ts.length,
-               (ts.string as NSString).character(at: pos) == 0xFFFC,
-               let att = ts.attribute(.attachment, at: pos, effectiveRange: nil) as? CheckboxAttachment {
-                coordinator.toggleCheckbox(att, in: self)
-                return true
+        let ns  = ts.string as NSString
+        var lineStart = 0
+        if sel.location > 0 {
+            for i in stride(from: sel.location - 1, through: 0, by: -1) {
+                if ns.character(at: i) == 0x0A { lineStart = i + 1; break }
             }
+        }
+        if lineStart < ts.length,
+           ns.character(at: lineStart) == 0xFFFC,
+           let att = ts.attribute(.attachment, at: lineStart, effectiveRange: nil) as? CheckboxAttachment {
+            coordinator.toggleCheckbox(att, in: self)
+            return true
         }
         return false
     }
