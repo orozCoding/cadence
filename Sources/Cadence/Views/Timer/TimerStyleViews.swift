@@ -594,13 +594,15 @@ struct PulseTimerCircle: View {
         let ringCount = 4
 
         ForEach(0..<ringCount, id: \.self) { i in
-            // Phase offset so rings are staggered evenly
             let phase = (t * ringSpeed + Double(i) / Double(ringCount))
                 .truncatingRemainder(dividingBy: 1.0)
-            let scale  = CGFloat(phase)          // 0 → 1 (growing)
+            // Inverted: rings contract inward (implosion); original: expand outward
+            let scale  = inverted ? CGFloat(1.0 - phase) : CGFloat(phase)
             let radius = minR + scale * (maxR - minR)
-            let opacity = Double(1.0 - phase)    // fades as it expands
-            let lineW: CGFloat = 2.0 - scale * 1.0  // thins as it expands
+            let opacity = Double(1.0 - phase)          // fades on same trajectory
+            let lineW: CGFloat = inverted
+                ? (1.0 + scale * 1.0)    // thicker when large
+                : (2.0 - scale * 1.0)    // thinner as it expands
 
             Circle()
                 .stroke(AppTheme.accent.opacity(opacity * 0.75), lineWidth: max(0.5, lineW))
@@ -618,6 +620,8 @@ struct RadiateTimerCircle: View {
     let isRunning: Bool
     var inverted: Bool = false
 
+    @State private var frozenAngle: CGFloat = 0
+
     private let spokeCount = 60
     private let innerR: CGFloat = 44
     private let outerR: CGFloat = 58
@@ -630,7 +634,7 @@ struct RadiateTimerCircle: View {
                     spokeCanvas(rotAngle: CGFloat(t * 8.0 * .pi / 180.0))
                 }
             } else {
-                spokeCanvas(rotAngle: 0)
+                spokeCanvas(rotAngle: frozenAngle)
             }
 
             VStack(spacing: 2) {
@@ -650,6 +654,11 @@ struct RadiateTimerCircle: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
+        .onChange(of: isRunning) { _, newVal in
+            if !newVal {
+                frozenAngle = CGFloat(Date().timeIntervalSinceReferenceDate * 8.0 * .pi / 180.0)
+            }
+        }
     }
 
     private func spokeCanvas(rotAngle: CGFloat) -> some View {

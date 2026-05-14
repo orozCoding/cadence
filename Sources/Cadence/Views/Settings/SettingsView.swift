@@ -159,6 +159,13 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 9)
                             .stroke(AppTheme.divider, lineWidth: 1)
                     )
+                    .accessibilityRepresentation {
+                        Picker("Timer style", selection: $settings.timerStyle) {
+                            ForEach(TimerStyle.allCases) { style in
+                                Text(style.label).tag(style)
+                            }
+                        }
+                    }
                 }
 
                 // Timer Sounds section
