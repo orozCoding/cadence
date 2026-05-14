@@ -179,28 +179,41 @@ private final class BodyNSTextView: NSTextView {
     // a checked line) rather than stale or default attributes.
     func syncTypingAttributes() {
         guard let ts = textStorage else { return }
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byWordWrapping
+        let defaults: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor(AppTheme.textSecondary),
+            .paragraphStyle: para
+        ]
         if ts.length == 0 {
-            // Empty storage: reset to AppTheme defaults so the next typed character
-            // doesn't inherit stale strikethrough or tertiary-colour attributes.
-            let para = NSMutableParagraphStyle()
-            para.lineBreakMode = .byWordWrapping
-            typingAttributes = [
-                .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: NSColor(AppTheme.textSecondary),
-                .paragraphStyle: para
-            ]
-            return
+            typingAttributes = defaults; return
         }
         let pos = selectedRange().location
-        // When cursor is at end-of-document, borrow attributes from the last char.
-        let attrPos = pos < ts.length ? pos : ts.length - 1
+        // When cursor is at end-of-document, borrow from the last char.
+        var attrPos = pos < ts.length ? pos : ts.length - 1
+        // Attachment chars (U+FFFC) carry only .paragraphStyle in buildAttr —
+        // sampling them would leave .font and .foregroundColor absent, causing
+        // the next typed character to fall back to AppKit defaults.
+        // Skip past FFFC to the first content character on the same line.
+        let ns = ts.string as NSString
+        if attrPos < ts.length && ns.character(at: attrPos) == 0xFFFC {
+            let next = attrPos + 1
+            if next < ts.length && ns.character(at: next) != 0x0A {
+                attrPos = next
+            } else {
+                typingAttributes = defaults; return
+            }
+        }
         typingAttributes = ts.attributes(at: attrPos, effectiveRange: nil)
     }
 
     // Force plain-text-only paste so that rich-text pastes from external sources
     // don't introduce foreign attributes that bypass our AppTheme normalization.
     override func paste(_ sender: Any?) {
-        guard let plain = NSPasteboard.general.string(forType: .string) else { return }
+        guard let plain = NSPasteboard.general.string(forType: .string) else {
+            NSSound.beep(); return   // non-text pasteboard content (image, file URL, etc.)
+        }
         insertText(plain, replacementRange: selectedRange())
     }
 
@@ -485,7 +498,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         tv.invalidateIntrinsicContentSize()
     }
 
-    // MARK: End-editing cleanup — remove empty checkbox lines on blur
+    // MARK: End-editing cleanup — remove only the trailing empty checkbox on blur
 
     func textDidEndEditing(_ notification: Notification) {
         guard let tv = notification.object as? BodyNSTextView,
@@ -498,14 +511,16 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             line.dropFirst(6).trimmingCharacters(in: .whitespaces).isEmpty
         }
 
+        // Only clean up the trailing line — a leftover empty checkbox that was
+        // created by pressing Enter on the last line before blurring.  Removing
+        // all empty checkboxes document-wide would silently delete placeholder
+        // rows the user intentionally left elsewhere in the document.
+        guard let last = lines.last, isEmptyCheckbox(last) else { return }
+
         if lines.count > 1 {
-            let filtered = lines.filter { !isEmptyCheckbox($0) }
-            guard filtered.count != lines.count else { return }
-            lines = filtered.isEmpty ? [""] : filtered
-        } else if lines.count == 1, isEmptyCheckbox(lines[0]) {
-            lines[0] = ""
+            lines.removeLast()
         } else {
-            return
+            lines[0] = ""
         }
 
         let newRaw = lines.joined(separator: "\n")
