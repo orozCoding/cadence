@@ -34,6 +34,9 @@ enum TimerStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// Visual-only setting: controls which way each style's animation renders.
+/// It does not affect timer calculation — `remaining` and `progress` are always
+/// direction-independent. Changing it mid-session is safe and takes effect immediately.
 enum TimerDirection: String, CaseIterable, Identifiable {
     case original = "original"
     case inverted = "inverted"

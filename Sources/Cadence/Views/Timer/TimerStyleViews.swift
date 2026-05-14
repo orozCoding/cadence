@@ -3,6 +3,9 @@ import SwiftUI
 // MARK: - Unified dispatcher
 
 /// Renders the correct clock face for the active TimerStyle and direction.
+/// `inverted` is a visual-only flag — all styles derive their fill/position from `progress`,
+/// which is always `(1 - remaining/total)` regardless of direction. Flipping `inverted`
+/// mid-session is safe and takes effect on the next render with no timer state change.
 struct TimerClockView: View {
     let style: TimerStyle
     let progress: CGFloat
