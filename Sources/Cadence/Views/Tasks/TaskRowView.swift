@@ -4,6 +4,7 @@ struct TaskRowView: View {
     let task: CadenceTask
     let onTap: () -> Void
     let onToggle: () -> Void
+    var dragProvider: (() -> NSItemProvider)? = nil
 
     @EnvironmentObject var settings: AppSettings
     @State private var isHovered = false
@@ -70,6 +71,8 @@ struct TaskRowView: View {
             }
 
             deadlineBadges
+
+            dragHandle
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -88,6 +91,19 @@ struct TaskRowView: View {
         .accessibilityHint(bodyPreview.isEmpty ? "Open details" : bodyPreview)
         .accessibilityAction(.default, onTap)
         .accessibilityAction(named: task.isDone ? "Mark as To Do" : "Mark as Done", onToggle)
+    }
+
+    @ViewBuilder
+    private var dragHandle: some View {
+        if isHovered, let dragProvider {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.textTertiary)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+                .onDrag { dragProvider() }
+                .transition(.opacity)
+        }
     }
 
     @ViewBuilder

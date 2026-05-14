@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Binding var selection: NavSelection?
@@ -76,12 +77,15 @@ struct SidebarView: View {
                                     label: day.dayLabel(today: settings.currentDate),
                                     icon: "sun.max",
                                     isSelected: selection == .day(day),
+                                    // Safe: both day (startOfDay) and today (settings.currentDate,
+                                    // also startOfDay via NSCalendarDayChanged) are midnight-normalized,
+                                    // so day < today is false for today's row.
                                     isPast: day < today,
                                     incompleteCount: incompleteCount,
-                                    allDone: incompleteCount == 0
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) }
-                                }
+                                    allDone: incompleteCount == 0,
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .day(day) } },
+                                    onDrop: { providers in loadAndMove(providers, to: .day(day)) }
+                                )
                             }
                         }
                     }
@@ -105,10 +109,10 @@ struct SidebarView: View {
                                     isSelected: selection == .week(weekStart),
                                     isPast: weekStart < currentWeekStart,
                                     incompleteCount: incompleteCount,
-                                    allDone: incompleteCount == 0
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) }
-                                }
+                                    allDone: incompleteCount == 0,
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .week(weekStart) } },
+                                    onDrop: { providers in loadAndMove(providers, to: .week(weekStart)) }
+                                )
                             }
                         }
                     }
@@ -132,10 +136,10 @@ struct SidebarView: View {
                                     isSelected: selection == .month(monthStart),
                                     isPast: monthStart < currentMonthStart,
                                     incompleteCount: incompleteCount,
-                                    allDone: incompleteCount == 0
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) }
-                                }
+                                    allDone: incompleteCount == 0,
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .month(monthStart) } },
+                                    onDrop: { providers in loadAndMove(providers, to: .month(monthStart)) }
+                                )
                             }
                         }
                     }
@@ -159,10 +163,10 @@ struct SidebarView: View {
                                     isSelected: selection == .year(year),
                                     isPast: year < currentYear,
                                     incompleteCount: incompleteCount,
-                                    allDone: incompleteCount == 0
-                                ) {
-                                    withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) }
-                                }
+                                    allDone: incompleteCount == 0,
+                                    action: { withAnimation(.easeInOut(duration: 0.18)) { selection = .year(year) } },
+                                    onDrop: { providers in loadAndMove(providers, to: .year(year)) }
+                                )
                             }
                         }
                     }
@@ -232,6 +236,16 @@ struct SidebarView: View {
         }
         if allDoneAndPast {
             withAnimation(.easeInOut(duration: 0.18)) { selection = .all }
+        }
+    }
+
+    private func loadAndMove(_ providers: [NSItemProvider], to period: TaskPeriod) {
+        let weekStartsOn = settings.weekStartsOn
+        _ = providers.first?.loadDataRepresentation(for: .cadenceTaskID) { data, _ in
+            guard let data, let str = String(data: data, encoding: .utf8), let id = UUID(uuidString: str) else { return }
+            DispatchQueue.main.async {
+                store.moveToPeriod(taskId: id, period: period, weekStartsOn: weekStartsOn)
+            }
         }
     }
 }
@@ -405,7 +419,7 @@ struct SidebarRow: View {
     }
 }
 
-// MARK: - Period row (Days / Weeks / Months / Years — with past/done state)
+// MARK: - Period row (Days / Weeks / Months / Years — past/done state + drag-and-drop target)
 
 struct SidebarPeriodRow: View {
     let label: String
@@ -415,44 +429,62 @@ struct SidebarPeriodRow: View {
     let incompleteCount: Int
     let allDone: Bool
     let action: () -> Void
+    let onDrop: ([NSItemProvider]) -> Void
 
     @State private var isHovered = false
+    @State private var isTargeted = false
 
     private var isStrikethrough: Bool { isPast && allDone }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundStyle(iconColor)
-                    .frame(width: 16)
-                Text(label)
-                    .font(.system(size: 13))
-                    .foregroundStyle(labelColor)
-                    .strikethrough(isStrikethrough, color: AppTheme.textTertiary)
-                    .lineLimit(1)
-                Spacer()
-                if isPast && incompleteCount > 0 {
-                    Text("\(incompleteCount)")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.25)))
+        ZStack(alignment: .center) {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(iconColor)
+                        .frame(width: 16)
+                    Text(label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(labelColor)
+                        .strikethrough(isStrikethrough, color: AppTheme.textTertiary)
+                        .lineLimit(1)
+                    Spacer()
+                    if isPast && incompleteCount > 0 {
+                        Text("\(incompleteCount)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.25)))
+                    }
                 }
+                .contentShape(Rectangle())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                        .fill(isSelected ? AppTheme.selectedItem : (isHovered ? AppTheme.hoveredItem : Color.clear))
+                )
             }
-            .contentShape(Rectangle())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .pointerCursor()
+
+            if isTargeted {
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .fill(isSelected ? AppTheme.selectedItem : (isHovered ? AppTheme.hoveredItem : Color.clear))
-            )
+                    .stroke(AppTheme.accent, lineWidth: 2)
+                    .padding(1)
+                    .allowsHitTesting(false)
+            }
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .pointerCursor()
+        .onDrop(of: [UTType.cadenceTaskID], isTargeted: $isTargeted) { providers in
+            // Mirror the past-deadline guard from TaskCreateView/TaskEditView:
+            // reject drops onto rows whose period is already in the past.
+            guard !isPast else { return false }
+            onDrop(providers)
+            return true
+        }
     }
 
     private var iconColor: Color {
