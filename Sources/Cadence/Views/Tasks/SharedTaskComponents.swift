@@ -125,6 +125,8 @@ struct DeadlineToggleRow<Content: View>: View {
 func normalizeURL(_ raw: String) -> String {
     let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !s.isEmpty else { return s }
+    // Protocol-relative reference (//host/path) → prepend https:
+    if s.hasPrefix("//") { return "https:" + s }
     // Return early only when :// belongs to a scheme at the very start of the string.
     // s.contains("://") would falsely match query values like
     // example.com?next=https://idp.example/callback.
@@ -179,7 +181,12 @@ func normalizeURL(_ raw: String) -> String {
             // preserved as malformed URLs.
             if afterColon.isEmpty && authEnd < s.endIndex {
                 let schemeName = String(authority[colonSearchFrom..<colon]).lowercased()
-                if schemeName != "http" && schemeName != "https" { return s }
+                if schemeName == "http" || schemeName == "https" {
+                    // Repair single-slash typo: http:/host → http://host
+                    let pathStart = s.index(after: authEnd)
+                    return schemeName + "://" + String(s[pathStart...])
+                }
+                return s
             }
             // Treat as URI scheme (mailto:, tel:, spotify:, etc.) only when the
             // part before the colon contains no dot.  No registered URI scheme
@@ -282,7 +289,7 @@ struct URLEditSection: View {
                 .frame(height: 176)
             }
 
-            if !(urls.last?.isEmpty ?? true) && urls.count < 10 {
+            if !(urls.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) && urls.count < 10 {
                 Button(action: { urls.append(""); entryIds.append(UUID()) }) {
                     Label("Add URL", systemImage: "plus.circle.fill")
                         .font(.system(size: 12))
@@ -293,6 +300,12 @@ struct URLEditSection: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
                 .animation(.easeInOut(duration: 0.15), value: urls.last?.isEmpty ?? true)
             }
+        }
+        .onChange(of: urls.count) { count in
+            // Keep entryIds in sync if the parent binding is mutated externally
+            // (avoids zip silently dropping rows when counts diverge).
+            while entryIds.count < count { entryIds.append(UUID()) }
+            if entryIds.count > count { entryIds = Array(entryIds.prefix(count)) }
         }
     }
 }

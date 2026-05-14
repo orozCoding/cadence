@@ -250,7 +250,12 @@ struct TaskCreateView: View {
             weekStartsOn: settings.weekStartsOn
         )
         let normalizedUrls = urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
-        errors += normalizedUrls.filter { URL(string: $0) == nil }.map { "Invalid URL: \($0)" }
+        // Report the user's original input in error messages, not the normalized form.
+        errors += urls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, URL(string: normalizeURL(trimmed)) == nil else { return nil }
+            return "Invalid URL: \(trimmed)"
+        }
         validationErrors = errors
         guard errors.isEmpty else { return }
 

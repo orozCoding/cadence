@@ -20,6 +20,8 @@ struct TaskEditView: View {
     @State private var editedUrls: [String]
     @State private var validationErrors: [String] = []
     @State private var showDiscardAlert = false
+    // Precomputed once so hasUnsavedChanges doesn't re-normalize stored URLs every render.
+    private let normalizedStoredUrls: [String]
 
     init(task: CadenceTask, onBack: @escaping () -> Void) {
         self.task = task
@@ -35,6 +37,7 @@ struct TaskEditView: View {
         _monthDate   = State(initialValue: task.monthStart ?? Date())
         _yearValue   = State(initialValue: task.yearDeadline ?? Calendar.current.component(.year, from: Date()))
         _editedUrls  = State(initialValue: task.urls.isEmpty ? [""] : task.urls)
+        normalizedStoredUrls = task.urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
     }
 
     private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
@@ -59,8 +62,7 @@ struct TaskEditView: View {
            monthDate.startOfMonth().noonLocal() != orig { return true }
         if enableYear, yearValue != task.yearDeadline { return true }
         let normalizedEdited = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
-        let normalizedStored = task.urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
-        if normalizedEdited != normalizedStored { return true }
+        if normalizedEdited != normalizedStoredUrls { return true }
         return false
     }
 
@@ -290,7 +292,11 @@ struct TaskEditView: View {
         if newMonth == task.monthStart    { errors.removeAll { $0 == "Month deadline cannot be in the past." } }
         if newYear  == task.yearDeadline  { errors.removeAll { $0 == "Year deadline cannot be in the past." } }
         let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
-        errors += normalizedUrls.filter { URL(string: $0) == nil }.map { "Invalid URL: \($0)" }
+        errors += editedUrls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, URL(string: normalizeURL(trimmed)) == nil else { return nil }
+            return "Invalid URL: \(trimmed)"
+        }
         validationErrors = errors
         guard errors.isEmpty else { return }
 
