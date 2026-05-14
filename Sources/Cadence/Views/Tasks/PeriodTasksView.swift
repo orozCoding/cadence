@@ -140,21 +140,21 @@ struct PeriodTasksView: View {
                     // Re-read from store after mutation to include the toggled task in the reorder.
                     let destIds = allTasks.filter { willBeDone ? $0.isDone : !$0.isDone }.map(\.id)
                     store.reorder(taskIds: destIds, periodKey: destKey)
+                },
+                dragProvider: {
+                    draggedId = task.id
+                    let provider = NSItemProvider()
+                    let uuidData = task.id.uuidString.data(using: .utf8) ?? Data()
+                    provider.registerDataRepresentation(for: .cadenceTaskID, visibility: .all) { completion in
+                        completion(uuidData, nil)
+                        return nil
+                    }
+                    return provider
                 }
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 2)
             .opacity(draggedId == task.id ? 0.4 : 1.0)
-            .onDrag {
-                draggedId = task.id
-                let provider = NSItemProvider()
-                let uuidData = task.id.uuidString.data(using: .utf8) ?? Data()
-                provider.registerDataRepresentation(for: .cadenceTaskID, visibility: .all) { completion in
-                    completion(uuidData, nil)
-                    return nil
-                }
-                return provider
-            }
             .onDrop(
                 of: [UTType.cadenceTaskID],
                 delegate: TaskReorderDelegate(
