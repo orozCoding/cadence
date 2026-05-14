@@ -207,6 +207,7 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
             DispatchQueue.main.async {
                 tv.window?.makeFirstResponder(tv)
                 tv.setSelectedRange(NSRange(location: tv.textStorage?.length ?? 0, length: 0))
+                tv.syncTypingAttributes()
             }
         }
     }
@@ -453,6 +454,10 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             return handleBackspace(tv: tv, ts: ts)
         }
 
+        if commandSelector == #selector(NSResponder.deleteForward(_:)) {
+            return handleForwardDelete(tv: tv, ts: ts)
+        }
+
         guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
 
         let sel    = tv.selectedRange()
@@ -599,6 +604,35 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         isRendering = true
         ts.setAttributedString(newAttr)
         tv.setSelectedRange(NSRange(location: min(newCursor, ts.length), length: 0))
+        isRendering = false
+        tv.syncTypingAttributes()
+        tv.invalidateIntrinsicContentSize()
+        return true
+    }
+
+    // MARK: Forward-delete — strip checkbox prefix instead of deleting the FFFC char
+
+    private func handleForwardDelete(tv: BodyNSTextView, ts: NSTextStorage) -> Bool {
+        let sel = tv.selectedRange()
+        guard sel.length == 0,
+              sel.location < ts.length,
+              (ts.string as NSString).character(at: sel.location) == 0xFFFC
+        else { return false }
+
+        let raw = extractRaw(from: ts)
+        var rawLines = raw.components(separatedBy: "\n")
+        let li = lineIndex(for: sel.location, in: ts)
+        guard li < rawLines.count else { return false }
+        let line = rawLines[li]
+        guard line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ") else { return false }
+
+        // Strip the checkbox prefix and render as a plain text line.
+        rawLines[li] = String(line.dropFirst(6))
+        let newRaw = rawLines.joined(separator: "\n")
+        text = newRaw; committedText = newRaw
+        isRendering = true
+        ts.setAttributedString(buildAttr(newRaw))
+        tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
         isRendering = false
         tv.syncTypingAttributes()
         tv.invalidateIntrinsicContentSize()
