@@ -219,7 +219,7 @@ struct URLEditSection: View {
                         .buttonStyle(.plain)
                         .pointerCursor()
                         .help("Open URL in browser")
-                        .accessibilityLabel("Open URL in browser")
+                        .accessibilityLabel("Open \(urls[i]) in browser")
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .animation(.easeInOut(duration: 0.12), value: urls[i].isEmpty)
                     }
@@ -239,7 +239,7 @@ struct URLEditSection: View {
                         }
                         .buttonStyle(.plain)
                         .pointerCursor()
-                        .accessibilityLabel("Remove URL")
+                        .accessibilityLabel("Remove \(urls[i].isEmpty ? "empty URL" : urls[i])")
                     }
                 }
             }
