@@ -20,8 +20,9 @@ final class PomodoroTimer: ObservableObject {
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
     var timeString: String {
-        let m = Int(remaining) / 60
-        let s = Int(remaining) % 60
+        let totalSecs = Int(ceil(remaining))
+        let m = totalSecs / 60
+        let s = totalSecs % 60
         return String(format: "%02d:%02d", m, s)
     }
 

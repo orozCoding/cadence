@@ -39,7 +39,8 @@ struct TimerClockView: View {
         case .radiate:
             RadiateTimerCircle(
                 progress: progress, isFinished: isFinished,
-                timeString: timeString, inverted: inverted
+                timeString: timeString, isRunning: isRunning,
+                inverted: inverted
             )
         case .neon:
             NeonTimerCircle(
@@ -368,17 +369,17 @@ struct OrbitTimerCircle: View {
     // The rocket's orbit is clearly outside the face
     private let orbitRadius: CGFloat = 56
 
-    // Effective angle: clockwise (original) or counter-clockwise (inverted)
+    // Effective angle: both modes start at 12 o'clock (−π/2); direction changes sweep
     private var orbitAngle: CGFloat {
         inverted
-            ? -progress * 2 * .pi + .pi / 2   // counter-clockwise from 12
+            ? -progress * 2 * .pi - .pi / 2   // counter-clockwise from 12
             : progress * 2 * .pi - .pi / 2    // clockwise from 12
     }
 
     // The rocket should point in the direction of travel (tangent)
     private var rocketFacingDegrees: Double {
         inverted
-            ? Double(-progress * 360) + 90    // CCW tangent
+            ? Double(-progress * 360) - 90    // CCW tangent
             : Double(progress * 360) + 90     // CW tangent
     }
 
@@ -409,7 +410,7 @@ struct OrbitTimerCircle: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let R = orbitRadius
                 let startA = inverted
-                    ? Double(-tailStart * 2 * .pi + .pi / 2)
+                    ? Double(-tailStart * 2 * .pi - .pi / 2)
                     : Double(tailStart * 2 * .pi - .pi / 2)
                 let endA = Double(orbitAngle)
 
@@ -557,7 +558,8 @@ struct PulseTimerCircle: View {
                     pulseRings(t: t)
                 }
             } else {
-                pulseRings(t: 0)
+                // Use progress as phase seed so paused appearance varies with session state
+                pulseRings(t: Double(inverted ? 1 - progress : progress))
             }
 
             // Center dot
@@ -613,6 +615,7 @@ struct RadiateTimerCircle: View {
     let progress: CGFloat
     let isFinished: Bool
     let timeString: String
+    let isRunning: Bool
     var inverted: Bool = false
 
     private let spokeCount = 60
@@ -621,41 +624,13 @@ struct RadiateTimerCircle: View {
 
     var body: some View {
         ZStack {
-            TimelineView(.periodic(from: .now, by: 1.0 / 20.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                let rotAngle = CGFloat(t * 8.0 * .pi / 180.0)  // 8°/s rotation
-
-                Canvas { ctx, size in
-                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                    let effectiveP = inverted ? (1 - progress) : progress
-
-                    for i in 0..<spokeCount {
-                        let fi = CGFloat(i)
-                        let spokeAngle = fi / CGFloat(spokeCount) * 2 * .pi - .pi / 2 + rotAngle
-                        let spokeFrac  = fi / CGFloat(spokeCount)
-                        let lit = spokeFrac < effectiveP
-
-                        let x1 = center.x + cos(spokeAngle) * innerR
-                        let y1 = center.y + sin(spokeAngle) * innerR
-                        let x2 = center.x + cos(spokeAngle) * outerR
-                        let y2 = center.y + sin(spokeAngle) * outerR
-
-                        var path = Path()
-                        path.move(to: CGPoint(x: x1, y: y1))
-                        path.addLine(to: CGPoint(x: x2, y: y2))
-
-                        if lit {
-                            // Bright spoke with a subtle glow-width
-                            ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.90)),
-                                       style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                            ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.25)),
-                                       style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        } else {
-                            ctx.stroke(path, with: .color(AppTheme.divider.opacity(0.7)),
-                                       style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                        }
-                    }
+            if isRunning {
+                TimelineView(.periodic(from: .now, by: 1.0 / 20.0)) { context in
+                    let t = context.date.timeIntervalSinceReferenceDate
+                    spokeCanvas(rotAngle: CGFloat(t * 8.0 * .pi / 180.0))
                 }
+            } else {
+                spokeCanvas(rotAngle: 0)
             }
 
             VStack(spacing: 2) {
@@ -676,6 +651,39 @@ struct RadiateTimerCircle: View {
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
     }
+
+    private func spokeCanvas(rotAngle: CGFloat) -> some View {
+        Canvas { ctx, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let effectiveP = inverted ? (1 - progress) : progress
+
+            for i in 0..<spokeCount {
+                let fi = CGFloat(i)
+                let spokeAngle = fi / CGFloat(spokeCount) * 2 * .pi - .pi / 2 + rotAngle
+                let spokeFrac  = fi / CGFloat(spokeCount)
+                let lit = spokeFrac < effectiveP
+
+                let x1 = center.x + cos(spokeAngle) * innerR
+                let y1 = center.y + sin(spokeAngle) * innerR
+                let x2 = center.x + cos(spokeAngle) * outerR
+                let y2 = center.y + sin(spokeAngle) * outerR
+
+                var path = Path()
+                path.move(to: CGPoint(x: x1, y: y1))
+                path.addLine(to: CGPoint(x: x2, y: y2))
+
+                if lit {
+                    ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.90)),
+                               style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.25)),
+                               style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                } else {
+                    ctx.stroke(path, with: .color(AppTheme.divider.opacity(0.7)),
+                               style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Style 6: Neon (electric plasma arc)
@@ -691,7 +699,7 @@ struct NeonTimerCircle: View {
     // Arc angle for the tip spark
     private var tipAngle: CGFloat {
         inverted
-            ? -progress * 2 * .pi + .pi / 2
+            ? -progress * 2 * .pi - .pi / 2
             : progress * 2 * .pi - .pi / 2
     }
     private var tipX: CGFloat { cos(tipAngle) * radius }
