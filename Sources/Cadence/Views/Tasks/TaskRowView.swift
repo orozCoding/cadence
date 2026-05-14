@@ -85,7 +85,7 @@ struct TaskRowView: View {
         .onHover { isHovered = $0 }
         .onTapGesture(perform: onTap)
         .pointerCursor()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(bodyPreview.isEmpty ? "Open details" : bodyPreview)
         .accessibilityAction(.default, onTap)

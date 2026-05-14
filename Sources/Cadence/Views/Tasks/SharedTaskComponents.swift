@@ -387,6 +387,7 @@ struct URLBadgeIcon: View {
                 .padding(.vertical, 6)
         }
         .accessibilityLabel("Open URL: \(url)")
+        .accessibilityAddTraits(.isLink)
     }
 
     private func openInBrowser() {
