@@ -88,7 +88,10 @@ private final class BodyNSTextView: NSTextView {
     override var intrinsicContentSize: NSSize {
         guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
         lm.ensureLayout(for: tc)
-        return NSSize(width: NSView.noIntrinsicMetric, height: max(lm.usedRect(for: tc).height, 16))
+        var rect = lm.usedRect(for: tc)
+        let extra = lm.extraLineFragmentRect
+        if !extra.isNull && !extra.isEmpty { rect = rect.union(extra) }
+        return NSSize(width: NSView.noIntrinsicMetric, height: max(rect.height, 16))
     }
 
     override func didChangeText() {
@@ -145,11 +148,11 @@ private final class BodyNSTextView: NSTextView {
     // inserted character inherits the correct style (e.g. strikethrough on
     // a checked line) rather than stale or default attributes.
     func syncTypingAttributes() {
-        guard let ts = textStorage else { return }
+        guard let ts = textStorage, ts.length > 0 else { return }
         let pos = selectedRange().location
-        if pos < ts.length {
-            typingAttributes = ts.attributes(at: pos, effectiveRange: nil)
-        }
+        // When cursor is at end-of-document, borrow attributes from the last char.
+        let attrPos = pos < ts.length ? pos : ts.length - 1
+        typingAttributes = ts.attributes(at: attrPos, effectiveRange: nil)
     }
 
     // Force plain-text-only paste so that rich-text pastes from external sources
@@ -205,7 +208,7 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
         if focusTrigger > c.lastFocusTrigger {
             c.lastFocusTrigger = focusTrigger
             DispatchQueue.main.async {
-                tv.window?.makeFirstResponder(tv)
+                guard tv.window?.makeFirstResponder(tv) == true else { return }
                 tv.setSelectedRange(NSRange(location: tv.textStorage?.length ?? 0, length: 0))
                 tv.syncTypingAttributes()
             }
@@ -217,7 +220,10 @@ private struct BodyEditorRepresentable: NSViewRepresentable {
               let lm = tv.layoutManager, let tc = tv.textContainer else { return nil }
         tc.containerSize = CGSize(width: w, height: .greatestFiniteMagnitude)
         lm.ensureLayout(for: tc)
-        return CGSize(width: w, height: max(lm.usedRect(for: tc).height, 16))
+        var rect = lm.usedRect(for: tc)
+        let extra = lm.extraLineFragmentRect
+        if !extra.isNull && !extra.isEmpty { rect = rect.union(extra) }
+        return CGSize(width: w, height: max(rect.height, 16))
     }
 }
 
