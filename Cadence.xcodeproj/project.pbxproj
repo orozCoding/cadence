@@ -27,6 +27,15 @@
 		B0000051 /* View+Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000031 /* View+Cursor.swift */; };
 		B0000052 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000032 /* Folder.swift */; };
 		B0000053 /* FolderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000033 /* FolderStore.swift */; };
+		B0000054 /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000034 /* SidebarRow.swift */; };
+		B0000055 /* SidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000035 /* SidebarSection.swift */; };
+		B0000056 /* FolderSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000036 /* FolderSwitcher.swift */; };
+		B0000057 /* AddFolderPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000037 /* AddFolderPopover.swift */; };
+		B0000058 /* DeadlineToggleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000038 /* DeadlineToggleRow.swift */; };
+		B0000059 /* DeadlineRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000039 /* DeadlineRow.swift */; };
+		B000005A /* DeadlineInfoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000003A /* DeadlineInfoSection.swift */; };
+		B000005B /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000003B /* TaskListView.swift */; };
+		B000005C /* PresetButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000003C /* PresetButton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +60,15 @@
 		B0000031 /* View+Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Cursor.swift"; sourceTree = "<group>"; };
 		B0000032 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		B0000033 /* FolderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderStore.swift; sourceTree = "<group>"; };
+		B0000034 /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
+		B0000035 /* SidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSection.swift; sourceTree = "<group>"; };
+		B0000036 /* FolderSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderSwitcher.swift; sourceTree = "<group>"; };
+		B0000037 /* AddFolderPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFolderPopover.swift; sourceTree = "<group>"; };
+		B0000038 /* DeadlineToggleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadlineToggleRow.swift; sourceTree = "<group>"; };
+		B0000039 /* DeadlineRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadlineRow.swift; sourceTree = "<group>"; };
+		B000003A /* DeadlineInfoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadlineInfoSection.swift; sourceTree = "<group>"; };
+		B000003B /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
+		B000003C /* PresetButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,6 +164,10 @@
 			isa = PBXGroup;
 			children = (
 				B0000028 /* SidebarView.swift */,
+				B0000034 /* SidebarRow.swift */,
+				B0000035 /* SidebarSection.swift */,
+				B0000036 /* FolderSwitcher.swift */,
+				B0000037 /* AddFolderPopover.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -159,6 +181,10 @@
 				B000002C /* SharedTaskComponents.swift */,
 				B000002D /* TaskDetailSheet.swift */,
 				B000002E /* TaskRowView.swift */,
+				B0000038 /* DeadlineToggleRow.swift */,
+				B0000039 /* DeadlineRow.swift */,
+				B000003A /* DeadlineInfoSection.swift */,
+				B000003B /* TaskListView.swift */,
 			);
 			path = Tasks;
 			sourceTree = "<group>";
@@ -168,6 +194,7 @@
 			children = (
 				B000002F /* PomodoroTimer.swift */,
 				B0000030 /* TimerPanelView.swift */,
+				B000003C /* PresetButton.swift */,
 			);
 			path = Timer;
 			sourceTree = "<group>";
@@ -260,6 +287,15 @@
 				B0000051 /* View+Cursor.swift in Sources */,
 				B0000052 /* Folder.swift in Sources */,
 				B0000053 /* FolderStore.swift in Sources */,
+				B0000054 /* SidebarRow.swift in Sources */,
+				B0000055 /* SidebarSection.swift in Sources */,
+				B0000056 /* FolderSwitcher.swift in Sources */,
+				B0000057 /* AddFolderPopover.swift in Sources */,
+				B0000058 /* DeadlineToggleRow.swift in Sources */,
+				B0000059 /* DeadlineRow.swift in Sources */,
+				B000005A /* DeadlineInfoSection.swift in Sources */,
+				B000005B /* TaskListView.swift in Sources */,
+				B000005C /* PresetButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -53,9 +53,9 @@ Before building something new, check whether it already exists:
 | `EmptyStateView` | `Tasks/SharedTaskComponents.swift` | Empty folder/period placeholder |
 | `SidebarRow` | `Sidebar/SidebarRow.swift` | Any clickable sidebar nav item |
 | `SidebarSection` | `Sidebar/SidebarSection.swift` | Collapsible sidebar group |
-| `DeadlineToggleRow` | `Tasks/DeadlineComponents.swift` | Deadline toggle in creation/edit sheets |
-| `DeadlineRow` | `Tasks/DeadlineComponents.swift` | Read-only deadline display row |
-| `DeadlineInfoSection` | `Tasks/DeadlineComponents.swift` | Full deadline block in detail sheet |
+| `DeadlineToggleRow` | `Tasks/DeadlineToggleRow.swift` | Deadline toggle in creation/edit sheets |
+| `DeadlineRow` | `Tasks/DeadlineRow.swift` | Read-only deadline display row |
+| `DeadlineInfoSection` | `Tasks/DeadlineInfoSection.swift` | Full deadline block in detail sheet |
 | `PresetButton` | `Timer/PresetButton.swift` | Timer preset / option button |
 
 ## Conflict-prone files — be careful

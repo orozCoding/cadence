@@ -11,6 +11,7 @@ struct TaskListView: View {
     private var doneCount: Int    { tasks.count - pendingCount }
 
     var body: some View {
+        let firstDoneId = tasks.first(where: { $0.isDone })?.id
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if pendingCount > 0 {
@@ -18,7 +19,7 @@ struct TaskListView: View {
                 }
 
                 ForEach(tasks) { task in
-                    if task.id == tasks.first(where: { $0.isDone })?.id {
+                    if task.id == firstDoneId {
                         SectionHeader(label: "Done", count: doneCount)
                             .padding(.top, pendingCount > 0 ? 8 : 0)
                             .transition(.opacity)

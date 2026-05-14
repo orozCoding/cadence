@@ -37,7 +37,9 @@ Sources/Cadence/
     │   ├── TaskRowView.swift     Individual task row (toggle + title + deadline badge)
     │   ├── TaskDetailSheet.swift Edit/view sheet — title, body, deadlines
     │   ├── NewTaskSheet.swift    Create sheet — title, body, deadline toggles, validation
-    │   ├── DeadlineComponents.swift  DeadlineToggleRow, DeadlineRow, DeadlineInfoSection
+    │   ├── DeadlineToggleRow.swift   Toggle row used in NewTaskSheet
+    │   ├── DeadlineRow.swift         Read-only deadline display row
+    │   ├── DeadlineInfoSection.swift Full deadline block used in TaskDetailSheet
     │   └── SharedTaskComponents.swift  TasksHeader, SectionHeader, EmptyStateView
     ├── Timer/
     │   ├── TimerPanelView.swift  Timer UI with preset grid and custom input
@@ -59,8 +61,8 @@ The only exception is tiny private helpers that are genuinely only usable by one
 
 ## Adding new UI
 
-- **New sidebar section** → add data query to `SidebarView.swift`, add a new row type in its own file under `Sidebar/`.
-- **New task field** → update `CadenceTask` in `Task.swift`, update `NewTaskSheet` and `TaskDetailSheet` to show it, possibly add a component to `DeadlineComponents.swift`.
+- **New sidebar section** → add a new query method to `TaskStore.swift`, add a new `SidebarSection` call inside `SidebarView.swift`, create any new row sub-component in its own file under `Sidebar/`.
+- **New task field** → update `CadenceTask` in `Task.swift`, update `NewTaskSheet` and `TaskDetailSheet` to render it. If the field needs a new reusable input widget, create a dedicated file under `Tasks/` (e.g. `MyFieldRow.swift`).
 - **New center view** → create a new file under `Views/Tasks/`, add a case to `NavSelection` in `ContentView.swift`, add a `switch` branch in `ContentView`.
 - **New timer feature** → create a new file under `Views/Timer/`.
 
