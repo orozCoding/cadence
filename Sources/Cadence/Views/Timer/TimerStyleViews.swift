@@ -33,18 +33,6 @@ struct TimerClockView: View {
                 progress: progress, isFinished: isFinished,
                 timeString: timeString, inverted: inverted
             )
-        case .pulse:
-            PulseTimerCircle(
-                progress: progress, isFinished: isFinished,
-                timeString: timeString, isRunning: isRunning,
-                inverted: inverted
-            )
-        case .radiate:
-            RadiateTimerCircle(
-                progress: progress, isFinished: isFinished,
-                timeString: timeString, isRunning: isRunning,
-                inverted: inverted
-            )
         case .neon:
             NeonTimerCircle(
                 progress: progress, isFinished: isFinished,
@@ -64,7 +52,7 @@ struct TimerButtonBG: View {
         switch style {
         case .glassy:
             GlassCircle(size: size, isAccent: isAccent)
-        case .minimal, .radiate:
+        case .minimal:
             Circle()
                 .fill(isAccent ? AppTheme.accent : AppTheme.divider)
                 .frame(width: size, height: size)
@@ -75,16 +63,6 @@ struct TimerButtonBG: View {
                 Circle()
                     .stroke(isAccent ? Color.white.opacity(0.30) : AppTheme.textTertiary,
                             lineWidth: 1.5)
-            }
-            .frame(width: size, height: size)
-        case .pulse:
-            ZStack {
-                Circle()
-                    .fill(isAccent ? AppTheme.accent : AppTheme.contentBackground)
-                Circle()
-                    .stroke(AppTheme.accent.opacity(isAccent ? 0.40 : 0.25), lineWidth: 1.5)
-                    .padding(-4)
-                    .opacity(isAccent ? 1 : 0)
             }
             .frame(width: size, height: size)
         case .neon:
@@ -359,7 +337,7 @@ struct MinimalTimerCircle: View {
     }
 }
 
-// MARK: - Style 3: Orbit (rocket outside the clock face)
+// MARK: - Style 3: Orbit (comet orbiting outside the clock face)
 
 struct OrbitTimerCircle: View {
     let progress: CGFloat
@@ -367,209 +345,65 @@ struct OrbitTimerCircle: View {
     let timeString: String
     var inverted: Bool = false
 
-    // The clock-face circle the rocket orbits outside of
-    private let faceRadius: CGFloat = 36
-    // The rocket's orbit is clearly outside the face
+    // Inner face ring the comet orbits outside of
+    private let faceRadius: CGFloat = 40
+    // Comet orbits at a larger radius, clearly outside the face
     private let orbitRadius: CGFloat = 56
 
-    // Effective angle: both modes start at 12 o'clock (−π/2); direction changes sweep
-    private var orbitAngle: CGFloat {
+    private var angle: CGFloat {
         inverted
-            ? -progress * 2 * .pi - .pi / 2   // counter-clockwise from 12
-            : progress * 2 * .pi - .pi / 2    // clockwise from 12
+            ? -progress * 2 * .pi - .pi / 2   // CCW from 12
+            : progress * 2 * .pi - .pi / 2    // CW from 12
     }
-
-    // The rocket should point in the direction of travel (tangent)
-    private var rocketFacingDegrees: Double {
-        inverted
-            ? Double(-progress * 360) - 90    // CCW tangent
-            : Double(progress * 360) + 90     // CW tangent
-    }
-
-    private var rocketX: CGFloat { cos(orbitAngle) * orbitRadius }
-    private var rocketY: CGFloat { sin(orbitAngle) * orbitRadius }
-
-    // Tail progress extents (behind the rocket)
-    private var tailStart: CGFloat {
-        let rawStart = inverted ? (progress + 0.14) : (progress - 0.14)
-        return max(0, min(1, rawStart))
-    }
+    private var dotX: CGFloat { cos(angle) * orbitRadius }
+    private var dotY: CGFloat { sin(angle) * orbitRadius }
 
     var body: some View {
         ZStack {
-            // Inner clock-face ring (the circle the rocket orbits outside of)
+            // Inner clock-face ring
             Circle()
-                .stroke(AppTheme.divider.opacity(0.6), lineWidth: 1.5)
+                .stroke(AppTheme.divider, lineWidth: 2)
                 .frame(width: faceRadius * 2, height: faceRadius * 2)
 
-            // Orbit track (faint outer ring)
+            // Faint orbit track
             Circle()
-                .stroke(AppTheme.divider.opacity(0.25), lineWidth: 1)
+                .stroke(AppTheme.divider.opacity(0.35), lineWidth: 1)
                 .frame(width: orbitRadius * 2, height: orbitRadius * 2)
 
-            // ── Fire trail ──────────────────────────────────────────────
-            // Trails drawn via Canvas for noise/turbulence control
-            Canvas { ctx, size in
-                let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let R = orbitRadius
-                let startA = inverted
-                    ? Double(-tailStart * 2 * .pi - .pi / 2)
-                    : Double(tailStart * 2 * .pi - .pi / 2)
-                let endA = Double(orbitAngle)
+            // Full elapsed arc on the orbit track (faint)
+            Group {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(AppTheme.accent.opacity(0.22), lineWidth: 3)
+                    .frame(width: orbitRadius * 2, height: orbitRadius * 2)
 
-                // Make sure we have some visible tail
-                guard abs(endA - startA) > 0.01 else { return }
-
-                let cw = !inverted  // clockwise flag for addArc
-
-                // Glow base layer
-                var glowPath = Path()
-                glowPath.addArc(center: center, radius: R,
-                                startAngle: .radians(startA), endAngle: .radians(endA),
-                                clockwise: !cw)
-                ctx.stroke(glowPath, with: .color(AppTheme.accent.opacity(0.18)),
-                           style: StrokeStyle(lineWidth: 14, lineCap: .round))
-
-                // Mid flame layer
-                var flamePath = Path()
-                flamePath.addArc(center: center, radius: R,
-                                 startAngle: .radians(startA), endAngle: .radians(endA),
-                                 clockwise: !cw)
-                ctx.stroke(flamePath, with: .color(AppTheme.accent.opacity(0.50)),
-                           style: StrokeStyle(lineWidth: 5, lineCap: .round))
-
-                // Bright core
-                var corePath = Path()
-                corePath.addArc(center: center, radius: R,
-                                startAngle: .radians(startA), endAngle: .radians(endA),
-                                clockwise: !cw)
-                ctx.stroke(corePath, with: .color(Color.white.opacity(0.70)),
-                           style: StrokeStyle(lineWidth: 2, lineCap: .round))
-
-                // Noisy sparks along the tail (seeded on progress); all math in Double
-                for i in 0..<12 {
-                    let fi = Double(i)
-                    let t  = fi / 12.0   // 0–1 along tail
-                    let sparkAngle = endA - (endA - startA) * t
-                    let noise  = sin(fi * 7.3 + Double(progress) * 31.4) * 5.0
-                    let sparkR = Double(R) + noise
-                    let sx     = Double(center.x) + cos(sparkAngle) * sparkR
-                    let sy     = Double(center.y) + sin(sparkAngle) * sparkR
-                    let sparkSize = (1 - t) * 3.5 + 0.5
-                    let alpha  = (1 - t) * 0.85
-
-                    let sparkColor = t < 0.3
-                        ? Color.white.opacity(alpha)
-                        : AppTheme.accent.opacity(alpha * 0.7)
-                    ctx.fill(Path(ellipseIn: CGRect(
-                        x: sx - sparkSize / 2, y: sy - sparkSize / 2,
-                        width: sparkSize, height: sparkSize)),
-                             with: .color(sparkColor))
-                }
+                // Short comet tail
+                Circle()
+                    .trim(from: max(0, progress - 0.09), to: progress)
+                    .stroke(AppTheme.accent.opacity(0.75),
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: orbitRadius * 2, height: orbitRadius * 2)
             }
-            .frame(width: 130, height: 130)
+            .rotationEffect(.degrees(-90))
+            .scaleEffect(x: inverted ? -1 : 1, y: 1)
             .animation(.linear(duration: 0.5), value: progress)
 
-            // ── Rocket ────────────────────────────────────────────────
             // Glow halo
             Circle()
-                .fill(AppTheme.accent.opacity(0.30))
-                .frame(width: 18, height: 18)
-                .blur(radius: 5)
-                .offset(x: rocketX, y: rocketY)
+                .fill(AppTheme.accent.opacity(0.28))
+                .frame(width: 16, height: 16)
+                .blur(radius: 4)
+                .offset(x: dotX, y: dotY)
                 .animation(.linear(duration: 0.5), value: progress)
 
-            // Rocket body: a rotated arrow/triangle pointing in direction of travel
-            RocketShape()
-                .fill(
-                    LinearGradient(colors: [Color.white, AppTheme.accentLight],
-                                   startPoint: .top, endPoint: .bottom)
-                )
-                .frame(width: 10, height: 14)
-                .rotationEffect(.degrees(rocketFacingDegrees))
-                .offset(x: rocketX, y: rocketY)
-                .shadow(color: AppTheme.accent.opacity(0.8), radius: 4)
-                .animation(.linear(duration: 0.5), value: progress)
-
-            // ── Time label ────────────────────────────────────────────
-            VStack(spacing: 2) {
-                Text(timeString)
-                    .font(.system(size: 28, weight: .thin, design: .monospaced))
-                    .foregroundStyle(isFinished ? AppTheme.accent : AppTheme.textPrimary)
-                    .contentTransition(.numericText())
-                if isFinished {
-                    Text("Done!")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                        .transition(.opacity.combined(with: .scale))
-                }
-            }
-        }
-        .frame(width: 130, height: 130)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Timer")
-        .accessibilityValue(isFinished ? "Done" : timeString)
-    }
-}
-
-/// A pointed rocket/arrowhead shape — nose at top, wider at base.
-private struct RocketShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let w = rect.width, h = rect.height
-        p.move(to: CGPoint(x: w / 2, y: 0))              // nose tip
-        p.addLine(to: CGPoint(x: w, y: h * 0.6))          // right shoulder
-        p.addCurve(to: CGPoint(x: w / 2, y: h),           // base center
-                   control1: CGPoint(x: w, y: h * 0.85),
-                   control2: CGPoint(x: w * 0.75, y: h))
-        p.addCurve(to: CGPoint(x: 0, y: h * 0.6),         // left shoulder
-                   control1: CGPoint(x: w * 0.25, y: h),
-                   control2: CGPoint(x: 0, y: h * 0.85))
-        p.closeSubpath()
-        return p
-    }
-}
-
-// MARK: - Style 4: Pulse (sonar rings)
-
-struct PulseTimerCircle: View {
-    let progress: CGFloat
-    let isFinished: Bool
-    let timeString: String
-    let isRunning: Bool
-    var inverted: Bool = false
-
-    // Speed of pulse rings: faster as progress grows (or inverted: slower)
-    private var ringSpeed: Double {
-        let p = Double(inverted ? (1 - progress) : progress)
-        return 0.4 + p * 2.2  // 0.4–2.6 rings/sec
-    }
-
-    // Phase is accumulated per-frame rather than derived from `t * ringSpeed` so that
-    // changes in ringSpeed (one per timer tick) don't cause visible phase jumps.
-    @State private var accumulatedPhase: Double = 0
-    @State private var phaseAnchorDate: Date = .now
-    @State private var lastRingSpeed: Double = 0.4
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(AppTheme.divider.opacity(0.4), lineWidth: 1.5)
-                .frame(width: 110, height: 110)
-
-            if isRunning {
-                TimelineView(.animation) { context in
-                    let dt = context.date.timeIntervalSince(phaseAnchorDate)
-                    pulseRings(phase: accumulatedPhase + dt * lastRingSpeed)
-                }
-            } else {
-                pulseRings(phase: accumulatedPhase)
-            }
-
+            // Comet dot
             Circle()
                 .fill(AppTheme.accent)
-                .frame(width: 8, height: 8)
-                .shadow(color: AppTheme.accent.opacity(0.6), radius: 6)
+                .frame(width: 9, height: 9)
+                .overlay(Circle().fill(Color.white.opacity(0.5)).padding(3))
+                .shadow(color: AppTheme.accent.opacity(0.6), radius: 4)
+                .offset(x: dotX, y: dotY)
+                .animation(.linear(duration: 0.5), value: progress)
 
             VStack(spacing: 2) {
                 Text(timeString)
@@ -588,145 +422,10 @@ struct PulseTimerCircle: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
-        .onAppear {
-            phaseAnchorDate = .now
-            lastRingSpeed = ringSpeed
-        }
-        .onChange(of: isRunning) { _, newVal in
-            let now = Date()
-            let elapsed = now.timeIntervalSince(phaseAnchorDate)
-            accumulatedPhase = (accumulatedPhase + elapsed * lastRingSpeed)
-                .truncatingRemainder(dividingBy: 1.0)
-            phaseAnchorDate = now
-            if newVal { lastRingSpeed = ringSpeed }
-        }
-        .onChange(of: progress) { _, _ in
-            // Commit phase at old speed before ringSpeed changes
-            let now = Date()
-            let elapsed = now.timeIntervalSince(phaseAnchorDate)
-            accumulatedPhase = (accumulatedPhase + elapsed * lastRingSpeed)
-                .truncatingRemainder(dividingBy: 1.0)
-            phaseAnchorDate = now
-            lastRingSpeed = ringSpeed
-        }
-    }
-
-    @ViewBuilder
-    private func pulseRings(phase: Double) -> some View {
-        let maxR: CGFloat = 55
-        let minR: CGFloat = 4
-        let ringCount = 4
-
-        ForEach(0..<ringCount, id: \.self) { i in
-            let p = (phase + Double(i) / Double(ringCount))
-                .truncatingRemainder(dividingBy: 1.0)
-            // Inverted: rings contract inward (implosion); original: expand outward
-            let scale  = inverted ? CGFloat(1.0 - p) : CGFloat(p)
-            let radius = minR + scale * (maxR - minR)
-            let opacity = Double(1.0 - p)
-            let lineW: CGFloat = inverted
-                ? (1.0 + scale * 1.0)
-                : (2.0 - scale * 1.0)
-
-            Circle()
-                .stroke(AppTheme.accent.opacity(opacity * 0.75), lineWidth: max(0.5, lineW))
-                .frame(width: radius * 2, height: radius * 2)
-        }
     }
 }
 
-// MARK: - Style 5: Radiate (rotating spoke ring)
-
-struct RadiateTimerCircle: View {
-    let progress: CGFloat
-    let isFinished: Bool
-    let timeString: String
-    let isRunning: Bool
-    var inverted: Bool = false
-
-    // Tracks accumulated rotation so pause/resume continues from the same angle.
-    @State private var rotationOffset: TimeInterval = 0
-    @State private var rotationResumeDate: Date = .now
-    @State private var frozenAngle: CGFloat = 0
-
-    private let spokeCount = 60
-    private let innerR: CGFloat = 44
-    private let outerR: CGFloat = 58
-
-    var body: some View {
-        ZStack {
-            if isRunning {
-                TimelineView(.periodic(from: .now, by: 1.0 / 20.0)) { context in
-                    let elapsed = rotationOffset + context.date.timeIntervalSince(rotationResumeDate)
-                    spokeCanvas(rotAngle: CGFloat(elapsed * 8.0 * .pi / 180.0))
-                }
-            } else {
-                spokeCanvas(rotAngle: frozenAngle)
-            }
-
-            VStack(spacing: 2) {
-                Text(timeString)
-                    .font(.system(size: 28, weight: .thin, design: .monospaced))
-                    .foregroundStyle(isFinished ? AppTheme.accent : AppTheme.textPrimary)
-                    .contentTransition(.numericText())
-                if isFinished {
-                    Text("Done!")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                        .transition(.opacity.combined(with: .scale))
-                }
-            }
-        }
-        .frame(width: 130, height: 130)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Timer")
-        .accessibilityValue(isFinished ? "Done" : timeString)
-        .onChange(of: isRunning) { _, newVal in
-            if newVal {
-                rotationResumeDate = .now
-            } else {
-                rotationOffset += Date().timeIntervalSince(rotationResumeDate)
-                frozenAngle = CGFloat(rotationOffset * 8.0 * .pi / 180.0)
-            }
-        }
-    }
-
-    private func spokeCanvas(rotAngle: CGFloat) -> some View {
-        Canvas { ctx, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-
-            for i in 0..<spokeCount {
-                let fi = CGFloat(i)
-                let spokeAngle = fi / CGFloat(spokeCount) * 2 * .pi - .pi / 2 + rotAngle
-                let spokeFrac  = fi / CGFloat(spokeCount)
-                // Inverted: fill CCW from 12 (high-index spokes light up first).
-                // >= ensures spoke 0 lights up when progress reaches 1.
-                let lit = inverted ? (spokeFrac >= 1 - progress) : (spokeFrac < progress)
-
-                let x1 = center.x + cos(spokeAngle) * innerR
-                let y1 = center.y + sin(spokeAngle) * innerR
-                let x2 = center.x + cos(spokeAngle) * outerR
-                let y2 = center.y + sin(spokeAngle) * outerR
-
-                var path = Path()
-                path.move(to: CGPoint(x: x1, y: y1))
-                path.addLine(to: CGPoint(x: x2, y: y2))
-
-                if lit {
-                    ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.90)),
-                               style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    ctx.stroke(path, with: .color(AppTheme.accent.opacity(0.25)),
-                               style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                } else {
-                    ctx.stroke(path, with: .color(AppTheme.divider.opacity(0.7)),
-                               style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Style 6: Neon (electric plasma arc)
+// MARK: - Style 4: Neon (electric plasma arc)
 
 struct NeonTimerCircle: View {
     let progress: CGFloat

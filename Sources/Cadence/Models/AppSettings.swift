@@ -5,8 +5,6 @@ enum TimerStyle: String, CaseIterable, Identifiable {
     case glassy  = "glassy"
     case minimal = "minimal"
     case orbit   = "orbit"
-    case pulse   = "pulse"
-    case radiate = "radiate"
     case neon    = "neon"
 
     var id: String { rawValue }
@@ -16,8 +14,6 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         case .glassy:   return "Glassy"
         case .minimal:  return "Minimal"
         case .orbit:    return "Orbit"
-        case .pulse:    return "Pulse"
-        case .radiate:  return "Radiate"
         case .neon:     return "Neon"
         }
     }
@@ -26,9 +22,7 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         switch self {
         case .glassy:   return "Liquid glass fill"
         case .minimal:  return "Clean arc stroke"
-        case .orbit:    return "Rocket with fire trail"
-        case .pulse:    return "Sonar pulse waves"
-        case .radiate:  return "Rotating spoke ring"
+        case .orbit:    return "Comet orbiting outside the clock face"
         case .neon:     return "Electric plasma arc"
         }
     }
