@@ -2,11 +2,12 @@ import Foundation
 import Combine
 
 enum TimerStyle: String, CaseIterable, Identifiable {
-    case glassy   = "glassy"
-    case minimal  = "minimal"
-    case orbit    = "orbit"
-    case segments = "segments"
-    case dots     = "dots"
+    case glassy  = "glassy"
+    case minimal = "minimal"
+    case orbit   = "orbit"
+    case pulse   = "pulse"
+    case radiate = "radiate"
+    case neon    = "neon"
 
     var id: String { rawValue }
 
@@ -15,8 +16,9 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         case .glassy:   return "Glassy"
         case .minimal:  return "Minimal"
         case .orbit:    return "Orbit"
-        case .segments: return "Segments"
-        case .dots:     return "Dots"
+        case .pulse:    return "Pulse"
+        case .radiate:  return "Radiate"
+        case .neon:     return "Neon"
         }
     }
 
@@ -24,9 +26,24 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         switch self {
         case .glassy:   return "Liquid glass fill"
         case .minimal:  return "Clean arc stroke"
-        case .orbit:    return "Orbiting dot trail"
-        case .segments: return "Arc tick marks"
-        case .dots:     return "Glowing dot ring"
+        case .orbit:    return "Rocket with fire trail"
+        case .pulse:    return "Sonar pulse waves"
+        case .radiate:  return "Rotating spoke ring"
+        case .neon:     return "Electric plasma arc"
+        }
+    }
+}
+
+enum TimerDirection: String, CaseIterable, Identifiable {
+    case original = "original"
+    case inverted = "inverted"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .original: return "Original"
+        case .inverted: return "Inverted"
         }
     }
 }
@@ -62,6 +79,9 @@ final class AppSettings: ObservableObject {
     @Published var timerStyle: TimerStyle {
         didSet { save() }
     }
+    @Published var timerDirection: TimerDirection {
+        didSet { save() }
+    }
     @Published var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
     private var cancellables = Set<AnyCancellable>()
@@ -75,6 +95,9 @@ final class AppSettings: ObservableObject {
 
         let styleRaw = UserDefaults.standard.string(forKey: "timerStyle") ?? ""
         timerStyle = TimerStyle(rawValue: styleRaw) ?? .glassy
+
+        let directionRaw = UserDefaults.standard.string(forKey: "timerDirection") ?? ""
+        timerDirection = TimerDirection(rawValue: directionRaw) ?? .original
 
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
@@ -91,5 +114,6 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(weekStartsOn.rawValue, forKey: "weekStartsOn")
         UserDefaults.standard.set(timerFinishSound.rawValue, forKey: "timerFinishSound")
         UserDefaults.standard.set(timerStyle.rawValue, forKey: "timerStyle")
+        UserDefaults.standard.set(timerDirection.rawValue, forKey: "timerDirection")
     }
 }

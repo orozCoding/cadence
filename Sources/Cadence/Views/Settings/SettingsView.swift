@@ -59,6 +59,44 @@ struct SettingsView: View {
                     }
                 }
 
+                // Timer Direction section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Timer Direction")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
+
+                    HStack {
+                        Text("Fill direction")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        HStack(spacing: 0) {
+                            ForEach(TimerDirection.allCases) { direction in
+                                let isSelected = settings.timerDirection == direction
+                                Button(action: { settings.timerDirection = direction }) {
+                                    Text(direction.label)
+                                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                                        .foregroundStyle(isSelected ? .white : AppTheme.textSecondary)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 6)
+                                        .background(isSelected ? AppTheme.accent : Color.clear)
+                                }
+                                .buttonStyle(.plain)
+                                .pointerCursor()
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 7).fill(AppTheme.divider))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .accessibilityRepresentation {
+                            Picker("Fill direction", selection: $settings.timerDirection) {
+                                ForEach(TimerDirection.allCases) { direction in
+                                    Text(direction.label).tag(direction)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Timer Style section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Timer Style")
@@ -77,6 +115,7 @@ struct SettingsView: View {
                                         isFinished: false,
                                         timeString: "12:30",
                                         isRunning: false,
+                                        inverted: settings.timerDirection == .inverted,
                                         isPreview: true
                                     )
                                     .scaleEffect(0.30)

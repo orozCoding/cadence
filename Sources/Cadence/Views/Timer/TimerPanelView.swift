@@ -30,13 +30,14 @@ struct TimerPanelView: View {
 
             Spacer()
 
-            // Timer clock — style driven by settings
+            // Timer clock — style and direction driven by settings
             TimerClockView(
                 style: settings.timerStyle,
                 progress: CGFloat(timer.progress),
                 isFinished: timer.isFinished,
                 timeString: timer.timeString,
-                isRunning: timer.isRunning
+                isRunning: timer.isRunning,
+                inverted: settings.timerDirection == .inverted
             )
 
             Spacer().frame(height: 20)
