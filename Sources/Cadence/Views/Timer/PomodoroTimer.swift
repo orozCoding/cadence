@@ -117,8 +117,8 @@ final class PomodoroTimer: ObservableObject {
         let elapsed = now.timeIntervalSince(resumeDate)
         remaining = max(0, remainingAtResume - elapsed)
         if remaining == 0 {
+            isFinished = true   // set before pause() so no subscriber sees isRunning=false + isFinished=false
             pause()
-            isFinished = true
             SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
             sendTimerFinishedNotification()
         }
