@@ -99,8 +99,23 @@ private final class BodyNSTextView: NSTextView {
         return NSSize(width: NSView.noIntrinsicMetric, height: max(rect.height, 16) + Self.bottomPad)
     }
 
+    // Keep the text container width in sync whenever SwiftUI resizes the view.
+    // widthTracksTextView only fires on AppKit autoresize events; SwiftUI sets
+    // the frame directly via setFrameSize, bypassing that mechanism.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if newSize.width > 0 {
+            textContainer?.containerSize = CGSize(width: newSize.width, height: .greatestFiniteMagnitude)
+        }
+    }
+
     override func didChangeText() {
         super.didChangeText()
+        // Re-apply the container width so each keystroke lays out correctly
+        // before SwiftUI has a chance to call sizeThatFits/updateNSView.
+        if frame.width > 0 {
+            textContainer?.containerSize = CGSize(width: frame.width, height: .greatestFiniteMagnitude)
+        }
         invalidateIntrinsicContentSize()
     }
 
