@@ -63,7 +63,7 @@ private struct GlassTimerCircle: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Timer")
             .accessibilityValue(isFinished ? "Done" : timeString)
-            .onChange(of: isRunning) { running in
+            .onChange(of: isRunning) { _, running in
                 if running {
                     waveStartDate = .now
                     phaseAtStart = frozenPhase
@@ -365,6 +365,9 @@ struct TimerPanelView: View {
             .padding(.vertical, 12)
 
             Spacer()
+        }
+        .onDisappear {
+            if timer.isRunning { timer.pause() }
         }
     }
 

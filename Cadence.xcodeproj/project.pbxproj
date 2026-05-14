@@ -30,6 +30,7 @@
 		B0000056 /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000036 /* TaskEditView.swift */; };
 		B0000057 /* FocusTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000037 /* FocusTimeView.swift */; };
 		B0000058 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0000038 /* Assets.xcassets */; };
+		B0000059 /* ChecklistBodyEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000039 /* ChecklistBodyEditor.swift */; };
 		B0000070 /* timer_start.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000060 /* timer_start.mp3 */; };
 		B0000071 /* timer_pause.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000061 /* timer_pause.mp3 */; };
 		B0000072 /* timer_finished.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000062 /* timer_finished.mp3 */; };
@@ -37,6 +38,7 @@
 		B0000074 /* timer_finished_3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000064 /* timer_finished_3.mp3 */; };
 		B0000075 /* timer_finished_song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000065 /* timer_finished_song.mp3 */; };
 		B0000076 /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000066 /* SoundManager.swift */; };
+		B0000078 /* DockIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000077 /* DockIconController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +66,7 @@
 		B0000036 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
 		B0000037 /* FocusTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTimeView.swift; sourceTree = "<group>"; };
 		B0000038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B0000039 /* ChecklistBodyEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistBodyEditor.swift; sourceTree = "<group>"; };
 		B0000060 /* timer_start.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_start.mp3; sourceTree = "<group>"; };
 		B0000061 /* timer_pause.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_pause.mp3; sourceTree = "<group>"; };
 		B0000062 /* timer_finished.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished.mp3; sourceTree = "<group>"; };
@@ -71,6 +74,7 @@
 		B0000064 /* timer_finished_3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_3.mp3; sourceTree = "<group>"; };
 		B0000065 /* timer_finished_song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_song.mp3; sourceTree = "<group>"; };
 		B0000066 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
+		B0000077 /* DockIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockIconController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +109,7 @@
 			children = (
 				B0000038 /* Assets.xcassets */,
 				B0000020 /* CadenceApp.swift */,
+				B0000077 /* DockIconController.swift */,
 				B0000011 /* Extensions */,
 				B0000012 /* Models */,
 				B0000067 /* Resources */,
@@ -211,6 +216,7 @@
 				B000002B /* PeriodTasksView.swift */,
 				B000002C /* SharedTaskComponents.swift */,
 				B000002E /* TaskRowView.swift */,
+				B0000039 /* ChecklistBodyEditor.swift */,
 				B0000035 /* TaskCreateView.swift */,
 				B0000036 /* TaskEditView.swift */,
 			);
@@ -314,6 +320,7 @@
 				B000004B /* PeriodTasksView.swift in Sources */,
 				B000004C /* SharedTaskComponents.swift in Sources */,
 				B000004E /* TaskRowView.swift in Sources */,
+				B0000059 /* ChecklistBodyEditor.swift in Sources */,
 				B000004F /* PomodoroTimer.swift in Sources */,
 				B0000050 /* TimerPanelView.swift in Sources */,
 				B0000051 /* View+Cursor.swift in Sources */,
@@ -324,6 +331,7 @@
 				B0000056 /* TaskEditView.swift in Sources */,
 				B0000057 /* FocusTimeView.swift in Sources */,
 				B0000076 /* SoundManager.swift in Sources */,
+				B0000078 /* DockIconController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
