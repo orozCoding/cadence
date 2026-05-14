@@ -348,6 +348,9 @@ struct URLBadgeIcon: View {
     let url: String
     @State private var isHovered = false
     @State private var showPopover = false
+    // Cancellable work item prevents the popover from firing early when
+    // the mouse quickly leaves and re-enters the badge.
+    @State private var hoverWork: DispatchWorkItem?
 
     var body: some View {
         Button(action: openInBrowser) {
@@ -366,11 +369,11 @@ struct URLBadgeIcon: View {
         .pointerCursor()
         .onHover { hovering in
             isHovered = hovering
+            hoverWork?.cancel()
             if hovering {
-                // Delay prevents the popover from flashing when the mouse passes over quickly.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if isHovered { showPopover = true }
-                }
+                let work = DispatchWorkItem { showPopover = true }
+                hoverWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
             } else {
                 showPopover = false
             }
