@@ -14,6 +14,8 @@ struct CadenceTask: Identifiable, Codable, Equatable {
     var monthStart: Date?   // start-of-month date
     var yearDeadline: Int?
 
+    var urls: [String]
+
     init(
         id: UUID = UUID(),
         folderId: UUID = .generalFolderID,
@@ -24,7 +26,8 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         dayDeadline: Date? = nil,
         weekStart: Date? = nil,
         monthStart: Date? = nil,
-        yearDeadline: Int? = nil
+        yearDeadline: Int? = nil,
+        urls: [String] = []
     ) {
         self.id = id
         self.folderId = folderId
@@ -36,12 +39,14 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         self.weekStart = weekStart
         self.monthStart = monthStart
         self.yearDeadline = yearDeadline
+        self.urls = urls
     }
 
     // Custom decoder: existing tasks without folderId default to General
     private enum CodingKeys: String, CodingKey {
         case id, folderId, title, body, isDone, createdAt
         case dayDeadline, weekStart, monthStart, yearDeadline
+        case urls
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +61,7 @@ struct CadenceTask: Identifiable, Codable, Equatable {
         weekStart   = try c.decodeIfPresent(Date.self, forKey: .weekStart)
         monthStart  = try c.decodeIfPresent(Date.self, forKey: .monthStart)
         yearDeadline = try c.decodeIfPresent(Int.self, forKey: .yearDeadline)
+        urls        = try c.decodeIfPresent([String].self, forKey: .urls) ?? []
     }
 
     // MARK: - Validation

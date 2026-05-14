@@ -17,7 +17,11 @@ struct TaskEditView: View {
     @State private var weekDate: Date
     @State private var monthDate: Date
     @State private var yearValue: Int
+    @State private var editedUrls: [String]
     @State private var validationErrors: [String] = []
+
+    // Precomputed once so hasUnsavedChanges doesn't re-normalize stored URLs every render.
+    private let normalizedStoredUrls: [String]
 
     // Debounced auto-save — cancelled and restarted on every change
     @State private var autoSaveTask: Task<Void, Never>? = nil
@@ -47,7 +51,9 @@ struct TaskEditView: View {
         _weekDate    = State(initialValue: task.weekStart ?? Date())
         _monthDate   = State(initialValue: task.monthStart ?? Date())
         _yearValue   = State(initialValue: task.yearDeadline ?? Calendar.current.component(.year, from: Date()))
+        _editedUrls  = State(initialValue: task.urls.isEmpty ? [""] : task.urls)
         _history     = State(initialValue: [(title: task.title, body: task.body)])
+        normalizedStoredUrls = task.urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
     }
 
     private var trimmedTitle: String { editedTitle.trimmingCharacters(in: .whitespaces) }
@@ -55,6 +61,7 @@ struct TaskEditView: View {
     private var canUndo: Bool { historyIndex > 0 }
     private var canRedo: Bool { historyIndex < history.count - 1 }
 
+    // Live version reflects any isDone toggles made while this view is open.
     private var currentTask: CadenceTask {
         store.tasks.first(where: { $0.id == task.id }) ?? task
     }
@@ -172,72 +179,79 @@ struct TaskEditView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Deadlines — anchored to bottom, always visible
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Deadlines")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.textTertiary)
+            // URLs + Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 16) {
+                URLEditSection(urls: $editedUrls)
+                    .onChange(of: editedUrls) { _, _ in scheduleAutoSave() }
 
-                DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                    let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
-                    DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
-                        .labelsHidden()
-                        .accessibilityLabel("Day deadline")
-                        .onChange(of: dayDate) { cascadeFromDay(); scheduleAutoSave() }
-                }
-                .onChange(of: enableDay) { cascadeAll(); scheduleAutoSave() }
+                Divider().background(AppTheme.divider)
 
-                DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
-                    let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
-                    DatePicker("Week deadline", selection: $weekDate,
-                               in: weekMin...,
-                               displayedComponents: .date)
-                        .labelsHidden()
-                        .onChange(of: weekDate) { cascadeFromWeek(); scheduleAutoSave() }
-                }
-                .onChange(of: enableWeek) { cascadeAll(); scheduleAutoSave() }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Deadlines")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
 
-                DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
-                    let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
-                    DatePicker("Month deadline", selection: $monthDate,
-                               in: monthMin...,
-                               displayedComponents: .date)
-                        .labelsHidden()
-                        .onChange(of: monthDate) { cascadeFromMonth(); scheduleAutoSave() }
-                }
-                .onChange(of: enableMonth) { cascadeAll(); scheduleAutoSave() }
-
-                DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
-                    let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
-                    Picker("Year deadline", selection: $yearValue) {
-                        ForEach(yearMin...(yearMin + 10), id: \.self) { y in
-                            Text(String(y)).tag(y)
-                        }
+                    DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
+                        let dayMin = task.dayDeadline.map { min($0, Date().startOfDay()) } ?? Date().startOfDay()
+                        DatePicker("Day deadline", selection: $dayDate, in: dayMin..., displayedComponents: .date)
+                            .labelsHidden()
+                            .accessibilityLabel("Day deadline")
+                            .onChange(of: dayDate) { cascadeFromDay(); scheduleAutoSave() }
                     }
-                    .labelsHidden()
-                    .accessibilityLabel("Year deadline")
-                    .frame(width: 90)
-                    .onChange(of: yearValue) { scheduleAutoSave() }
-                }
-                .onChange(of: enableYear) { cascadeAll(); scheduleAutoSave() }
+                    .onChange(of: enableDay) { cascadeAll(); scheduleAutoSave() }
 
-                if !validationErrors.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(validationErrors, id: \.self) { err in
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(AppTheme.destructive)
-                                Text(err)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(AppTheme.destructive)
+                    DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
+                        let weekMin = task.weekStart.map { min($0, Date().startOfWeek(weekStartsOn: settings.weekStartsOn)) } ?? Date().startOfWeek(weekStartsOn: settings.weekStartsOn)
+                        DatePicker("Week deadline", selection: $weekDate,
+                                   in: weekMin...,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                            .onChange(of: weekDate) { cascadeFromWeek(); scheduleAutoSave() }
+                    }
+                    .onChange(of: enableWeek) { cascadeAll(); scheduleAutoSave() }
+
+                    DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
+                        let monthMin = task.monthStart.map { min($0, Date().startOfMonth()) } ?? Date().startOfMonth()
+                        DatePicker("Month deadline", selection: $monthDate,
+                                   in: monthMin...,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                            .onChange(of: monthDate) { cascadeFromMonth(); scheduleAutoSave() }
+                    }
+                    .onChange(of: enableMonth) { cascadeAll(); scheduleAutoSave() }
+
+                    DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
+                        let yearMin = task.yearDeadline.map { min($0, Calendar.current.component(.year, from: Date())) } ?? Calendar.current.component(.year, from: Date())
+                        Picker("Year deadline", selection: $yearValue) {
+                            ForEach(yearMin...(yearMin + 10), id: \.self) { y in
+                                Text(String(y)).tag(y)
                             }
                         }
+                        .labelsHidden()
+                        .accessibilityLabel("Year deadline")
+                        .frame(width: 90)
+                        .onChange(of: yearValue) { scheduleAutoSave() }
                     }
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
-                }
-            }
+                    .onChange(of: enableYear) { cascadeAll(); scheduleAutoSave() }
+
+                    if !validationErrors.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(validationErrors, id: \.self) { err in
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(AppTheme.destructive)
+                                    Text(err)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(AppTheme.destructive)
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
+                    }
+                }  // end inner Deadlines VStack
+            }      // end outer URLs+Deadlines VStack
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
@@ -262,12 +276,22 @@ struct TaskEditView: View {
     // MARK: - Save
 
     // Auto-save: persists silently; falls back to latest persisted title if field is blank.
-    // Skips if validation errors remain after stripping overdue-but-unchanged deadlines.
+    // Skips deadline validation errors if the overdue deadline is unchanged.
+    // Skips URL validation errors — invalid URLs are simply dropped on auto-save.
     private func saveNow() {
         let titleToSave = trimmedTitle.isEmpty ? currentTask.title : trimmedTitle
         let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
         var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
         stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
+
+        // Auto-save persists only valid normalized URLs. Invalid/partial rows stay in editedUrls
+        // SwiftUI state so the user can keep typing without losing the slot in the UI.
+        let normalizedUrls = editedUrls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let normalized = normalizeURL(trimmed)
+            return isSaveableURL(normalized) ? normalized : nil
+        }
 
         var updated = currentTask
         updated.title = titleToSave
@@ -279,6 +303,7 @@ struct TaskEditView: View {
             updated.monthStart   = newMonth
             updated.yearDeadline = newYear
         }
+        updated.urls = normalizedUrls
         store.update(updated)
     }
 
@@ -287,8 +312,15 @@ struct TaskEditView: View {
         let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
         var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
         stripPastErrors(from: &errors, day: newDay, week: newWeek, month: newMonth, year: newYear)
+        // Report the user's original input in error messages, not the normalized form.
+        errors += editedUrls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
+            return "Invalid URL: \(trimmed)"
+        }
         validationErrors = errors
         guard errors.isEmpty else { return }
+        let normalizedUrls = editedUrls.map { normalizeURL($0) }.filter { !$0.isEmpty }
 
         var updated = currentTask
         updated.title        = trimmedTitle
@@ -297,6 +329,7 @@ struct TaskEditView: View {
         updated.weekStart    = newWeek
         updated.monthStart   = newMonth
         updated.yearDeadline = newYear
+        updated.urls         = normalizedUrls
         didSaveOnBack = true
         store.update(updated)
         onBack()

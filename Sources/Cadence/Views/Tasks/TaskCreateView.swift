@@ -18,6 +18,7 @@ struct TaskCreateView: View {
     @State private var weekDate = Date()
     @State private var monthDate = Date()
     @State private var yearValue = Calendar.current.component(.year, from: Date())
+    @State private var urls: [String] = [""]
     @State private var validationErrors: [String] = []
 
     // Guards against duplicate store.add() calls when both an explicit save path
@@ -143,67 +144,74 @@ struct TaskCreateView: View {
 
             Divider().background(AppTheme.divider)
 
-            // Deadlines — anchored to bottom, always visible
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Deadlines")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.textTertiary)
+            // URLs + Deadlines — anchored to bottom, always visible
+            VStack(alignment: .leading, spacing: 16) {
+                URLEditSection(urls: $urls)
+                    .onChange(of: urls) { _, _ in }
 
-                DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
-                    DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
-                        .labelsHidden()
-                        .accessibilityLabel("Day deadline")
-                        .onChange(of: dayDate) { cascadeFromDay() }
-                }
-                .onChange(of: enableDay) { cascadeAll() }
+                Divider().background(AppTheme.divider)
 
-                DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
-                    DatePicker("Week deadline", selection: $weekDate,
-                               in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
-                               displayedComponents: .date)
-                        .labelsHidden()
-                        .onChange(of: weekDate) { cascadeFromWeek() }
-                }
-                .onChange(of: enableWeek) { cascadeAll() }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Deadlines")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textTertiary)
 
-                DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
-                    DatePicker("Month deadline", selection: $monthDate,
-                               in: Date().startOfMonth()...,
-                               displayedComponents: .date)
-                        .labelsHidden()
-                        .onChange(of: monthDate) { cascadeFromMonth() }
-                }
-                .onChange(of: enableMonth) { cascadeAll() }
-
-                DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
-                    Picker("Year deadline", selection: $yearValue) {
-                        ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
-                            Text(String(y)).tag(y)
-                        }
+                    DeadlineToggleRow(icon: "sun.max", label: "Day", isEnabled: $enableDay) {
+                        DatePicker("Day deadline", selection: $dayDate, in: Date().startOfDay()..., displayedComponents: .date)
+                            .labelsHidden()
+                            .accessibilityLabel("Day deadline")
+                            .onChange(of: dayDate) { cascadeFromDay() }
                     }
-                    .labelsHidden()
-                    .accessibilityLabel("Year deadline")
-                    .frame(width: 90)
-                }
-                .onChange(of: enableYear) { cascadeAll() }
+                    .onChange(of: enableDay) { cascadeAll() }
 
-                if !validationErrors.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(validationErrors, id: \.self) { err in
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(AppTheme.destructive)
-                                Text(err)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(AppTheme.destructive)
+                    DeadlineToggleRow(icon: "calendar", label: "Week", isEnabled: $enableWeek) {
+                        DatePicker("Week deadline", selection: $weekDate,
+                                   in: Date().startOfWeek(weekStartsOn: settings.weekStartsOn)...,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                            .onChange(of: weekDate) { cascadeFromWeek() }
+                    }
+                    .onChange(of: enableWeek) { cascadeAll() }
+
+                    DeadlineToggleRow(icon: "calendar.badge.clock", label: "Month", isEnabled: $enableMonth) {
+                        DatePicker("Month deadline", selection: $monthDate,
+                                   in: Date().startOfMonth()...,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                            .onChange(of: monthDate) { cascadeFromMonth() }
+                    }
+                    .onChange(of: enableMonth) { cascadeAll() }
+
+                    DeadlineToggleRow(icon: "archivebox", label: "Year", isEnabled: $enableYear) {
+                        Picker("Year deadline", selection: $yearValue) {
+                            ForEach((Calendar.current.component(.year, from: Date()))...(Calendar.current.component(.year, from: Date()) + 10), id: \.self) { y in
+                                Text(String(y)).tag(y)
                             }
                         }
+                        .labelsHidden()
+                        .accessibilityLabel("Year deadline")
+                        .frame(width: 90)
                     }
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
-                }
-            }
+                    .onChange(of: enableYear) { cascadeAll() }
+
+                    if !validationErrors.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(validationErrors, id: \.self) { err in
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(AppTheme.destructive)
+                                    Text(err)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(AppTheme.destructive)
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.destructive.opacity(0.08)))
+                    }
+                }  // end inner Deadlines VStack
+            }      // end outer URLs+Deadlines VStack
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
@@ -226,14 +234,14 @@ struct TaskCreateView: View {
         onBack()
     }
 
-    // Save the draft if title is non-empty. If deadline validation fails, the task
-    // is saved without deadlines so text edits are never silently discarded.
+    // Save the draft if title is non-empty. If deadline or URL validation fails, the task
+    // is saved without those fields so text edits are never silently discarded.
     // The taskSaved flag prevents a second store.add() when onDisappear fires
     // after goBack() or save() have already persisted the task.
     private func saveIfPossible() {
         guard !taskSaved, canSave else { return }
         let folderId = capturedFolderId ?? folderStore.activeFolder.id
-        let errors = CadenceTask.validate(
+        let deadlineErrors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
@@ -241,14 +249,22 @@ struct TaskCreateView: View {
             weekStartsOn: settings.weekStartsOn
         )
         taskSaved = true
+        // Dismiss-path save: persist only valid normalized URLs so the model stays clean.
+        let normalizedUrls = urls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let normalized = normalizeURL(trimmed)
+            return isSaveableURL(normalized) ? normalized : nil
+        }
         let task = CadenceTask(
             folderId: folderId,
             title: title.trimmingCharacters(in: .whitespaces),
             body: body_,
-            dayDeadline: (errors.isEmpty && enableDay) ? dayDate.noonLocal() : nil,
-            weekStart: (errors.isEmpty && enableWeek) ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
-            monthStart: (errors.isEmpty && enableMonth) ? monthDate.startOfMonth().noonLocal() : nil,
-            yearDeadline: (errors.isEmpty && enableYear) ? yearValue : nil
+            dayDeadline: (deadlineErrors.isEmpty && enableDay) ? dayDate.noonLocal() : nil,
+            weekStart: (deadlineErrors.isEmpty && enableWeek) ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
+            monthStart: (deadlineErrors.isEmpty && enableMonth) ? monthDate.startOfMonth().noonLocal() : nil,
+            yearDeadline: (deadlineErrors.isEmpty && enableYear) ? yearValue : nil,
+            urls: normalizedUrls
         )
         store.add(task)
     }
@@ -258,15 +274,22 @@ struct TaskCreateView: View {
     private func save() {
         guard !taskSaved else { return }
         let folderId = capturedFolderId ?? folderStore.activeFolder.id
-        let errors = CadenceTask.validate(
+        var errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
             year: enableYear ? yearValue : nil,
             weekStartsOn: settings.weekStartsOn
         )
+        // Report the user's original input in error messages, not the normalized form.
+        errors += urls.compactMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !isSaveableURL(normalizeURL(trimmed)) else { return nil }
+            return "Invalid URL: \(trimmed)"
+        }
         validationErrors = errors
         guard errors.isEmpty else { return }
+        let normalizedUrls = urls.map { normalizeURL($0) }.filter { !$0.isEmpty }
         taskSaved = true
         let task = CadenceTask(
             folderId: folderId,
@@ -275,7 +298,8 @@ struct TaskCreateView: View {
             dayDeadline: enableDay ? dayDate.noonLocal() : nil,
             weekStart: enableWeek ? weekDate.startOfWeek(weekStartsOn: settings.weekStartsOn).noonLocal() : nil,
             monthStart: enableMonth ? monthDate.startOfMonth().noonLocal() : nil,
-            yearDeadline: enableYear ? yearValue : nil
+            yearDeadline: enableYear ? yearValue : nil,
+            urls: normalizedUrls
         )
         store.add(task)
         onBack()
