@@ -685,34 +685,69 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         return true
     }
 
-    // MARK: Forward-delete — strip checkbox prefix instead of deleting the FFFC char
+    // MARK: Forward-delete — two interception cases:
+    //   1. Cursor ON a FFFC char → strip checkbox prefix instead of deleting the attachment.
+    //   2. Cursor ON a '\n' and next char is FFFC → merging would produce "foo- [ ] bar"
+    //      (garbled markdown); instead strip the checkbox prefix from the next line and
+    //      join the two lines as plain text.
 
     private func handleForwardDelete(tv: BodyNSTextView, ts: NSTextStorage) -> Bool {
         let sel = tv.selectedRange()
-        guard sel.length == 0,
-              sel.location < ts.length,
-              (ts.string as NSString).character(at: sel.location) == 0xFFFC
-        else { return false }
+        guard sel.length == 0, sel.location < ts.length else { return false }
+        let ns  = ts.string as NSString
+        let ch  = ns.character(at: sel.location)
 
-        let raw = extractRaw(from: ts)
-        var rawLines = raw.components(separatedBy: "\n")
-        let li = lineIndex(for: sel.location, in: ts)
-        guard li < rawLines.count else { return false }
-        let line = rawLines[li]
-        guard line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ") else { return false }
+        if ch == 0xFFFC {
+            // Case 1: cursor sits on the attachment itself — strip the prefix.
+            let raw = extractRaw(from: ts)
+            var rawLines = raw.components(separatedBy: "\n")
+            let li = lineIndex(for: sel.location, in: ts)
+            guard li < rawLines.count else { return false }
+            let line = rawLines[li]
+            guard line.hasPrefix("- [ ] ") || line.lowercased().hasPrefix("- [x] ") else { return false }
 
-        // Strip the checkbox prefix and render as a plain text line.
-        rawLines[li] = String(line.dropFirst(6))
-        let newRaw = rawLines.joined(separator: "\n")
-        registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
-        text = newRaw; committedText = newRaw
-        isRendering = true
-        ts.setAttributedString(buildAttr(newRaw))
-        tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
-        isRendering = false
-        tv.syncTypingAttributes()
-        tv.invalidateIntrinsicContentSize()
-        return true
+            rawLines[li] = String(line.dropFirst(6))
+            let newRaw = rawLines.joined(separator: "\n")
+            registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
+            text = newRaw; committedText = newRaw
+            isRendering = true
+            ts.setAttributedString(buildAttr(newRaw))
+            tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
+            isRendering = false
+            tv.syncTypingAttributes()
+            tv.invalidateIntrinsicContentSize()
+            return true
+        }
+
+        if ch == 0x0A {
+            // Case 2: cursor at end-of-line; check if the NEXT line starts with a checkbox.
+            let nextIdx = sel.location + 1
+            guard nextIdx < ts.length, ns.character(at: nextIdx) == 0xFFFC else { return false }
+
+            let raw = extractRaw(from: ts)
+            var rawLines = raw.components(separatedBy: "\n")
+            let li = lineIndex(for: sel.location, in: ts)
+            guard li + 1 < rawLines.count else { return false }
+            let nextLine = rawLines[li + 1]
+            guard nextLine.hasPrefix("- [ ] ") || nextLine.lowercased().hasPrefix("- [x] ") else { return false }
+
+            // Merge: append next line's content (no prefix) to current line, remove next line.
+            rawLines[li] += String(nextLine.dropFirst(6))
+            rawLines.remove(at: li + 1)
+            let newRaw = rawLines.joined(separator: "\n")
+            // Cursor stays at sel.location (the former '\n' position, now within the merged line).
+            registerStructuralUndo(tv: tv, oldRaw: committedText, newRaw: newRaw)
+            text = newRaw; committedText = newRaw
+            isRendering = true
+            ts.setAttributedString(buildAttr(newRaw))
+            tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
+            isRendering = false
+            tv.syncTypingAttributes()
+            tv.invalidateIntrinsicContentSize()
+            return true
+        }
+
+        return false
     }
 
     // MARK: Helpers
