@@ -344,41 +344,31 @@ struct URLBadgeIcon: View {
     let url: String
     @State private var isHovered = false
 
-    private var displayLabel: String {
-        let normalized = normalizeURL(url)
-        if let u = URL(string: normalized), let host = u.host, !host.isEmpty {
-            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-        }
-        // Opaque URI (spotify:, mailto:, etc.) — show just the scheme
-        return URL(string: url)?.scheme ?? url
-    }
-
     var body: some View {
         Button(action: openInBrowser) {
-            HStack(spacing: 3) {
-                Image(systemName: "globe")
-                    .font(.system(size: 10))
-                    .foregroundStyle(isHovered ? AppTheme.accentDark : AppTheme.accentLight)
-                if isHovered {
-                    Text(displayLabel)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(AppTheme.accentDark)
-                        .lineLimit(1)
-                        .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(AppTheme.accentLight.opacity(isHovered ? 0.22 : 0.12))
-            )
-            .animation(.easeInOut(duration: 0.12), value: isHovered)
+            Image(systemName: "globe")
+                .font(.system(size: 10))
+                .foregroundStyle(isHovered ? AppTheme.accentDark : AppTheme.accentLight)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.accentLight.opacity(isHovered ? 0.22 : 0.12))
+                )
+                .animation(.easeInOut(duration: 0.12), value: isHovered)
         }
         .buttonStyle(.plain)
         .pointerCursor()
         .onHover { isHovered = $0 }
-        .help(url)
+        .popover(isPresented: $isHovered, arrowEdge: .bottom) {
+            Text(url)
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.textPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: 280)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         .accessibilityLabel("Open URL: \(url)")
     }
 
