@@ -174,9 +174,13 @@ func normalizeURL(_ raw: String) -> String {
         if !isPort {
             // Empty afterColon with a path/query after the authority means this is
             // a URI scheme followed by a hierarchical or path component
-            // (e.g. com.example.app:/oauth, http:/page). Leave such inputs as-is
-            // rather than prepending https://.
-            if afterColon.isEmpty && authEnd < s.endIndex { return s }
+            // (e.g. com.example.app:/oauth). Leave non-web schemes as-is.
+            // http:/ and https:/ are typos — fall through so they are not silently
+            // preserved as malformed URLs.
+            if afterColon.isEmpty && authEnd < s.endIndex {
+                let schemeName = String(authority[colonSearchFrom..<colon]).lowercased()
+                if schemeName != "http" && schemeName != "https" { return s }
+            }
             // Treat as URI scheme (mailto:, tel:, spotify:, etc.) only when the
             // part before the colon contains no dot.  No registered URI scheme
             // name includes a dot, so a dot signals a hostname (e.g. example.com:abc)

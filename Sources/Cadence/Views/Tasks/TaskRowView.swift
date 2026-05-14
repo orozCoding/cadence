@@ -35,6 +35,7 @@ struct TaskRowView: View {
             }
             .buttonStyle(.plain)
             .pointerCursor()
+            .accessibilityLabel(task.isDone ? "Mark as To Do" : "Mark as Done")
 
             // Title + body
             VStack(alignment: .leading, spacing: 2) {
