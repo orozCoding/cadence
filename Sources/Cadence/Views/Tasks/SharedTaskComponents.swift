@@ -206,6 +206,24 @@ struct URLEditSection: View {
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
 
+                    if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button(action: {
+                            let normalized = normalizeURL(urls[i])
+                            guard let u = URL(string: normalized) else { return }
+                            NSWorkspace.shared.open(u)
+                        }) {
+                            Image(systemName: "arrow.up.forward.square")
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .pointerCursor()
+                        .help("Open URL in browser")
+                        .accessibilityLabel("Open URL in browser")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .animation(.easeInOut(duration: 0.12), value: urls[i].isEmpty)
+                    }
+
                     if urls.count > 1 {
                         Button(action: {
                             var nextUrls = urls
@@ -245,17 +263,36 @@ struct URLBadgeIcon: View {
     let url: String
     @State private var isHovered = false
 
+    private var displayLabel: String {
+        let normalized = normalizeURL(url)
+        if let u = URL(string: normalized), let host = u.host, !host.isEmpty {
+            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        }
+        // Opaque URI (spotify:, mailto:, etc.) — show just the scheme
+        return URL(string: url)?.scheme ?? url
+    }
+
     var body: some View {
         Button(action: openInBrowser) {
-            Image(systemName: "globe")
-                .font(.system(size: 10))
-                .foregroundStyle(isHovered ? AppTheme.accentDark : AppTheme.accentLight)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.accentLight.opacity(isHovered ? 0.22 : 0.12))
-                )
+            HStack(spacing: 3) {
+                Image(systemName: "globe")
+                    .font(.system(size: 10))
+                    .foregroundStyle(isHovered ? AppTheme.accentDark : AppTheme.accentLight)
+                if isHovered {
+                    Text(displayLabel)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(AppTheme.accentDark)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(AppTheme.accentLight.opacity(isHovered ? 0.22 : 0.12))
+            )
+            .animation(.easeInOut(duration: 0.12), value: isHovered)
         }
         .buttonStyle(.plain)
         .pointerCursor()
