@@ -140,6 +140,18 @@ private final class BodyNSTextView: NSTextView {
         }.joined(separator: "\n")
     }
 
+    // Sync typingAttributes with the attributes at the current caret position.
+    // Call this after every programmatic setSelectedRange so that the next
+    // inserted character inherits the correct style (e.g. strikethrough on
+    // a checked line) rather than stale or default attributes.
+    func syncTypingAttributes() {
+        guard let ts = textStorage else { return }
+        let pos = selectedRange().location
+        if pos < ts.length {
+            typingAttributes = ts.attributes(at: pos, effectiveRange: nil)
+        }
+    }
+
     // Force plain-text-only paste so that rich-text pastes from external sources
     // don't introduce foreign attributes that bypass our AppTheme normalization.
     override func paste(_ sender: Any?) {
@@ -304,6 +316,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         committedText = raw
         tv.invalidateIntrinsicContentSize()
         isRendering = false
+        tv.syncTypingAttributes()
     }
 
     // MARK: Checkbox toggle
@@ -373,6 +386,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             // `[]` (2 display chars) → `[FFFC]` (1 display char): shift cursor back by 1.
             tv.setSelectedRange(NSRange(location: min(max(0, sel.location - 1), newLen), length: 0))
             isRendering = false
+            tv.syncTypingAttributes()
         } else {
             // Check if the display structure is out of sync with the raw text.
             // This catches pasted checkbox syntax (including "- [X] " capital X)
@@ -391,6 +405,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
                 ts.setAttributedString(newAttr)
                 tv.setSelectedRange(NSRange(location: min(sel.location, ts.length), length: 0))
                 isRendering = false
+                tv.syncTypingAttributes()
             }
         }
 
@@ -494,6 +509,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             let newLinePos = displayLineStart(li, in: tv)
             tv.setSelectedRange(NSRange(location: min(newLinePos, ts.length), length: 0))
             isRendering = false
+            tv.syncTypingAttributes()
             tv.invalidateIntrinsicContentSize()
         } else {
             // Split content at cursor using UTF-16 offsets (NSTextView cursor is UTF-16).
@@ -525,6 +541,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
             let newLinePos = lineContentStart(li + 1, in: tv)
             tv.setSelectedRange(NSRange(location: min(newLinePos, newLen), length: 0))
             isRendering = false
+            tv.syncTypingAttributes()
             tv.invalidateIntrinsicContentSize()
         }
         return true
@@ -583,6 +600,7 @@ private final class BodyEditorCoordinator: NSObject, NSTextViewDelegate {
         ts.setAttributedString(newAttr)
         tv.setSelectedRange(NSRange(location: min(newCursor, ts.length), length: 0))
         isRendering = false
+        tv.syncTypingAttributes()
         tv.invalidateIntrinsicContentSize()
         return true
     }
