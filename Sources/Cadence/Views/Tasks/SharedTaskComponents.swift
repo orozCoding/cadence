@@ -142,6 +142,16 @@ func normalizeURL(_ raw: String) -> String {
             return "http://" + s
         }
     }
+    // Private/link-local IPv4 ranges → http (these rarely have TLS certs).
+    // Extract the host portion (up to the first : / ? #) and parse octets.
+    let hostPart = lower.prefix(while: { $0 != ":" && $0 != "/" && $0 != "?" && $0 != "#" })
+    let octets = hostPart.split(separator: ".").compactMap { Int($0) }
+    if octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) {
+        let (a, b) = (octets[0], octets[1])
+        if a == 10 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168) || (a == 169 && b == 254) {
+            return "http://" + s
+        }
+    }
     // Distinguish host:port from a non-authority URI scheme (mailto:, tel:, spotify:, etc.).
     // Only inspect the authority portion — before the first / ? # — so that a colon inside
     // a query string (e.g. example.com?next=foo:bar) is not mistaken for a scheme separator.
@@ -206,7 +216,8 @@ struct URLEditSection: View {
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
 
-                    if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       URL(string: normalizeURL(urls[i])) != nil {
                         Button(action: {
                             let normalized = normalizeURL(urls[i])
                             guard let u = URL(string: normalized) else { return }
