@@ -196,63 +196,81 @@ struct URLEditSection: View {
         self._entryIds = State(initialValue: urls.wrappedValue.map { _ in UUID() })
     }
 
+    // Rows beyond this threshold scroll inside a fixed-height container so the
+    // deadline pickers and Save button are never pushed off-screen.
+    private static let scrollThreshold = 4
+
+    @ViewBuilder
+    private var urlRows: some View {
+        ForEach(Array(zip(entryIds, urls.indices)), id: \.0) { _, i in
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 13))
+                    .foregroundStyle(urls[i].isEmpty ? AppTheme.textTertiary : AppTheme.accent)
+                    .frame(width: 16)
+                    .animation(.easeInOut(duration: 0.15), value: urls[i].isEmpty)
+
+                TextField("Paste a URL...", text: $urls[i])
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
+
+                if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   URL(string: normalizeURL(urls[i])) != nil {
+                    Button(action: {
+                        let normalized = normalizeURL(urls[i])
+                        guard let u = URL(string: normalized) else { return }
+                        NSWorkspace.shared.open(u)
+                    }) {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .help("Open link")
+                    .accessibilityLabel("Open \(urls[i])")
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .animation(.easeInOut(duration: 0.12), value: urls[i].isEmpty)
+                }
+
+                if urls.count > 1 {
+                    Button(action: {
+                        var nextUrls = urls
+                        var nextIds = entryIds
+                        nextUrls.remove(at: i)
+                        nextIds.remove(at: i)
+                        urls = nextUrls
+                        entryIds = nextIds
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerCursor()
+                    .accessibilityLabel("Remove \(urls[i].isEmpty ? "empty URL" : urls[i])")
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("URLs", systemImage: "globe")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
 
-            ForEach(Array(zip(entryIds, urls.indices)), id: \.0) { _, i in
-                HStack(spacing: 8) {
-                    Image(systemName: "globe")
-                        .font(.system(size: 13))
-                        .foregroundStyle(urls[i].isEmpty ? AppTheme.textTertiary : AppTheme.accent)
-                        .frame(width: 16)
-                        .animation(.easeInOut(duration: 0.15), value: urls[i].isEmpty)
-
-                    TextField("Paste a URL...", text: $urls[i])
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(AppTheme.sidebarBackground))
-
-                    if !urls[i].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                       URL(string: normalizeURL(urls[i])) != nil {
-                        Button(action: {
-                            let normalized = normalizeURL(urls[i])
-                            guard let u = URL(string: normalized) else { return }
-                            NSWorkspace.shared.open(u)
-                        }) {
-                            Image(systemName: "arrow.up.forward.square")
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                        .buttonStyle(.plain)
-                        .pointerCursor()
-                        .help("Open URL in browser")
-                        .accessibilityLabel("Open \(urls[i]) in browser")
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        .animation(.easeInOut(duration: 0.12), value: urls[i].isEmpty)
-                    }
-
-                    if urls.count > 1 {
-                        Button(action: {
-                            var nextUrls = urls
-                            var nextIds = entryIds
-                            nextUrls.remove(at: i)
-                            nextIds.remove(at: i)
-                            urls = nextUrls
-                            entryIds = nextIds
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(AppTheme.textTertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .pointerCursor()
-                        .accessibilityLabel("Remove \(urls[i].isEmpty ? "empty URL" : urls[i])")
-                    }
+            // When few rows are present use a plain VStack; beyond the threshold
+            // wrap in a fixed-height ScrollView so the footer never overflows.
+            if urls.count <= URLEditSection.scrollThreshold {
+                VStack(spacing: 8) { urlRows }
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) { urlRows }
                 }
+                .frame(height: 176)
             }
 
             if !(urls.last?.isEmpty ?? true) && urls.count < 10 {
