@@ -69,6 +69,10 @@ struct DataBackupSection: View {
                     Button {
                         BackupService.clearPreImportSnapshot()
                         canRestore = BackupService.hasPreImportSnapshot()
+                        // The service clears the interrupted-import flag
+                        // alongside the snapshot — refresh the banner state
+                        // so we never advertise a restore that can't succeed.
+                        hadInterruptedImport = BackupService.hasInterruptedImport()
                     } label: {
                         Text("Forget snapshot")
                             .font(.system(size: 12))
@@ -161,9 +165,10 @@ struct DataBackupSection: View {
                     .pointerCursor()
 
                     Button {
-                        // Clearing the flag is the only way to dismiss the banner;
-                        // the snapshot is kept so the user can still restore later.
-                        UserDefaults.standard.removeObject(forKey: BackupService.importInProgressKey)
+                        // Dismiss the banner but keep the snapshot so the
+                        // user can still restore later from the regular
+                        // "Restore previous data" button below.
+                        BackupService.dismissInterruptedImportFlag()
                         hadInterruptedImport = false
                     } label: {
                         Text("Dismiss")

@@ -140,8 +140,21 @@ enum BackupService {
 
     /// Forget the pre-import snapshot (e.g. once the user is confident the
     /// import worked and they don't want the rollback to keep showing up).
+    ///
+    /// Also clears the interrupted-import flag, because without a snapshot
+    /// the recovery banner has nothing to offer — leaving it set would
+    /// advertise a "Restore previous data" button that can only fail.
     static func clearPreImportSnapshot() {
-        UserDefaults.standard.removeObject(forKey: preImportSnapshotKey)
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: preImportSnapshotKey)
+        defaults.removeObject(forKey: importInProgressKey)
+    }
+
+    /// Dismiss the interrupted-import banner without touching the rollback
+    /// snapshot. Used when the user has visually confirmed the imported
+    /// state looks correct but wants to keep the option to roll back.
+    static func dismissInterruptedImportFlag() {
+        UserDefaults.standard.removeObject(forKey: importInProgressKey)
     }
 
     /// Suggested filename for a fresh export, e.g. `cadence-backup-2026-05-15.json`.
