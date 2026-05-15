@@ -14,6 +14,9 @@ struct DataBackupSection: View {
     @State private var errorMessage: String?
     @State private var infoMessage: String?
     @State private var shareAnchor: NSView?
+    @State private var canRestore = BackupService.hasPreImportSnapshot()
+    @State private var hadInterruptedImport = BackupService.hasInterruptedImport()
+    @State private var showRestoreConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -25,6 +28,10 @@ struct DataBackupSection: View {
                 .font(.system(size: 11))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if hadInterruptedImport {
+                interruptedImportBanner
+            }
 
             HStack(spacing: 8) {
                 ShareAnchorButton(
@@ -48,6 +55,33 @@ struct DataBackupSection: View {
                 Spacer()
             }
 
+            if canRestore {
+                HStack(spacing: 8) {
+                    Button {
+                        showRestoreConfirm = true
+                    } label: {
+                        Label("Restore previous data", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.bordered)
+                    .pointerCursor()
+                    .accessibilityHint("Roll back to the state captured just before the most recent import")
+
+                    Button {
+                        BackupService.clearPreImportSnapshot()
+                        canRestore = BackupService.hasPreImportSnapshot()
+                    } label: {
+                        Text("Forget snapshot")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .pointerCursor()
+                    .accessibilityHint("Discard the rollback snapshot from the most recent import")
+
+                    Spacer()
+                }
+            }
+
             if let infoMessage {
                 Text(infoMessage)
                     .font(.system(size: 11))
@@ -59,6 +93,27 @@ struct DataBackupSection: View {
                     .foregroundStyle(AppTheme.destructive)
             }
         }
+        .onAppear {
+            canRestore = BackupService.hasPreImportSnapshot()
+            hadInterruptedImport = BackupService.hasInterruptedImport()
+        }
+        .alert("Restore previous data?", isPresented: $showRestoreConfirm) {
+            Button("Restore", role: .destructive) {
+                let ok = BackupService.restoreLastPreImport()
+                if ok {
+                    infoMessage = "Restored data from before the most recent import."
+                    errorMessage = nil
+                    hadInterruptedImport = BackupService.hasInterruptedImport()
+                    canRestore = BackupService.hasPreImportSnapshot()
+                } else {
+                    errorMessage = "No rollback snapshot was available."
+                    infoMessage = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This replaces every task, folder, focus-time entry, and preference with the snapshot captured just before your most recent import.")
+        }
         .alert("Import will replace all local data", isPresented: $showImportConfirm, presenting: pendingImport) { backup in
             Button("Replace and Import", role: .destructive) {
                 BackupService.apply(backup)
@@ -66,6 +121,8 @@ struct DataBackupSection: View {
                 errorMessage = nil
                 pendingImport = nil
                 pendingImportFilename = nil
+                canRestore = BackupService.hasPreImportSnapshot()
+                hadInterruptedImport = BackupService.hasInterruptedImport()
             }
             Button("Cancel", role: .cancel) {
                 pendingImport = nil
@@ -74,8 +131,58 @@ struct DataBackupSection: View {
         } message: { backup in
             let exported = ISO8601DateFormatter().string(from: backup.exportedAt)
             let source = pendingImportFilename ?? "this file"
-            Text("Importing from \(source) (exported \(exported)) will overwrite every task, folder, focus-time entry, and preference currently in Cadence. This cannot be undone.")
+            Text("Importing from \(source) (exported \(exported)) will overwrite every task, folder, focus-time entry, and preference currently in Cadence. You'll be able to roll back from the Data section if needed.")
         }
+    }
+
+    /// Banner shown when an `apply()` started but never cleared its
+    /// in-progress flag — almost certainly because the app crashed or was
+    /// killed mid-import. Offers a one-click rollback before any further
+    /// mutation can happen.
+    private var interruptedImportBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(AppTheme.destructive)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Last import didn't finish")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Cadence detected that an import was interrupted. You can restore the snapshot captured just before it started, or dismiss this warning if everything looks correct.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button {
+                        showRestoreConfirm = true
+                    } label: {
+                        Text("Restore previous data")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .pointerCursor()
+
+                    Button {
+                        // Clearing the flag is the only way to dismiss the banner;
+                        // the snapshot is kept so the user can still restore later.
+                        UserDefaults.standard.removeObject(forKey: BackupService.importInProgressKey)
+                        hadInterruptedImport = false
+                    } label: {
+                        Text("Dismiss")
+                    }
+                    .buttonStyle(.bordered)
+                    .pointerCursor()
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(AppTheme.destructive.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(AppTheme.destructive.opacity(0.35), lineWidth: 1)
+        )
     }
 
     // MARK: - Export + share

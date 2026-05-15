@@ -66,14 +66,22 @@ enum BackupService {
     /// give the user a recovery path if anything goes wrong: at worst they
     /// re-run the app and call `restoreLastPreImport()`.
     static func apply(_ backup: CadenceBackup) {
-        let defaults = UserDefaults.standard
-
         // Stash the current snapshot so a bad import can be rolled back.
         // Failure to encode here is logged but doesn't block import — the
         // user already confirmed; refusing now would be more surprising.
         if let preImportData = try? encode(makeBackup()) {
-            defaults.set(preImportData, forKey: preImportSnapshotKey)
+            UserDefaults.standard.set(preImportData, forKey: preImportSnapshotKey)
         }
+        applyToStores(backup)
+    }
+
+    /// Performs the actual store mutations + interrupted-import flag
+    /// bookkeeping. Split out so `restoreLastPreImport()` can replay the
+    /// pre-import snapshot without clobbering the very snapshot it just
+    /// read — taking a fresh `makeBackup()` of the partial/bad state at the
+    /// start of a restore would destroy the only known-good rollback.
+    private static func applyToStores(_ backup: CadenceBackup) {
+        let defaults = UserDefaults.standard
         defaults.set(true, forKey: importInProgressKey)
 
         // Make sure every task points to a folder that exists. Tasks whose
@@ -107,17 +115,33 @@ enum BackupService {
         UserDefaults.standard.bool(forKey: importInProgressKey)
     }
 
+    /// True if a pre-import snapshot is available to roll back to. Drives
+    /// whether the Settings UI shows the "Restore previous data" button.
+    static func hasPreImportSnapshot() -> Bool {
+        UserDefaults.standard.data(forKey: preImportSnapshotKey) != nil
+    }
+
     /// Roll back to the snapshot captured just before the most recent
     /// `apply` call. Returns false if no snapshot is available (e.g. the
     /// user has never imported, or the snapshot was cleared).
+    ///
+    /// Restore writes directly via `applyToStores` so the existing
+    /// pre-import snapshot is preserved — if the restore itself is
+    /// interrupted, the user can run it again.
     @discardableResult
     static func restoreLastPreImport() -> Bool {
         guard let data = UserDefaults.standard.data(forKey: preImportSnapshotKey),
               let snapshot = try? decode(data) else {
             return false
         }
-        apply(snapshot)
+        applyToStores(snapshot)
         return true
+    }
+
+    /// Forget the pre-import snapshot (e.g. once the user is confident the
+    /// import worked and they don't want the rollback to keep showing up).
+    static func clearPreImportSnapshot() {
+        UserDefaults.standard.removeObject(forKey: preImportSnapshotKey)
     }
 
     /// Suggested filename for a fresh export, e.g. `cadence-backup-2026-05-15.json`.
