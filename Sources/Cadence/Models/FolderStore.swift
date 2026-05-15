@@ -84,6 +84,28 @@ final class FolderStore: ObservableObject {
         saveFolders()
     }
 
+    /// Replace the entire folder list (and optionally the active folder) in a
+    /// single atomic step. Used by the backup import flow.
+    ///
+    /// The General folder is always re-inserted at index 0 if missing so the
+    /// app's invariant ("General always exists") is preserved even if the
+    /// imported file is malformed.
+    func replaceAll(folders newFolders: [Folder], activeFolderID: UUID?) {
+        var merged = newFolders
+        if !merged.contains(where: { $0.id == .generalFolderID }) {
+            merged.insert(Folder(id: .generalFolderID, name: "General"), at: 0)
+        }
+        folders = merged
+        dataIsReadable = true
+        saveFolders()
+
+        if let id = activeFolderID, let match = merged.first(where: { $0.id == id }) {
+            setActive(match)
+        } else {
+            setActive(merged[0])
+        }
+    }
+
     private func saveFolders() {
         guard dataIsReadable else { return }  // Don't overwrite potentially-recoverable corrupt data
         guard let data = try? JSONEncoder().encode(folders) else { return }

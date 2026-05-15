@@ -45,6 +45,13 @@ final class TaskStore: ObservableObject {
         save()
     }
 
+    /// Replace every task wholesale. Used by the backup import flow so the
+    /// imported file becomes the new source of truth.
+    func replaceAll(_ newTasks: [CadenceTask]) {
+        tasks = newTasks
+        save()
+    }
+
     // MARK: - Filtered views (folder-scoped)
 
     func tasks(forDay date: Date, folderId: UUID) -> [CadenceTask] {

@@ -209,6 +209,9 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                // Data (Export / Import) section
+                DataBackupSection()
             }
             .padding(24)
             .frame(maxWidth: 480, alignment: .leading)

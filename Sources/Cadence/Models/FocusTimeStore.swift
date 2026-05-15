@@ -84,6 +84,15 @@ final class FocusTimeStore: ObservableObject {
         save()
     }
 
+    /// Replace every focus-time entry with the supplied map. Used by the
+    /// backup import flow. Non-positive values are filtered out to keep the
+    /// stored map sparse (matching `setDay` semantics).
+    func replaceAll(_ daily: [String: Int]) {
+        dailySeconds = daily.filter { $0.value > 0 }
+        ticksSinceSave = 0
+        save()
+    }
+
     // MARK: - Helpers
 
     func dayKey(for date: Date) -> String { df.string(from: date) }
