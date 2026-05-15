@@ -45,10 +45,38 @@ final class TaskStore: ObservableObject {
         save()
     }
 
-    /// Replace every task wholesale. Used by the backup import flow so the
-    /// imported file becomes the new source of truth.
+    /// Replace every task wholesale. Used by `restoreLastPreImport` so a
+    /// rollback fully reverts to the snapshot captured before the import,
+    /// even if the user added tasks afterwards.
     func replaceAll(_ newTasks: [CadenceTask]) {
         tasks = newTasks
+        save()
+    }
+
+    /// Overlay incoming tasks onto the current list. Tasks present in both
+    /// lists (same `id`) are updated to the incoming version. Tasks in the
+    /// incoming list but not local are appended. Local-only tasks are left
+    /// alone — this is the regular import path, where merging across
+    /// devices must not delete work done on the destination.
+    ///
+    /// Defensive against a malformed backup that contains duplicate IDs:
+    /// later occurrences win the lookup, and each ID is appended at most
+    /// once. The original local ordering of pre-existing tasks is preserved.
+    func mergeIn(_ incoming: [CadenceTask]) {
+        var incomingByID: [UUID: CadenceTask] = [:]
+        for task in incoming { incomingByID[task.id] = task }
+
+        var appliedIDs = Set<UUID>()
+        for i in tasks.indices {
+            if let updated = incomingByID[tasks[i].id] {
+                tasks[i] = updated
+                appliedIDs.insert(updated.id)
+            }
+        }
+        for task in incoming where !appliedIDs.contains(task.id) {
+            tasks.append(task)
+            appliedIDs.insert(task.id)
+        }
         save()
     }
 

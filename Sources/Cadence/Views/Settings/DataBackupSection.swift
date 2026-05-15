@@ -4,9 +4,16 @@ import UniformTypeIdentifiers
 
 /// Settings section that lets the user export every piece of app state to a
 /// single JSON file (and immediately share it through the system share
-/// sheet) or import such a file to restore everything on a different
-/// machine. "Everything" means tasks, folders, focus history, preferences,
-/// and the active folder — anything the app persists.
+/// sheet) or merge such a file into the local state to sync across
+/// machines.
+///
+/// Import semantics are **merge**, not replace: tasks and folders sharing
+/// an ID with the file get the file's version; focus-time days present in
+/// the file overwrite the local value for those days; preferences come
+/// from the file wholesale. Anything local that the file doesn't mention
+/// is preserved — work done on the destination device since the export is
+/// not lost. (Rollback, by contrast, is a full replace — see
+/// `BackupService.restoreLastPreImport`.)
 struct DataBackupSection: View {
     @State private var showImportConfirm = false
     @State private var pendingImport: CadenceBackup?
@@ -24,7 +31,7 @@ struct DataBackupSection: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
 
-            Text("Back up everything — tasks, folders, focus history, and preferences — to a single file you can move between machines.")
+            Text("Back up everything — tasks, folders, focus history, and preferences — to a single file you can move between machines. Importing merges into your local data: anything not in the file is kept.")
                 .font(.system(size: 11))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +57,7 @@ struct DataBackupSection: View {
                 }
                 .buttonStyle(.bordered)
                 .pointerCursor()
-                .accessibilityHint("Replace all local data with the contents of a backup file")
+                .accessibilityHint("Merge the contents of a backup file into your local data")
 
                 Spacer()
             }
@@ -118,10 +125,10 @@ struct DataBackupSection: View {
         } message: {
             Text("This replaces every task, folder, focus-time entry, and preference with the snapshot captured just before your most recent import.")
         }
-        .alert("Import will replace all local data", isPresented: $showImportConfirm, presenting: pendingImport) { backup in
-            Button("Replace and Import", role: .destructive) {
+        .alert("Merge backup into local data?", isPresented: $showImportConfirm, presenting: pendingImport) { backup in
+            Button("Import", role: .destructive) {
                 BackupService.apply(backup)
-                infoMessage = "Imported \(backup.tasks.count) tasks, \(backup.folders.count) folders, and \(backup.focusDailySeconds.count) focus days."
+                infoMessage = "Merged \(backup.tasks.count) tasks, \(backup.folders.count) folders, and \(backup.focusDailySeconds.count) focus days from the file."
                 errorMessage = nil
                 pendingImport = nil
                 pendingImportFilename = nil
@@ -135,7 +142,7 @@ struct DataBackupSection: View {
         } message: { backup in
             let exported = ISO8601DateFormatter().string(from: backup.exportedAt)
             let source = pendingImportFilename ?? "this file"
-            Text("Importing from \(source) (exported \(exported)) will overwrite every task, folder, focus-time entry, and preference currently in Cadence. You'll be able to roll back from the Data section if needed.")
+            Text("Importing from \(source) (exported \(exported)) will merge the file into your local data. Tasks and folders that share an ID with the file are replaced with the file's version; focus history is updated for days in the file. Local items not in the file are kept. Preferences are taken from the file. You'll be able to roll back from the Data section if needed.")
         }
     }
 
