@@ -40,6 +40,13 @@
 		B0000075 /* timer_finished_song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = B0000065 /* timer_finished_song.mp3 */; };
 		B0000076 /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000066 /* SoundManager.swift */; };
 		B0000078 /* DockIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000077 /* DockIconController.swift */; };
+		B0000090 /* CadenceBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000091 /* CadenceBackup.swift */; };
+		B0000092 /* BackupSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000093 /* BackupSettings.swift */; };
+		B0000094 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000095 /* BackupService.swift */; };
+		B0000096 /* DataBackupSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000097 /* DataBackupSection.swift */; };
+		B0000098 /* ShareAnchorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000099 /* ShareAnchorButton.swift */; };
+		B000009A /* BackupHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009B /* BackupHeader.swift */; };
+		B000009C /* BackupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009D /* BackupError.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,6 +84,13 @@
 		B0000065 /* timer_finished_song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = timer_finished_song.mp3; sourceTree = "<group>"; };
 		B0000066 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		B0000077 /* DockIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockIconController.swift; sourceTree = "<group>"; };
+		B0000091 /* CadenceBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CadenceBackup.swift; sourceTree = "<group>"; };
+		B0000093 /* BackupSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSettings.swift; sourceTree = "<group>"; };
+		B0000095 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		B0000097 /* DataBackupSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataBackupSection.swift; sourceTree = "<group>"; };
+		B0000099 /* ShareAnchorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnchorButton.swift; sourceTree = "<group>"; };
+		B000009B /* BackupHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHeader.swift; sourceTree = "<group>"; };
+		B000009D /* BackupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupError.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +161,8 @@
 		B0000069 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B000009D /* BackupError.swift */,
+				B0000095 /* BackupService.swift */,
 				B0000066 /* SoundManager.swift */,
 			);
 			path = Services;
@@ -165,6 +181,9 @@
 			isa = PBXGroup;
 			children = (
 				B0000022 /* AppSettings.swift */,
+				B000009B /* BackupHeader.swift */,
+				B0000093 /* BackupSettings.swift */,
+				B0000091 /* CadenceBackup.swift */,
 				B0000032 /* Folder.swift */,
 				B0000033 /* FolderStore.swift */,
 				B0000034 /* FocusTimeStore.swift */,
@@ -198,7 +217,9 @@
 		B0000015 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				B0000097 /* DataBackupSection.swift */,
 				B0000027 /* SettingsView.swift */,
+				B0000099 /* ShareAnchorButton.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -336,6 +357,13 @@
 				B0000057 /* FocusTimeView.swift in Sources */,
 				B0000076 /* SoundManager.swift in Sources */,
 				B0000078 /* DockIconController.swift in Sources */,
+				B0000090 /* CadenceBackup.swift in Sources */,
+				B0000092 /* BackupSettings.swift in Sources */,
+				B0000094 /* BackupService.swift in Sources */,
+				B0000096 /* DataBackupSection.swift in Sources */,
+				B0000098 /* ShareAnchorButton.swift in Sources */,
+				B000009A /* BackupHeader.swift in Sources */,
+				B000009C /* BackupError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

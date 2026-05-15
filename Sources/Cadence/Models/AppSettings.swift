@@ -119,4 +119,26 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(timerDirection.rawValue, forKey: "timerDirection")
         UserDefaults.standard.set(animateDockIcon, forKey: "animateDockIcon")
     }
+
+    /// Apply a settings snapshot from a backup file. Unknown raw values fall
+    /// back to the current value so a partially-corrupt backup leaves the
+    /// rest of the preferences intact rather than resetting them to defaults.
+    func apply(_ backup: BackupSettings) {
+        weekStartsOn      = Weekday(rawValue: backup.weekStartsOn) ?? weekStartsOn
+        timerFinishSound  = TimerFinishSound(rawValue: backup.timerFinishSound) ?? timerFinishSound
+        timerStyle        = TimerStyle(rawValue: backup.timerStyle) ?? timerStyle
+        timerDirection    = TimerDirection(rawValue: backup.timerDirection) ?? timerDirection
+        animateDockIcon   = backup.animateDockIcon
+    }
+
+    /// Capture the current preferences as a portable snapshot.
+    func snapshot() -> BackupSettings {
+        BackupSettings(
+            weekStartsOn: weekStartsOn.rawValue,
+            timerFinishSound: timerFinishSound.rawValue,
+            timerStyle: timerStyle.rawValue,
+            timerDirection: timerDirection.rawValue,
+            animateDockIcon: animateDockIcon
+        )
+    }
 }

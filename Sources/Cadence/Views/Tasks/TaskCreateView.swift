@@ -25,6 +25,11 @@ struct TaskCreateView: View {
     // (goBack / save button) and .onDisappear both fire in the same session.
     @State private var taskSaved = false
 
+    // Set when a full-data import / restore lands while this draft is open.
+    // Every save path early-returns when this is true, so the editor cannot
+    // resurrect a pre-import draft on dismiss. See onReceive below.
+    @State private var dataWasReplaced = false
+
     // Captured at onAppear so a folder switch mid-edit cannot redirect the new task
     // to a different folder (folderStore.activeFolder changes before onDisappear fires).
     @State private var capturedFolderId: UUID? = nil
@@ -222,6 +227,14 @@ struct TaskCreateView: View {
             historySnapshotTask?.cancel()
             saveIfPossible()
         }
+        .onReceive(NotificationCenter.default.publisher(for: BackupService.dataWillBeReplacedNotification)) { _ in
+            // A backup import or rollback is about to overwrite the task
+            // store. Cancel pending writes and exit without saving so a
+            // stale draft cannot land on top of the imported state.
+            dataWasReplaced = true
+            historySnapshotTask?.cancel()
+            onBack()
+        }
     }
 
     // MARK: - Navigation
@@ -239,7 +252,7 @@ struct TaskCreateView: View {
     // The taskSaved flag prevents a second store.add() when onDisappear fires
     // after goBack() or save() have already persisted the task.
     private func saveIfPossible() {
-        guard !taskSaved, canSave else { return }
+        guard !dataWasReplaced, !taskSaved, canSave else { return }
         let folderId = capturedFolderId ?? folderStore.activeFolder.id
         let deadlineErrors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
@@ -272,7 +285,7 @@ struct TaskCreateView: View {
     // MARK: - Explicit save (Add Task button)
 
     private func save() {
-        guard !taskSaved else { return }
+        guard !dataWasReplaced, !taskSaved else { return }
         let folderId = capturedFolderId ?? folderStore.activeFolder.id
         var errors = CadenceTask.validate(
             day: enableDay ? dayDate.noonLocal() : nil,
