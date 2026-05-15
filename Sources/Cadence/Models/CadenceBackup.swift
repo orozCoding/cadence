@@ -73,12 +73,20 @@ struct CadenceBackup: Codable, Equatable {
         format = rawFormat
         schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
 
+        // Core payload fields are required as KEYS in the JSON, even if
+        // they decode to empty collections. Otherwise a stub file like
+        // `{"format":"cadence-backup","schemaVersion":1}` would pass and
+        // wipe all local state on import. Genuine "wipe my data" exports
+        // still work because Cadence always emits the keys with empty
+        // arrays/dicts.
+        tasks = try c.decode([CadenceTask].self, forKey: .tasks)
+        folders = try c.decode([Folder].self, forKey: .folders)
+        focusDailySeconds = try c.decode([String: Int].self, forKey: .focusDailySeconds)
+        settings = try c.decode(BackupSettings.self, forKey: .settings)
+
+        // Optional metadata — older or partial files may omit these.
         appVersion = try c.decodeIfPresent(String.self, forKey: .appVersion) ?? ""
         exportedAt = try c.decodeIfPresent(Date.self, forKey: .exportedAt) ?? Date()
-        tasks = try c.decodeIfPresent([CadenceTask].self, forKey: .tasks) ?? []
-        folders = try c.decodeIfPresent([Folder].self, forKey: .folders) ?? []
         activeFolderID = try c.decodeIfPresent(UUID.self, forKey: .activeFolderID)
-        focusDailySeconds = try c.decodeIfPresent([String: Int].self, forKey: .focusDailySeconds) ?? [:]
-        settings = try c.decodeIfPresent(BackupSettings.self, forKey: .settings) ?? BackupSettings()
     }
 }
