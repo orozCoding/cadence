@@ -98,6 +98,51 @@ xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CON
 
 After that, open it from Spotlight, Launchpad, or Finder like any other macOS app. Run the same command whenever you want to update after pulling new changes.
 
+## Shipping Downloadable Releases
+
+GitHub Pages is useful as a landing page, but the downloadable app itself should be distributed through **GitHub Releases**. This repo now includes a release workflow at [`./.github/workflows/release.yml`](./.github/workflows/release.yml) that:
+
+- builds a Release version of `Cadence.app`
+- packages it as `Cadence-macOS.zip`
+- uploads it to the matching GitHub Release when you push a version tag like `v1.0.0`
+
+You can also build the same archive locally:
+
+```bash
+./scripts/package-macos-app.sh
+```
+
+That creates:
+
+```text
+dist/release/Cadence-macOS.zip
+```
+
+### Release flow
+
+1. Commit and push your changes to GitHub
+2. Create and push a version tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+3. Open the repository's **Releases** page on GitHub
+4. Download `Cadence-macOS.zip`
+5. Unzip and drag `Cadence.app` into `/Applications`
+
+### Important macOS note
+
+The current workflow creates an **unsigned** app, which is fine for testing and early sharing, but macOS will warn users that the app is from an unidentified developer.
+
+To make it install more like a "real app", the next step is:
+
+1. Join the Apple Developer Program
+2. Sign the app with a **Developer ID Application** certificate
+3. Notarize the app with Apple
+4. Staple the notarization ticket before uploading the archive
+
+Without signing and notarization, GitHub can host the download, but the install experience will still feel unofficial.
+
 ---
 
 ## Data Storage
