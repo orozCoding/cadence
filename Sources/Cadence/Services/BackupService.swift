@@ -21,10 +21,12 @@ enum BackupService {
     }
 
     /// Build a snapshot containing every piece of user state currently in
-    /// memory. Calls `flushIfNeeded` on the focus store first so any
-    /// in-flight focus seconds from a running timer are included.
+    /// memory. Drains the pomodoro's in-flight focus accumulator (and the
+    /// elapsed fraction since the last tick) before reading so a snapshot
+    /// taken mid-tick reflects the same focus total a `pause()` would have
+    /// credited a moment later.
     static func makeBackup() -> CadenceBackup {
-        FocusTimeStore.shared.flushIfNeeded()
+        PomodoroTimer.shared.creditInFlightFocusTime()
         return CadenceBackup(
             appVersion: appVersionString(),
             tasks: TaskStore.shared.tasks,

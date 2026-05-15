@@ -110,6 +110,28 @@ final class PomodoroTimer: ObservableObject {
         isFinished = false
     }
 
+    /// Credit any whole seconds of in-flight focus time to `FocusTimeStore`
+    /// without pausing or otherwise disturbing a running session. Used by
+    /// the backup export path so a snapshot taken mid-tick reflects the
+    /// same focus total a `pause()` would credit a moment later.
+    ///
+    /// Mirrors the credit logic inside `tick()` and `pause()`. Sub-second
+    /// remainder stays in `focusAccumulator` and will be credited by the
+    /// next regular tick.
+    func creditInFlightFocusTime() {
+        if isRunning {
+            let now = Date()
+            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
+            let wholeSeconds = Int(focusAccumulator)
+            if wholeSeconds > 0 {
+                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
+                focusAccumulator -= TimeInterval(wholeSeconds)
+            }
+            lastTickDate = now
+        }
+        FocusTimeStore.shared.flushIfNeeded()
+    }
+
     private func tick() {
         let now = Date()
         let tickElapsed = now.timeIntervalSince(lastTickDate)
