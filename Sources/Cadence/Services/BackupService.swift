@@ -46,17 +46,78 @@ enum BackupService {
         try decoder.decode(CadenceBackup.self, from: data)
     }
 
+    /// UserDefaults key holding the most recent pre-import snapshot. Used as
+    /// a manual rollback path if an import turns out to have been a mistake
+    /// or was interrupted mid-write. Exposed for `restoreLastPreImport()`.
+    static let preImportSnapshotKey = "cadence_pre_import_snapshot"
+
+    /// UserDefaults flag set just before `apply` mutates anything and cleared
+    /// just after. If it's still set at next launch, an import was
+    /// interrupted and the user can be offered the rollback.
+    static let importInProgressKey = "cadence_import_in_progress"
+
     /// Replace every store's contents with the snapshot. Caller is expected
     /// to confirm with the user first since this overwrites all local data.
+    ///
+    /// The current state is stashed in UserDefaults under
+    /// `preImportSnapshotKey` before any mutation, and an
+    /// `importInProgressKey` marker is raised for the duration. UserDefaults
+    /// does not give us a true cross-key transaction, but together these
+    /// give the user a recovery path if anything goes wrong: at worst they
+    /// re-run the app and call `restoreLastPreImport()`.
     static func apply(_ backup: CadenceBackup) {
+        let defaults = UserDefaults.standard
+
+        // Stash the current snapshot so a bad import can be rolled back.
+        // Failure to encode here is logged but doesn't block import — the
+        // user already confirmed; refusing now would be more surprising.
+        if let preImportData = try? encode(makeBackup()) {
+            defaults.set(preImportData, forKey: preImportSnapshotKey)
+        }
+        defaults.set(true, forKey: importInProgressKey)
+
+        // Make sure every task points to a folder that exists. Tasks whose
+        // `folderId` isn't represented in `backup.folders` would otherwise
+        // be invisible in the UI until the next launch (when FolderStore's
+        // init creates "Recovered" stubs). Re-running that recovery here
+        // keeps the in-memory state consistent immediately after import.
+        let backupFolderIDs = Set(backup.folders.map { $0.id })
+        let referencedFolderIDs = Set(backup.tasks.map { $0.folderId })
+        let missingFolderIDs = referencedFolderIDs.subtracting(backupFolderIDs)
+        var foldersToApply = backup.folders
+        for orphanID in missingFolderIDs where orphanID != .generalFolderID {
+            let shortID = orphanID.uuidString.prefix(8).uppercased()
+            foldersToApply.append(Folder(id: orphanID, name: "Recovered (\(shortID))"))
+        }
+
         // Folders must be replaced first so tasks that reference custom
-        // folder IDs land in valid folders. TaskStore tolerates unknown
-        // folder IDs (FolderStore creates "Recovered" stubs at next launch),
-        // but ordering it this way avoids that fallback in the happy path.
-        FolderStore.shared.replaceAll(folders: backup.folders, activeFolderID: backup.activeFolderID)
+        // folder IDs land in valid folders.
+        FolderStore.shared.replaceAll(folders: foldersToApply, activeFolderID: backup.activeFolderID)
         TaskStore.shared.replaceAll(backup.tasks)
         FocusTimeStore.shared.replaceAll(backup.focusDailySeconds)
         AppSettings.shared.apply(backup.settings)
+
+        defaults.removeObject(forKey: importInProgressKey)
+    }
+
+    /// True if an import was started but never completed (the process was
+    /// killed between the marker being set and `apply` finishing). Callers
+    /// can surface a "your last import didn't finish — restore?" prompt.
+    static func hasInterruptedImport() -> Bool {
+        UserDefaults.standard.bool(forKey: importInProgressKey)
+    }
+
+    /// Roll back to the snapshot captured just before the most recent
+    /// `apply` call. Returns false if no snapshot is available (e.g. the
+    /// user has never imported, or the snapshot was cleared).
+    @discardableResult
+    static func restoreLastPreImport() -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: preImportSnapshotKey),
+              let snapshot = try? decode(data) else {
+            return false
+        }
+        apply(snapshot)
+        return true
     }
 
     /// Suggested filename for a fresh export, e.g. `cadence-backup-2026-05-15.json`.

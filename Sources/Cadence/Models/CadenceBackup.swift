@@ -4,14 +4,21 @@ import Foundation
 /// focus-time history, and preferences. Used to export to and import from a
 /// single JSON file so the user can move state between machines.
 ///
-/// `schemaVersion` lets us evolve the format. Newer fields should be decoded
-/// with `decodeIfPresent` so older backups remain importable.
+/// `format` is a fixed magic marker that prevents an unrelated `.json` file
+/// from being silently treated as a valid (empty) backup. Combined with the
+/// required `schemaVersion`, it makes the import path refuse anything that
+/// wasn't produced by Cadence.
 struct CadenceBackup: Codable, Equatable {
+    /// Magic marker written into every exported file. The decoder rejects
+    /// any input that doesn't carry this exact value.
+    static let formatIdentifier = "cadence-backup"
+
     /// The schema currently produced by this app. Bump when fields are
     /// renamed, removed, or have their semantics changed (additive fields
     /// don't require a bump as long as decoders default sensibly).
     static let currentSchemaVersion = 1
 
+    var format: String
     var schemaVersion: Int
     var appVersion: String
     var exportedAt: Date
@@ -23,6 +30,7 @@ struct CadenceBackup: Codable, Equatable {
     var settings: BackupSettings
 
     init(
+        format: String = CadenceBackup.formatIdentifier,
         schemaVersion: Int = CadenceBackup.currentSchemaVersion,
         appVersion: String,
         exportedAt: Date = Date(),
@@ -32,6 +40,7 @@ struct CadenceBackup: Codable, Equatable {
         focusDailySeconds: [String: Int],
         settings: BackupSettings
     ) {
+        self.format = format
         self.schemaVersion = schemaVersion
         self.appVersion = appVersion
         self.exportedAt = exportedAt
@@ -43,13 +52,27 @@ struct CadenceBackup: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, appVersion, exportedAt
+        case format, schemaVersion, appVersion, exportedAt
         case tasks, folders, activeFolderID, focusDailySeconds, settings
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+
+        // `format` and `schemaVersion` are required and validated up front:
+        // an empty `{}` or unrelated JSON must not silently decode as an
+        // empty-but-valid backup that would wipe local state on apply.
+        let rawFormat = try c.decode(String.self, forKey: .format)
+        guard rawFormat == CadenceBackup.formatIdentifier else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .format,
+                in: c,
+                debugDescription: "Not a Cadence backup file (format = \"\(rawFormat)\")."
+            )
+        }
+        format = rawFormat
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+
         appVersion = try c.decodeIfPresent(String.self, forKey: .appVersion) ?? ""
         exportedAt = try c.decodeIfPresent(Date.self, forKey: .exportedAt) ?? Date()
         tasks = try c.decodeIfPresent([CadenceTask].self, forKey: .tasks) ?? []
