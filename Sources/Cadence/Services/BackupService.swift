@@ -111,15 +111,13 @@ enum BackupService {
         defaults.set(true, forKey: importInProgressKey)
         defaults.synchronize()  // ensure the in-progress flag is on disk before mutating
 
-        // Pause any running pomodoro before we replace the focus map. A
-        // running timer otherwise keeps calling `FocusTimeStore.addSecond()`
-        // on the freshly imported map on its next tick, so today's value
-        // would drift away from the imported backup immediately. `pause()`
-        // also flushes any sub-second focus accumulator into the (about
-        // to be overwritten) map; that flushed value is discarded by the
-        // `replaceAll` below, which is the desired behavior — the import
-        // is the source of truth from this point on.
-        PomodoroTimer.shared.pause()
+        // Reset any in-flight pomodoro before we replace the focus map.
+        // `prepareForDataReplacement` pauses (flushing any sub-second focus
+        // accumulator into the about-to-be-overwritten map, which is then
+        // discarded by `replaceAll`), then clears `remaining` so a later
+        // Resume can't tick seconds onto the freshly imported total — the
+        // imported snapshot is the source of truth from this point on.
+        PomodoroTimer.shared.prepareForDataReplacement()
 
         // Notify any open editor sheets to abandon pending writes before we
         // overwrite their underlying store. Stale autosaves landing after

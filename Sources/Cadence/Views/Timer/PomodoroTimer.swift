@@ -100,6 +100,16 @@ final class PomodoroTimer: ObservableObject {
         SoundManager.shared.playTimerSetOrReset()
     }
 
+    /// Stop and reset the timer to its configured `total` without playing
+    /// the reset sound. Used when a backup import / rollback is about to
+    /// overwrite the focus store — keeping the pre-import session paused
+    /// would let a later resume drift the freshly-imported focus total.
+    func prepareForDataReplacement() {
+        pause()
+        remaining = total
+        isFinished = false
+    }
+
     private func tick() {
         let now = Date()
         let tickElapsed = now.timeIntervalSince(lastTickDate)
