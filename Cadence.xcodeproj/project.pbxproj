@@ -45,6 +45,8 @@
 		B0000094 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000095 /* BackupService.swift */; };
 		B0000096 /* DataBackupSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000097 /* DataBackupSection.swift */; };
 		B0000098 /* ShareAnchorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000099 /* ShareAnchorButton.swift */; };
+		B000009A /* BackupHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009B /* BackupHeader.swift */; };
+		B000009C /* BackupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009D /* BackupError.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -87,6 +89,8 @@
 		B0000095 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		B0000097 /* DataBackupSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataBackupSection.swift; sourceTree = "<group>"; };
 		B0000099 /* ShareAnchorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnchorButton.swift; sourceTree = "<group>"; };
+		B000009B /* BackupHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHeader.swift; sourceTree = "<group>"; };
+		B000009D /* BackupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupError.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +161,7 @@
 		B0000069 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B000009D /* BackupError.swift */,
 				B0000095 /* BackupService.swift */,
 				B0000066 /* SoundManager.swift */,
 			);
@@ -176,6 +181,7 @@
 			isa = PBXGroup;
 			children = (
 				B0000022 /* AppSettings.swift */,
+				B000009B /* BackupHeader.swift */,
 				B0000093 /* BackupSettings.swift */,
 				B0000091 /* CadenceBackup.swift */,
 				B0000032 /* Folder.swift */,
@@ -356,6 +362,8 @@
 				B0000094 /* BackupService.swift in Sources */,
 				B0000096 /* DataBackupSection.swift in Sources */,
 				B0000098 /* ShareAnchorButton.swift in Sources */,
+				B000009A /* BackupHeader.swift in Sources */,
+				B000009C /* BackupError.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

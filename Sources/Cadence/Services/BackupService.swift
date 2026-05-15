@@ -41,9 +41,23 @@ enum BackupService {
     }
 
     /// Decode JSON bytes back into a snapshot. Throws if the file is not a
-    /// valid Cadence backup.
+    /// valid Cadence backup or if its `schemaVersion` is newer than this
+    /// build understands.
+    ///
+    /// Decoding is two-staged: a tiny `BackupHeader` is read first to check
+    /// the magic marker and version. Only when those pass do we attempt the
+    /// full payload decode. This means a future schema-2 backup that
+    /// renames a core key will surface as `BackupError.unsupportedSchema`
+    /// rather than a generic "missing key" error.
     static func decode(_ data: Data) throws -> CadenceBackup {
-        try decoder.decode(CadenceBackup.self, from: data)
+        let header = try decoder.decode(BackupHeader.self, from: data)
+        guard header.format == CadenceBackup.formatIdentifier else {
+            throw BackupError.notACadenceBackup(format: header.format)
+        }
+        guard header.schemaVersion <= CadenceBackup.currentSchemaVersion else {
+            throw BackupError.unsupportedSchema(found: header.schemaVersion, supported: CadenceBackup.currentSchemaVersion)
+        }
+        return try decoder.decode(CadenceBackup.self, from: data)
     }
 
     /// UserDefaults key holding the most recent pre-import snapshot. Used as
@@ -55,6 +69,13 @@ enum BackupService {
     /// just after. If it's still set at next launch, an import was
     /// interrupted and the user can be offered the rollback.
     static let importInProgressKey = "cadence_import_in_progress"
+
+    /// Posted immediately before any store mutation so open editor sheets
+    /// can cancel pending autosaves and dismiss themselves. Otherwise a
+    /// TaskCreateView / TaskEditView left open in the main window while
+    /// Settings ran the import would auto-save stale state on dismiss and
+    /// silently corrupt the imported snapshot.
+    static let dataWillBeReplacedNotification = Notification.Name("cadence.backup.dataWillBeReplaced")
 
     /// Replace every store's contents with the snapshot. Caller is expected
     /// to confirm with the user first since this overwrites all local data.
@@ -71,6 +92,11 @@ enum BackupService {
         // user already confirmed; refusing now would be more surprising.
         if let preImportData = try? encode(makeBackup()) {
             UserDefaults.standard.set(preImportData, forKey: preImportSnapshotKey)
+            // Force a write to disk so a process kill mid-import still
+            // leaves the rollback snapshot recoverable on next launch.
+            // `synchronize()` is officially redundant on modern macOS but
+            // remains the only documented way to request an immediate flush.
+            UserDefaults.standard.synchronize()
         }
         applyToStores(backup)
     }
@@ -83,6 +109,13 @@ enum BackupService {
     private static func applyToStores(_ backup: CadenceBackup) {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: importInProgressKey)
+        defaults.synchronize()  // ensure the in-progress flag is on disk before mutating
+
+        // Notify any open editor sheets to abandon pending writes before we
+        // overwrite their underlying store. Stale autosaves landing after
+        // this point would otherwise resurrect pre-import drafts (see
+        // TaskCreateView / TaskEditView onReceive handler).
+        NotificationCenter.default.post(name: dataWillBeReplacedNotification, object: nil)
 
         // Make sure every task points to a folder that exists. Tasks whose
         // `folderId` isn't represented in `backup.folders` would otherwise
@@ -148,6 +181,7 @@ enum BackupService {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: preImportSnapshotKey)
         defaults.removeObject(forKey: importInProgressKey)
+        defaults.synchronize()
     }
 
     /// Dismiss the interrupted-import banner without touching the rollback
@@ -155,6 +189,7 @@ enum BackupService {
     /// state looks correct but wants to keep the option to roll back.
     static func dismissInterruptedImportFlag() {
         UserDefaults.standard.removeObject(forKey: importInProgressKey)
+        UserDefaults.standard.synchronize()
     }
 
     /// Suggested filename for a fresh export, e.g. `cadence-backup-2026-05-15.json`.

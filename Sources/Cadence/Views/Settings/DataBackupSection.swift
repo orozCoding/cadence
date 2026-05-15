@@ -254,14 +254,14 @@ struct DataBackupSection: View {
         let backup: CadenceBackup
         do {
             backup = try BackupService.decode(data)
-        } catch {
-            errorMessage = "That file doesn't look like a Cadence backup. (\(error.localizedDescription))"
+        } catch let error as BackupError {
+            // BackupError already carries a user-readable message (e.g.
+            // "not a Cadence backup" or "update the app to read schema N").
+            errorMessage = error.localizedDescription
             infoMessage = nil
             return
-        }
-
-        if backup.schemaVersion > CadenceBackup.currentSchemaVersion {
-            errorMessage = "This backup was made by a newer version of Cadence (schema \(backup.schemaVersion)). Update the app and try again."
+        } catch {
+            errorMessage = "That file doesn't look like a Cadence backup. (\(error.localizedDescription))"
             infoMessage = nil
             return
         }
