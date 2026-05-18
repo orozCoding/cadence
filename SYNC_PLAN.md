@@ -61,12 +61,18 @@ behind the existing `BackupService`" rather than "redesign sync."
 ### Option 1 — iCloud Drive ubiquity container (FAVORITE) ⭐
 
 **Shape.** The app writes the same `CadenceBackup` JSON we already produce
-into a single file inside the app's iCloud ubiquity container
-(`~/Library/Mobile Documents/iCloud~com~orozcoding~cadence/Documents/cadence-state.json`).
-macOS syncs that file across Macs signed into the same Apple ID for free.
+into a single file inside the app's iCloud ubiquity container, at a
+**non-`Documents/` path** because the file is app-private state, not a
+user document. Concrete location:
+`~/Library/Mobile Documents/iCloud~com~orozcoding~cadence/Data/cadence-state.json`.
+Apple reserves `Documents/` for user-visible files (they appear in
+Files/Finder under iCloud Drive); putting our state there would clutter
+the user's iCloud Drive and is the wrong scope.
+macOS syncs the file across Macs signed into the same Apple ID for free.
 
 **Read path.** On launch and whenever `NSMetadataQuery` (scoped to
-`NSMetadataQueryUbiquitousDocumentsScope`, observing
+`NSMetadataQueryUbiquitousDataScope` — *not* `…DocumentsScope`, since
+the file lives outside `Documents/`; observing
 `NSMetadataQueryDidUpdateNotification`) reports the ubiquitous file
 changed, we:
 
@@ -103,9 +109,14 @@ Hard constraints:
 
 **Offline behaviour.** iCloud Drive is offline-first by design: the file
 sits on local disk, edits write through immediately, the daemon uploads
-when reachable. If both Macs edit while offline, iCloud surfaces a
-conflict file we resolve with the same `mergeIn` logic (last-writer-wins
-per record, never destructive to local-only records).
+when reachable. If both Macs edit while offline, iCloud surfaces the
+divergence as **conflicting `NSFileVersion` records** on the canonical
+file (not as a sibling file on disk — that is a Dropbox / third-party
+behaviour, Option 3, not iCloud ubiquity). We resolve each version with
+the same `mergeIn` logic (last-writer-wins per record, never destructive
+to local-only records). The full resolution flow — including writing the
+consolidated snapshot back before marking versions resolved — is in
+"Conflict resolution" below.
 
 **Setup.** One toggle in Settings → "Sync via iCloud". Both Macs need to be
 signed into the same iCloud account (they already are, for any
@@ -135,22 +146,34 @@ single-user macOS setup).
   iCloud entitlement and a properly code-signed/notarised build. The app
   currently runs unsigned via `xcodebuild` for personal use; this is the
   one real cost.
-- **Two specific entitlements** must be provisioned in the developer
-  portal *and* listed in the app's entitlements plist:
+- **Required entitlements** (must be provisioned in the developer portal
+  *and* listed in the app's entitlements plist):
+  - `com.apple.developer.icloud-services = ["CloudDocuments"]` — the
+    service identifier that actually enables the iCloud Documents
+    capability for this app. Without it, the container entitlement
+    below is inert and `url(forUbiquityContainerIdentifier:)` returns
+    `nil`.
   - `com.apple.developer.ubiquity-container-identifiers` — value must
     include the exact container identifier we commit to, e.g.
     `iCloud.com.orozcoding.cadence`. The TeamID prefix is prepended by
     Xcode signing automatically.
-  - `com.apple.security.app-sandbox = true` — required for iCloud
-    entitlements to function under notarisation / App Store distribution.
+- **Sandboxing — a choice we are making, not a hard iCloud requirement.**
+  App Sandbox (`com.apple.security.app-sandbox = true`) is *required* for
+  Mac App Store distribution; for notarised direct distribution it is
+  optional. We adopt it anyway because (a) future iOS/iPad expansion
+  forces it, and (b) it keeps the threat surface small. Adopting it
+  *does* mean we must handle the UserDefaults-migration risk explicitly
+  (see Phase 1 acceptance criteria below).
+
   A mismatch between the entitlement and what the code passes to
   `FileManager.default.url(forUbiquityContainerIdentifier:)` returns
   `nil` with **no error** — sync appears enabled but nothing is ever
   written. Phase 1 has to verify the container ID is correctly resolved
   before any other work starts.
-  (Note: this is *not* the same as `com.apple.developer.ubiquity-kvstore-identifier`,
-  which is the `NSUbiquitousKeyValueStore` entitlement. Option 1 does not
-  use the KV store.)
+  (Note: none of these are the same as
+  `com.apple.developer.ubiquity-kvstore-identifier`, which is the
+  `NSUbiquitousKeyValueStore` entitlement. Option 1 does not use the
+  KV store.)
 - Container changes (rename, bundle ID change) are *one-way doors*: once
   shipped, renaming the container orphans existing data. We commit to a
   container name up front.
@@ -162,8 +185,21 @@ single-user macOS setup).
      `NSFileVersion.unresolvedConflictVersionsOfItem(at: url)`.
   2. For each non-`nil` entry, open a coordinated read of its `url`,
      decode with `BackupService.decode`, run `BackupService.apply()`.
-  3. Mark each version `isResolved = true`.
-  4. Once all are resolved, call `NSFileVersion.removeOtherVersionsOfItem(at:)`.
+     This merges every conflicting version into the local stores.
+  3. **Write the merged state back to the canonical file**: take a fresh
+     `BackupService.makeBackup()` (which now reflects all merged
+     versions), encode, and write to `cadence-state.json` under
+     `NSFileCoordinator`. Verify the write succeeded (no coordinator
+     error) before proceeding.
+  4. Only **after** the consolidated write succeeds, mark each
+     conflicting version `isResolved = true` and call
+     `NSFileVersion.removeOtherVersionsOfItem(at:)`.
+  Skipping step 3 is a real data-loss path: without an explicit
+  post-merge write, the merged state lives only in this Mac's local
+  stores until the next user mutation. If the user closes the app first,
+  the other Mac never sees the resolution, and its next sync push will
+  overwrite the canonical file with one of the pre-merge versions —
+  silently undoing the merge.
   Conflict copies do **not** appear as `cadence-state 2.json` files — that
   is a third-party-cloud-provider behaviour (Option 3), not iCloud
   ubiquity-container behaviour. Treating it as such would silently
@@ -177,11 +213,22 @@ single-user macOS setup).
   - On sign-out, fall back to the local `UserDefaults` store (no crash,
     no data loss — data is already there). Surface a one-line banner in
     Settings explaining what happened.
-  - Define a re-enable policy: when iCloud comes back, **prefer the local
-    state** over whatever was last in iCloud (the user kept editing locally
-    while signed out; that work must not be silently overwritten by a
-    stale cloud snapshot). The first post-recovery write seeds the cloud
-    with the local snapshot.
+  - Re-enable policy: when iCloud comes back, **merge — do not blindly
+    prefer local**. The other Mac may have continued making legitimate
+    edits to the cloud copy while this Mac was signed out; "prefer local"
+    would silently overwrite them. The correct flow:
+    1. With writes still gated, download the current cloud snapshot
+       (`startDownloadingUbiquitousItem` + wait for `.current`).
+    2. Decode the cloud snapshot and run `BackupService.apply()` in merge
+       mode against the local stores (`mergeIn` for tasks/folders,
+       per-key for focus days, and — accepting the known settings-merge
+       limitation — settings from whichever side has the newer
+       `exportedAt`).
+    3. Take a fresh `makeBackup()` of the now-consolidated state and
+       write it back as the first post-recovery write.
+    4. Only then open the write gate.
+    This treats sign-out as a long offline period rather than as a
+    "local is canonical" event.
 - **iCloud storage near full → silent write failures.** The user's iCloud
   plan is shared with Photos, Mail, backups, etc. If full,
   `NSFileCoordinator` returns an error that we must catch and surface.
@@ -367,13 +414,31 @@ users.
    gating — works in unsigned dev builds today. Buys us real sync
    immediately and exercises `BackupService` cross-device while the
    ADP / provisioning paperwork for Option 1 is in flight.
-3. **Phase 1.** App entitlement + container setup. The two entitlement
-   keys (`com.apple.developer.ubiquity-container-identifiers`,
-   `com.apple.security.app-sandbox`) wired into the entitlements plist
-   with the exact container ID, plus a no-op Settings toggle. Acceptance
-   criterion: a signed build on two Macs both resolve a non-`nil`
-   `FileManager.default.url(forUbiquityContainerIdentifier:)` and can
-   write & read a throwaway file.
+3. **Phase 1.** App entitlement + container setup. The three iCloud-related
+   entitlement keys (`com.apple.developer.icloud-services` set to
+   `["CloudDocuments"]`, `com.apple.developer.ubiquity-container-identifiers`
+   with the exact container ID, and the App Sandbox toggle
+   `com.apple.security.app-sandbox = true`) wired into the entitlements
+   plist, plus a no-op Settings toggle. Acceptance criteria — *all three
+   must pass before Phase 2 starts*:
+
+   1. A signed build on two Macs both resolve a non-`nil`
+      `FileManager.default.url(forUbiquityContainerIdentifier:)` and can
+      write & read a throwaway file in the container's `Data/` subpath.
+   2. **Sandbox-transition data survival.** Enabling App Sandbox
+      changes the effective preferences domain. Before Phase 2 ships,
+      install the new sandboxed build over an existing un-sandboxed
+      install and verify every `UserDefaults` key the app currently uses
+      (`cadence_tasks`, `cadence_folders`, `cadence_active_folder_id`,
+      `focusDailySeconds`, `weekStartsOn`, `timerFinishSound`,
+      `timerStyle`, `timerDirection`, `animateDockIcon`, and any backup
+      service keys) still loads correctly on first launch under the
+      sandbox. If anything is lost, ship a one-shot migration shim that
+      copies the pre-sandbox defaults into the sandboxed container
+      *before* any other code runs at first launch.
+   3. The no-op Settings toggle persists correctly and the rest of the
+      app (tasks, focus, settings) behaves identically to the
+      un-sandboxed build.
 4. **Phase 2 — write side.** Debounced
    `BackupService.makeBackup() → encode → coordinated write` on every
    store change, running on a background queue with the idle-debounce +
@@ -411,10 +476,22 @@ The transport must therefore, on launch:
 1. Query `NSMetadataQuery` for an existing file in the ubiquity
    container.
 2. If one exists, call `startDownloadingUbiquitousItem(at:)` and **gate
-   all writes** until either `NSMetadataUbiquitousItemDownloadingStatusCurrent`
-   fires *or* a generous timeout (e.g. 30 s with no progress) elapses.
-3. After the gate opens, apply the file in merge mode before any local
-   mutation is allowed to write to the cloud copy.
+   all writes** until
+   `NSMetadataUbiquitousItemDownloadingStatusCurrent` fires. The gate
+   must **not** silently open on a timeout — opening it without the
+   download having completed re-introduces the exact empty-snapshot
+   overwrite hazard this section exists to prevent.
+3. If the download has not completed after a long wait (e.g. 30 s with
+   no progress), surface a blocking choice in the UI:
+   - **"Wait and keep trying"** — the default; keeps the gate shut and
+     keeps retrying the download. The user can still read existing
+     local data; only the *write side* is blocked.
+   - **"This Mac is the new source of truth"** — explicit user consent
+     to open the gate and let the local (possibly empty) state become
+     canonical. This is the only path that may overwrite the cloud
+     copy without first reading it.
+4. Once `.current` fires, apply the file in merge mode before any local
+   mutation is allowed to write to the cloud copy, then open the gate.
 
 This is a data-safety invariant, not a polish item.
 
