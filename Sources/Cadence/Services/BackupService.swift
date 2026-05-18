@@ -132,12 +132,16 @@ enum BackupService {
         defaults.synchronize()  // ensure the in-progress flag is on disk before mutating
 
         // Reset any in-flight pomodoro before we touch the focus map.
-        // `prepareForDataReplacement` pauses (flushing any sub-second focus
-        // accumulator into the about-to-be-mutated map; merge mode keeps
-        // local days, so that flushed value lands on the local copy and is
-        // either kept or overwritten by the file's value for the same day)
-        // and clears `remaining` so a later Resume can't tick seconds onto
-        // the freshly imported total.
+        // `prepareForDataReplacement` pauses — which credits any wall-clock
+        // seconds owed for the current session to today's local entry — and
+        // clears `remaining` so a later Resume can't tick seconds onto the
+        // freshly imported total. In merge mode the file's value for any day
+        // it carries overwrites the local value for that day; if the file
+        // contains today, the seconds just credited locally are intentionally
+        // superseded by the file's number (that is the merge contract — file
+        // wins for present days). Those credits are still preserved in the
+        // rollback snapshot captured above at line 103, so a `restoreLastPreImport`
+        // recovers them.
         PomodoroTimer.shared.prepareForDataReplacement()
 
         // Notify any open editor sheets to abandon pending writes before we

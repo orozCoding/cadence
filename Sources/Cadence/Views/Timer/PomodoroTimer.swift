@@ -69,6 +69,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func start() {
+        // Guard against being called while already running. Without this, a
+        // double-start would reset resumeDate/remainingAtResume to the current
+        // instant while keeping `creditedSecondsThisSession` at its prior
+        // (advanced) value, stalling all credit until the new run accumulated
+        // enough wall-clock to catch up to the watermark.
+        guard !isRunning else { return }
         guard remaining > 0 else { return }
         // Request permission on first timer start so the prompt appears in context.
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
@@ -136,8 +142,12 @@ final class PomodoroTimer: ObservableObject {
     private func tick() {
         let now = Date()
         creditEarnedSeconds(now: now)
-        let runElapsed = now.timeIntervalSince(resumeDate)
-        remaining = max(0, remainingAtResume - runElapsed)
+        // Use the same capped measurement as `pause()` so the two paths share
+        // one formula. With the cap, a sleep-overrun resolves cleanly to
+        // remaining == 0 (and runEarned == remainingAtResume) instead of via
+        // a max(0, negative) saturation.
+        let runEarned = currentRunEarned(now: now)
+        remaining = max(0, remainingAtResume - runEarned)
         if remaining == 0 {
             isFinished = true   // set before pause() so no subscriber sees isRunning=false + isFinished=false
             pause()
