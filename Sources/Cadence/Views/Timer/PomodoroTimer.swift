@@ -36,6 +36,9 @@ final class PomodoroTimer: ObservableObject {
 
     func set(seconds: TimeInterval) {
         pause()
+        // Effective input granularity is 1 second: fractional inputs from the
+        // custom-minutes field (e.g. 0.49 min ≈ 29.4 s) are rounded so the
+        // display and tick boundaries stay aligned.
         total = max(1, seconds.rounded())
         remaining = total
         isFinished = false

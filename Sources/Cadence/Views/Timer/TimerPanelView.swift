@@ -137,14 +137,22 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        let trimmed = customMinutes.trimmingCharacters(in: .whitespaces)
+        let trimmed = customMinutes.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Restrict to digits and a decimal separator so Double() can't quietly
+        // accept things like "1e2" (scientific notation → 100 min) that the
+        // user didn't intend to enter.
+        let allowed = CharacterSet(charactersIn: "0123456789.,")
+        guard trimmed.unicodeScalars.allSatisfy(allowed.contains) else { return }
         // Accept dot-decimal ("0.5") regardless of locale, then fall back to
         // locale-aware parsing so comma-decimal users ("0,5") still work.
+        // Grouping separator off in the fallback — a 3-digit field shouldn't
+        // treat "1,234" as 1234.
         let parsed: Double? = Double(trimmed) ?? {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
             formatter.locale = .current
+            formatter.usesGroupingSeparator = false
             return formatter.number(from: trimmed)?.doubleValue
         }()
         guard let mins = parsed, mins > 0, mins <= 999 else { return }
