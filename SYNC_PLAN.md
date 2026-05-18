@@ -107,29 +107,58 @@ inside the read path is a hang/data-loss risk whenever the Mac is low
 on disk and iCloud has evicted the file under "Optimise Mac Storage" —
 that part is unchanged.
 
-**Critical read-path invariant — flush local dirty state before applying.**
+**Critical read-path invariant — fold local dirty state into the merge.**
 A naive `metadata-update → apply()` flow has a silent data-loss path: if
 this Mac has uncommitted local edits sitting behind the debounce window
 when a remote update arrives, `BackupService.apply()` will overwrite
 same-`id` records with the cloud version — silently reverting the
 local edits before they were ever uploaded. The read path therefore
-must, before calling `apply()`:
+must perform an explicit **in-memory three-way merge** rather than a
+naive apply. Concrete sequence, all under the
+`transport.isApplyingRemote` reentrancy flag described below:
 
-1. **Flush any pending local writes first** — synchronously drain the
-   debounce timer, take a `makeBackup()` of the current in-memory
-   state, encode + coordinated-write it to the cloud file, and only
-   then re-read the (now-merged-with-our-own-changes) cloud file and
-   apply.
-2. If for any reason a flush cannot complete (transient
-   `NSFileCoordinator` error, container missing), **defer the apply**
-   rather than dropping the local edits. The dirty flag stays set; the
-   apply re-runs on the next metadata update (when the flush has a
-   chance to succeed) or on the next mutation flush. Better a delayed
-   import than a silent overwrite of work.
+1. **Capture remote in memory.** Open a coordinated read of the
+   just-arrived `cadence-state.json` and `BackupService.decode` it
+   into a local `remote: CadenceBackup` value. Do **not** touch the
+   stores yet.
+2. **Capture current local state.** Synchronously drain the debounce
+   timer and take `local = BackupService.makeBackup()` — this is the
+   in-memory state including any dirty edits made since the last
+   successful write.
+3. **Merge in memory, local-pending wins same-`id` collisions.**
+   Compute `merged` by:
+   - Start from `remote` (so anything `local` doesn't know about — work
+     done on the other Mac — is preserved).
+   - For each record (task, folder) in `local`, overwrite the
+     same-`id` entry in `merged` (so this Mac's dirty edits beat the
+     remote's older copy of the same record). Append local-only `id`s.
+   - For focus-day keys present in both, prefer the higher of the two
+     second counts (focus time only grows; this avoids losing minutes
+     to a stale cloud day).
+   - For settings, use the dedicated `settingsUpdatedAt` rule
+     described under the sign-out flow.
+4. **Apply `merged` to the stores** via the existing
+   `BackupService.apply()` merge path. Because `merged` already
+   embodies the precedence rules above, the same-`id` overwrite inside
+   `apply()` is now safe — every same-`id` collision was already
+   resolved in step 3 with local-pending wins.
+5. **Write `merged` back to the cloud file** as one coordinated write,
+   then clear the dirty flag and record the resulting blob as
+   `last-written` (used by the self-echo suppression rule below). This
+   single consolidated write is what the other Mac sees as the
+   resolved post-merge state.
+6. If any step fails (transient `NSFileCoordinator` error, container
+   missing, decode failure on `remote`), **defer the entire sequence**
+   rather than partially applying. The dirty flag stays set; the
+   sequence re-runs on the next metadata update or the next mutation
+   flush. Better a delayed import than silent partial state.
 
-This rule is what makes "same-id wins" safe in a continuous-sync
-context. Without it, the merge semantics that work fine for one-shot
-manual imports become a data-loss vector.
+This sequence is what makes "same-id overwrite" safe in a continuous-sync
+context. Without the explicit local-pending-wins step, the merge
+semantics that are fine for one-shot manual imports become a data-loss
+vector. With it, the only loss case is "two Macs edited the same
+record while disconnected from each other" — covered by the
+`NSFileVersion` conflict-resolution flow below.
 
 **Self-echo / ping-pong suppression.** Every `apply()` writes through
 the stores, which would normally re-flip the dirty flag and cause the
@@ -254,15 +283,29 @@ single-user macOS setup).
   `NSFileVersion.unresolvedConflictVersionsOfItem(at:)`. Resolution flow:
   1. After every `NSMetadataQuery` update, call
      `NSFileVersion.unresolvedConflictVersionsOfItem(at: url)`.
-  2. For each non-`nil` entry, open a coordinated read of its `url`,
-     decode with `BackupService.decode`, run `BackupService.apply()`.
-     This merges every conflicting version into the local stores.
-  3. **Write the merged state back to the canonical file**: take a fresh
+  2. **Sort the returned versions by `modificationDate` ascending**
+     (oldest first). Without an explicit sort, iteration order is
+     undefined and `apply()`'s "same-id overwrite" gives non-deterministic
+     last-writer-wins. Ties on `modificationDate` (rare; same-second
+     writes from two Macs): break by `version.persistentIdentifier`
+     hash to keep ordering deterministic across runs.
+  3. Iterate in sorted order. For each version: open a coordinated read
+     of its `url`, decode with `BackupService.decode`, run
+     `BackupService.apply()`. Because we go oldest → newest and
+     same-`id` records are overwritten by the incoming snapshot, the
+     newest version's records win same-`id` collisions — the
+     deterministic last-writer-wins rule we want.
+  4. After the loop, also feed the currently-canonical
+     `cadence-state.json` (i.e. the non-conflicting current version)
+     through the same in-memory three-way merge as the regular read
+     path, so any local dirty edits not represented in any version are
+     preserved.
+  5. **Write the merged state back to the canonical file**: take a fresh
      `BackupService.makeBackup()` (which now reflects all merged
-     versions), encode, and write to `cadence-state.json` under
-     `NSFileCoordinator`. Verify the write succeeded (no coordinator
-     error) before proceeding.
-  4. Only **after** the consolidated write succeeds, mark each
+     versions plus local pending edits), encode, and write to
+     `cadence-state.json` under `NSFileCoordinator`. Verify the write
+     succeeded (no coordinator error) before proceeding.
+  6. Only **after** the consolidated write succeeds, mark each
      conflicting version `isResolved = true` and call
      `NSFileVersion.removeOtherVersionsOfItem(at:)`.
   Skipping step 3 is a real data-loss path: without an explicit
@@ -297,12 +340,17 @@ single-user macOS setup).
        task or focus edit, so a Mac that did a lot of task work offline
        would silently overwrite the actually-newer settings copy from
        the other Mac. Two acceptable resolutions:
-       - **Add a dedicated `settingsUpdatedAt: Date` field** to
+       - **Add a dedicated `settingsUpdatedAt: Date?` field** to
          `BackupSettings`, bumped only when a setting mutates, and pick
-         the side with the newer value. Requires a `schemaVersion` bump
-         (covered by the forward-compat rule below); old binaries
-         decoding via `decodeIfPresent` simply fall back to the current
-         "settings replaced wholesale" behaviour with no breakage.
+         the side with the newer value. This is an **additive-only**
+         change — declared as `decodeIfPresent` — so it does **not**
+         require a `schemaVersion` bump, and old binaries that don't
+         know about the field simply ignore it and fall back to the
+         current "settings replaced wholesale" behaviour with no
+         breakage. (The `unsupportedSchema` suspend-writes rule below
+         applies only to *breaking* changes that bump `schemaVersion`;
+         optional fields decoded with `decodeIfPresent` are not breaking
+         and do not bump it. The two rules do not conflict.)
        - **Merge settings field-by-field**, again gated on a per-field
          timestamp dictionary in `BackupSettings`. More invasive — pick
          only if real settings-loss pain is observed after option (a).
@@ -537,11 +585,20 @@ users.
    wipes existing iCloud data.
 6. **Phase 4 — robustness.**
    - `NSFileVersion.unresolvedConflictVersionsOfItem(at:)` resolver per
-     the conflict-resolution flow above.
+     the conflict-resolution flow above (including the sort-by-
+     `modificationDate` tie-breaker).
    - `NSUbiquityIdentityDidChangeNotification` handler — disable sync,
      surface banner, fall back to local-only.
+   - **Re-enable-after-sign-in recovery flow.** When the identity token
+     returns, run the full download → in-memory merge → consolidated
+     write → open-gate sequence described in the sign-out section
+     above. This is scheduled here explicitly because the disable
+     direction alone is not enough — without the matching enable
+     direction, a re-signed-in user either loses iCloud edits made
+     elsewhere or has sync silently stay off after re-login.
    - Surface iCloud-storage-full errors from coordinated writes.
-   - End-to-end test on two real Macs.
+   - End-to-end test on two real Macs, including the sign-out /
+     sign-in round trip.
 7. **Phase 5 (optional).** Promote Phase 0.5's Option 3 from "bridge"
    to "permanent secondary transport" for users who don't want iCloud
    (one transport selected at a time; the merge code is identical).
