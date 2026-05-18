@@ -83,13 +83,29 @@ changed, we:
 2. Open a coordinated read, `BackupService.decode` the file, and call
    `BackupService.apply()` — the existing merge code does the rest.
 
-`NSFilePresenter` is **not** an alternative here: the iCloud daemon (`bird`)
-does not coordinate writes on our behalf when it pulls a new version from
-the cloud, so a presenter would silently miss remote updates.
-`NSMetadataQuery` is the only correct mechanism for detecting remote
-changes. Skipping the download-status check is a hang/data-loss risk
-whenever the Mac is low on disk and iCloud has evicted the file under
-"Optimise Mac Storage".
+A note on `NSFilePresenter` vs `NSMetadataQuery` — they are
+**complementary, not alternatives**:
+
+- `NSMetadataQuery` is the right tool for *discovering* that a new or
+  updated `cadence-state.json` has arrived from the cloud (or finished
+  downloading after eviction). It is the only signal that fires when
+  the iCloud daemon (`bird`) writes a remote update — `bird` does not
+  go through `NSFileCoordinator`, so a presenter alone would miss
+  these arrivals.
+- `NSFilePresenter` is the right tool for observing
+  coordinator-gated mutations *to a file the app already has open*
+  (e.g., another well-behaved process editing the same file with
+  `NSFileCoordinator`). For our single-file, app-private state this
+  channel is rare in practice, but if we ever do hold the file open
+  for editing across longer windows, registering a presenter is the
+  correct way to be notified of in-flight changes.
+
+We use `NSMetadataQuery` as the **primary** remote-change channel for
+the reasons above; a presenter is optional belt-and-braces if we add
+long-lived open handles later. Skipping the download-status check
+inside the read path is a hang/data-loss risk whenever the Mac is low
+on disk and iCloud has evicted the file under "Optimise Mac Storage" —
+that part is unchanged.
 
 **Write path.** Any mutating call on a store flips a "dirty" flag. A
 debounced writer takes a fresh `makeBackup()`, encodes it, and writes
@@ -155,8 +171,17 @@ single-user macOS setup).
     `nil`.
   - `com.apple.developer.ubiquity-container-identifiers` — value must
     include the exact container identifier we commit to, e.g.
-    `iCloud.com.orozcoding.cadence`. The TeamID prefix is prepended by
-    Xcode signing automatically.
+    `iCloud.com.orozcoding.cadence`. **Two notes on the form**:
+    - In the entitlements plist you write `iCloud.com.orozcoding.cadence`
+      *without* a Team ID prefix. Xcode prepends `<TEAMID>.` at sign
+      time. `FileManager.url(forUbiquityContainerIdentifier:)` is then
+      called with the same un-prefixed `iCloud.com.orozcoding.cadence`
+      string at runtime — the framework matches it against the signed
+      entitlement.
+    - Do not hand-edit this in `project.pbxproj` or the entitlements
+      file without understanding what Xcode is doing for you. Adding a
+      stray `<TEAMID>.` prefix yourself produces a `nil` result at
+      runtime with no error logged.
 - **Sandboxing — a choice we are making, not a hard iCloud requirement.**
   App Sandbox (`com.apple.security.app-sandbox = true`) is *required* for
   Mac App Store distribution; for notarised direct distribution it is
@@ -221,9 +246,22 @@ single-user macOS setup).
        (`startDownloadingUbiquitousItem` + wait for `.current`).
     2. Decode the cloud snapshot and run `BackupService.apply()` in merge
        mode against the local stores (`mergeIn` for tasks/folders,
-       per-key for focus days, and — accepting the known settings-merge
-       limitation — settings from whichever side has the newer
-       `exportedAt`).
+       per-key for focus days). For settings the snapshot-level
+       `exportedAt` is **not** a sound tiebreaker — it advances on any
+       task or focus edit, so a Mac that did a lot of task work offline
+       would silently overwrite the actually-newer settings copy from
+       the other Mac. Two acceptable resolutions:
+       - **Add a dedicated `settingsUpdatedAt: Date` field** to
+         `BackupSettings`, bumped only when a setting mutates, and pick
+         the side with the newer value. Requires a `schemaVersion` bump
+         (covered by the forward-compat rule below); old binaries
+         decoding via `decodeIfPresent` simply fall back to the current
+         "settings replaced wholesale" behaviour with no breakage.
+       - **Merge settings field-by-field**, again gated on a per-field
+         timestamp dictionary in `BackupSettings`. More invasive — pick
+         only if real settings-loss pain is observed after option (a).
+       Phase 2 picks option (a) as the lower-risk path; revisit if the
+       field-level case bites in practice.
     3. Take a fresh `makeBackup()` of the now-consolidated state and
        write it back as the first post-recovery write.
     4. Only then open the write gate.
@@ -473,10 +511,21 @@ it back to Mac A, **and Mac A's data is gone.**
 
 The transport must therefore, on launch:
 
-1. Query `NSMetadataQuery` for an existing file in the ubiquity
-   container.
-2. If one exists, call `startDownloadingUbiquitousItem(at:)` and **gate
-   all writes** until
+1. **Hold the write gate closed from process start** — before any other
+   code that could trigger a debounced write runs. The gate stays shut
+   until **both** of:
+   - `NSMetadataQueryDidFinishGathering` has fired (i.e. the metadata
+     query has completed its initial enumeration of the ubiquity
+     container and we know whether a `cadence-state.json` already
+     exists), and
+   - the existence check + download step below have resolved.
+   Without the "until gathering finishes" condition, an empty local
+   snapshot can win the race: the writer flushes before
+   `NSMetadataQuery` has discovered the existing cloud file, and the
+   empty snapshot overwrites it.
+2. Once gathering finishes, inspect the results. If a
+   `cadence-state.json` exists, call `startDownloadingUbiquitousItem(at:)`
+   and keep the gate shut until
    `NSMetadataUbiquitousItemDownloadingStatusCurrent` fires. The gate
    must **not** silently open on a timeout — opening it without the
    download having completed re-introduces the exact empty-snapshot
@@ -492,6 +541,11 @@ The transport must therefore, on launch:
      copy without first reading it.
 4. Once `.current` fires, apply the file in merge mode before any local
    mutation is allowed to write to the cloud copy, then open the gate.
+
+If gathering finishes and **no** `cadence-state.json` exists at all
+(genuinely first-ever launch across all the user's Macs), the gate
+opens immediately — there is nothing to overwrite. This is the only
+path that opens the gate without a downloaded file.
 
 This is a data-safety invariant, not a polish item.
 
