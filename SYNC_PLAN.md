@@ -225,18 +225,35 @@ atomicity — the flag is only for self-echo suppression):
      to a stale cloud day).
    - For settings, use the dedicated `settingsUpdatedAt` rule
      described under the sign-out flow.
-   - **For `activeFolderID`: local always wins; never overwrite from
-     remote.** Which folder is open on *this* Mac is a UI selection,
-     not user data — there's no reason for Mac B to take Mac A's
-     active folder over Mac B's own. (Matches the existing one-shot
-     `BackupService.apply()` which already leaves `activeFolderID`
-     alone with a "destination device keeps its current context"
-     comment.) Edge case: if the local `activeFolderID` points at a
-     folder that the merge result has tombstoned, fall back to
-     `.generalFolderID` — same fallback the codebase already uses on
-     missing folders. The cloud snapshot's `activeFolderID` field is
-     still written (the snapshot stays a complete representation)
-     but is never *read* into local state during sync.
+   - **For `activeFolderID`: split between local store and merged blob,
+     to avoid ping-pong.** Which folder is open on *this* Mac is a UI
+     selection, not user data — there's no reason for Mac B to take
+     Mac A's active folder over Mac B's own. Two concrete rules
+     enforce this without causing the wire format to ping-pong
+     between the two Macs' selections:
+     1. **Local store: never overwritten from sync.** The live
+        `FolderStore.activeFolder` keeps whatever this Mac selected.
+        Matches the existing one-shot `BackupService.apply()` which
+        already leaves `activeFolderID` alone with a "destination
+        device keeps its current context" comment.
+     2. **Merged blob: preserve the *incoming remote's*
+        `activeFolderID`, not the local selection.** Set
+        `merged.activeFolderID = remote.activeFolderID` when building
+        `merged` for the write-back. This is the critical rule that
+        prevents ping-pong: if Mac A has folder X active and Mac B
+        has folder Y, naively writing local-Y back when reading
+        remote-X would cause Mac A to write X back when reading the
+        new Y, and so on forever (self-echo suppression doesn't help
+        — each blob genuinely differs). Preserving the incoming value
+        means whatever the cloud already had survives the write-back
+        round trip; nobody pings-pongs; the field still carries a
+        meaningful value (the active folder of whichever Mac last
+        wrote a non-active-folder change).
+     Edge case: if this Mac's local `activeFolderID` points at a
+     folder that the merge result has tombstoned, the local store
+     falls back to `.generalFolderID` — same fallback the codebase
+     already uses for missing folders. (This is a local-store
+     transition, not a `merged` blob change.)
 4. **Apply `merged` to the stores** via the existing
    `BackupService.apply()` merge path. Because `merged` already
    embodies the precedence rules above, the same-`id` overwrite inside
@@ -580,8 +597,12 @@ single-user macOS setup).
      - Tombstones authoritative; `deletedAt` precedence as above.
      - Focus-day collisions resolve by `max()`.
      - Settings resolve by `settingsUpdatedAt`.
-     - `activeFolderID`: local always wins; never overwrite from any
-       version (same rule as the regular read path).
+     - `activeFolderID`: local store unaffected (per the read-path
+       rule); in the `merged` blob, preserve the **canonical
+       (non-conflicting) file's** `activeFolderID` — the one we read
+       at step 4 alongside the conflict versions. This is the
+       resolver's equivalent of "preserve incoming remote's value"
+       and keeps the field from ping-ponging post-conflict.
      The captured `local` snapshot sits at the end of the sort (its
      overall-snapshot timestamp is `Date()`), so it gets the last
      pass through the fold. But the per-record `updatedAt` rule
@@ -641,9 +662,11 @@ single-user macOS setup).
        precedence** (newer `deletedAt` wins; tombstone on either side
        authoritative — so deletes made on the other Mac while this
        one was signed out still propagate), focus-day `max()`, the
-       dedicated `settingsUpdatedAt` rule, and `activeFolderID`
-       local-always-wins (the local Mac keeps its current folder
-       selection regardless of what the cloud says).
+       dedicated `settingsUpdatedAt` rule, and `activeFolderID` split
+       (local store keeps its current folder selection regardless of
+       what the cloud says; the `merged` blob preserves the
+       incoming-remote's `activeFolderID` to avoid the ping-pong
+       described in the regular read path).
     5. Apply `merged` to the stores once (under
        `transport.isApplyingRemote = true`).
     6. Take a fresh `makeBackup()` of the now-consolidated state and
