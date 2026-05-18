@@ -416,38 +416,50 @@ single-user macOS setup).
   - On sign-out, fall back to the local `UserDefaults` store (no crash,
     no data loss — data is already there). Surface a one-line banner in
     Settings explaining what happened.
-  - Re-enable policy: when iCloud comes back, **merge — do not blindly
-    prefer local**. The other Mac may have continued making legitimate
-    edits to the cloud copy while this Mac was signed out; "prefer local"
-    would silently overwrite them. The correct flow:
+  - Re-enable policy: when iCloud comes back, **run the same in-memory
+    three-way merge as the regular read path — do not call
+    `BackupService.apply()` directly on the cloud snapshot.** The other
+    Mac may have continued making legitimate edits while this Mac was
+    signed out; the local stores may also contain edits made offline.
+    Either set, naively applied via same-`id` overwrite, would silently
+    obliterate the other. The correct flow:
     1. With writes still gated, download the current cloud snapshot
        (`startDownloadingUbiquitousItem` + wait for `.current`).
-    2. Decode the cloud snapshot and run `BackupService.apply()` in merge
-       mode against the local stores (`mergeIn` for tasks/folders,
-       per-key for focus days). For settings the snapshot-level
-       `exportedAt` is **not** a sound tiebreaker — it advances on any
-       task or focus edit, so a Mac that did a lot of task work offline
-       would silently overwrite the actually-newer settings copy from
-       the other Mac. Two acceptable resolutions:
-       - **Add a dedicated `settingsUpdatedAt: Date?` field** to
-         `BackupSettings`, bumped only when a setting mutates, and pick
-         the side with the newer value. This is an **additive-only**
-         change — declared as `decodeIfPresent` — so it does **not**
-         require a `schemaVersion` bump, and old binaries that don't
-         know about the field simply ignore it and fall back to the
-         current "settings replaced wholesale" behaviour with no
-         breakage. (The `unsupportedSchema` suspend-writes rule below
-         applies only to *breaking* changes that bump `schemaVersion`;
-         optional fields decoded with `decodeIfPresent` are not breaking
-         and do not bump it. The two rules do not conflict.)
-       - **Merge settings field-by-field**, again gated on a per-field
-         timestamp dictionary in `BackupSettings`. More invasive — pick
-         only if real settings-loss pain is observed after option (a).
-       Phase 2 picks option (a) as the lower-risk path; revisit if the
-       field-level case bites in practice.
-    3. Take a fresh `makeBackup()` of the now-consolidated state and
-       write it back as the first post-recovery write.
-    4. Only then open the write gate.
+    2. Decode the cloud snapshot into `remote: CadenceBackup` in
+       memory. Do **not** touch the stores yet.
+    3. Capture `local = BackupService.makeBackup()` of the current
+       store contents (which include every offline edit made while
+       signed out).
+    4. Compute `merged` using the same rules as the regular read-path
+       merge: same-`id` overwrite with local-pending-wins,
+       **tombstone precedence** (newer `deletedAt` wins; tombstone on
+       either side authoritative — so deletes made on the other Mac
+       while this one was signed out still propagate), focus-day
+       `max()`, and the dedicated `settingsUpdatedAt` rule.
+    5. Apply `merged` to the stores once (under
+       `transport.isApplyingRemote = true`).
+    6. Take a fresh `makeBackup()` of the now-consolidated state and
+       write it back as the first post-recovery write under
+       `NSFileCoordinator`. Verify success.
+    7. Only then open the write gate.
+
+    The `settingsUpdatedAt` rule referenced in step 4: pick the side
+    with the newer `settingsUpdatedAt`. This field was added in Phase
+    2 as a `Date?` declared `decodeIfPresent` on `BackupSettings`,
+    bumped only when a setting actually mutates. Because it is
+    additive-only, no `schemaVersion` bump is required and old binaries
+    that don't know about the field simply fall back to the original
+    "settings replaced wholesale" behaviour. (The `unsupportedSchema`
+    suspend-writes rule below applies only to *breaking* changes that
+    bump `schemaVersion`; optional fields decoded with `decodeIfPresent`
+    are not breaking and do not bump it. The two rules do not
+    conflict.) If `settingsUpdatedAt` is missing on both sides (e.g.
+    both binaries pre-date the field) the snapshot-level `exportedAt`
+    is the fallback tiebreaker — known to be unsound but never worse
+    than today's behaviour. A future "merge settings field-by-field
+    with per-field timestamps" is an option if option (a) proves
+    insufficient.
+
     This treats sign-out as a long offline period rather than as a
     "local is canonical" event.
 - **iCloud storage near full → silent write failures.** The user's iCloud
@@ -682,11 +694,28 @@ users.
       prompt the user to update" rule even though the matching
       `decode` path lives in Phase 3 — writes must respect the
       contract from day 1.
-5. **Phase 3 — read side.** `NSMetadataQuery` watcher →
-   `startDownloadingUbiquitousItem(at:)` if status is not `.current` →
-   coordinated read → `BackupService.apply()` in merge mode. Includes
-   the **first-launch bootstrap gate** (see below) so a fresh Mac never
-   wipes existing iCloud data.
+5. **Phase 3 — read side.** Wire the read pipeline exactly as the
+   "Critical read-path invariant — fold local dirty state into the
+   merge" section spells out:
+   1. `NSMetadataQuery` watcher (scoped to
+      `NSMetadataQueryUbiquitousDataScope`) fires.
+   2. If `NSMetadataUbiquitousItemDownloadingStatusKey` is not
+      `.current`, call `startDownloadingUbiquitousItem(at:)` and wait.
+   3. Coordinated read of the file → `BackupService.decode` into a
+      `remote: CadenceBackup` in memory. Do not touch the stores.
+   4. Synchronously drain the debounce timer and capture
+      `local = BackupService.makeBackup()`.
+   5. Compute `merged` with the precedence rules (same-`id`
+      local-pending-wins, tombstone-authoritative, focus-day `max()`,
+      `settingsUpdatedAt` for settings).
+   6. Apply `merged` once under `transport.isApplyingRemote = true`.
+   7. Coordinated write of `merged` back to `cadence-state.json`.
+   Includes the **first-launch bootstrap gate** (see below — gate held
+   closed from process start until `NSMetadataQueryDidFinishGathering`
+   fires AND the download has completed) so a fresh Mac never wipes
+   existing iCloud data. A naive `decode → apply()` flow would silently
+   revert dirty local edits; the in-memory merge above is what makes
+   "same-id wins" safe in a continuous-sync context.
 6. **Phase 4 — robustness.**
    - `NSFileVersion.unresolvedConflictVersionsOfItem(at:)` resolver per
      the conflict-resolution flow above (including the sort-by-
