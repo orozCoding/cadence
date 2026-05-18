@@ -36,14 +36,29 @@ Translated into requirements:
   wholesale; local-only records are preserved. There's a pre-import
   snapshot for rollback and an interrupted-import marker for crash
   recovery.
-  - ⚠️ **Known limitation for continuous sync:** "settings taken wholesale"
-    is fine for a one-shot import but is a silent conflict sink when sync
-    runs on every change. If Mac A changes the theme and Mac B (with the
-    old theme still in its snapshot) writes later, Mac B's snapshot will
-    silently revert Mac A's theme change. Acceptable for personal use with
-    light settings churn, but **must be called out explicitly**, and a
-    follow-on task can add per-key, timestamped settings merge if it bites
-    in practice.
+  - ⚠️ **Known limitation for continuous sync (settings):** "settings
+    taken wholesale" is fine for a one-shot import but is a silent
+    conflict sink when sync runs on every change. The
+    `settingsUpdatedAt: Date?` field added in Phase 2 (additive,
+    `decodeIfPresent`, no schema bump) makes settings merge with
+    "newest-wins-by-its-own-timestamp" — see the sign-out re-enable
+    flow for details.
+  - ⚠️ **Known limitation for continuous sync (deletion):** the existing
+    "local-only records are preserved" rule means **deletes do not
+    propagate**. Concrete failure: Mac A deletes a task and writes the
+    new snapshot; Mac B reads it, sees the task is "missing" from the
+    incoming file, but preserves the local copy under the local-only
+    rule — and writes it back on the next sync. The deletion is
+    permanently defeated. This is acceptable in the existing one-shot
+    manual import (the user can re-delete on the destination Mac); it
+    is a **data-correctness blocker** under continuous sync.
+    **Fix landed in this plan (see "Delete propagation via tombstones"
+    section below):** add a `deletedAt: Date?` field to `CadenceTask`
+    and `Folder`, soft-delete records by setting that field rather
+    than removing them from the array, hide tombstoned records from
+    the UI, hard-purge tombstones older than a retention window (30
+    days) on launch. This is small, additive, and decodes cleanly on
+    old binaries via `decodeIfPresent`.
 - The stores (`TaskStore`, `FolderStore`, `FocusTimeStore`, `AppSettings`)
   expose `mergeIn` and `replaceAll`.
 
@@ -125,13 +140,20 @@ naive apply. Concrete sequence, all under the
    timer and take `local = BackupService.makeBackup()` — this is the
    in-memory state including any dirty edits made since the last
    successful write.
-3. **Merge in memory, local-pending wins same-`id` collisions.**
-   Compute `merged` by:
+3. **Merge in memory, local-pending wins same-`id` collisions, tombstones
+   are authoritative.** Compute `merged` by:
    - Start from `remote` (so anything `local` doesn't know about — work
      done on the other Mac — is preserved).
    - For each record (task, folder) in `local`, overwrite the
      same-`id` entry in `merged` (so this Mac's dirty edits beat the
      remote's older copy of the same record). Append local-only `id`s.
+   - **Apply tombstone precedence**: for any record whose `deletedAt`
+     field is non-`nil` on *either* side, set the merged record's
+     `deletedAt` to the newer of the two timestamps. A tombstone on
+     either side is authoritative — this is how deletes propagate
+     without being silently resurrected by the local-only-wins rule.
+     See "Delete propagation via tombstones" below for the model
+     change and retention policy.
    - For focus-day keys present in both, prefer the higher of the two
      second counts (focus time only grows; this avoids losing minutes
      to a stale cloud day).
@@ -181,6 +203,49 @@ equality on the encoded blob) and skip the write entirely if they
 match — a final guard against scheduling redundant writes for any
 reason (e.g. a future code path that flips dirty without changing
 logical state).
+
+**Delete propagation via tombstones.** Without a persisted base snapshot
+to diff against, "this record is in `local` but not in `remote`" is
+ambiguous: did the other Mac delete it, or has the other Mac just not
+seen it yet? The local-only-wins rule the existing `BackupService`
+picks resolves the ambiguity in the safe direction *for one-shot
+manual imports* (never lose work) but is wrong for continuous sync
+(deletions never propagate; deleted records get resurrected on the
+next read). We resolve this with **tombstones**, the standard answer:
+
+- Add `deletedAt: Date?` to `CadenceTask` and `Folder` (both
+  `decodeIfPresent`, so old binaries ignore it — no `schemaVersion`
+  bump). A `nil` value means "live"; a non-`nil` value means "deleted
+  at this timestamp."
+- `TaskStore.delete(_:)` and `FolderStore.delete(_:)` change from
+  `removeAll(where:)` to setting `deletedAt = Date()`. The records
+  stay in the array (and therefore in the snapshot) but are filtered
+  out of every UI query (`tasks(forDay:)`, `distinctDays(folderId:)`,
+  etc.) by an `isLive` predicate.
+- The merge algorithm in the read path treats tombstones as
+  authoritative: if either side has a record with `deletedAt != nil`,
+  the merged version is tombstoned. The newer of the two
+  `deletedAt` timestamps wins (so an undelete on one Mac after a
+  delete on the other would still need the user to repeat the
+  undelete — explicit and visible, not silent).
+- A **retention sweep** runs on launch: tombstones older than the
+  retention window (default 30 days) are hard-removed from the local
+  array. The window must be long enough that *every* user device has
+  reasonably synced at least once in that span; 30 days is the
+  conservative starting point. Aggressive shortening risks
+  tombstones being purged before a long-offline Mac sees them, which
+  would resurrect those deletions exactly the way we are trying to
+  prevent.
+- **Migration on first launch under sync:** any record without a
+  `deletedAt` field decodes to `nil` (live) via `decodeIfPresent`. No
+  one-shot migration needed; the change is purely additive.
+
+This is the smallest change that gives correct delete semantics; the
+alternative — persisting a `lastAppliedSnapshot` and computing intent
+by diffing — is sound but adds a second piece of disk state that has
+its own race conditions (what if the lastApplied write succeeds but
+the cloud write fails?). Tombstones keep all the truth in the
+snapshot itself.
 
 **Write path.** Any mutating call on a store flips a "dirty" flag. A
 debounced writer takes a fresh `makeBackup()`, encodes it, and writes
@@ -280,40 +345,64 @@ single-user macOS setup).
 - **Conflict resolution uses `NSFileVersion`, not filesystem siblings.**
   Two Macs writing while both online (or each writing while offline, then
   reconnecting) produce conflicting versions surfaced by
-  `NSFileVersion.unresolvedConflictVersionsOfItem(at:)`. Resolution flow:
+  `NSFileVersion.unresolvedConflictVersionsOfItem(at:)`. The resolver
+  must merge **all** candidates — every conflicting version, the
+  currently-canonical file, and this Mac's pending local state — through
+  a *single* ordered candidate set so the timestamp-ordering policy is
+  uniform. Resolution flow:
   1. After every `NSMetadataQuery` update, call
-     `NSFileVersion.unresolvedConflictVersionsOfItem(at: url)`.
-  2. **Sort the returned versions by `modificationDate` ascending**
-     (oldest first). Without an explicit sort, iteration order is
-     undefined and `apply()`'s "same-id overwrite" gives non-deterministic
-     last-writer-wins. Ties on `modificationDate` (rare; same-second
-     writes from two Macs): break by `version.persistentIdentifier`
-     hash to keep ordering deterministic across runs.
-  3. Iterate in sorted order. For each version: open a coordinated read
-     of its `url`, decode with `BackupService.decode`, run
-     `BackupService.apply()`. Because we go oldest → newest and
-     same-`id` records are overwritten by the incoming snapshot, the
-     newest version's records win same-`id` collisions — the
-     deterministic last-writer-wins rule we want.
-  4. After the loop, also feed the currently-canonical
-     `cadence-state.json` (i.e. the non-conflicting current version)
-     through the same in-memory three-way merge as the regular read
-     path, so any local dirty edits not represented in any version are
-     preserved.
-  5. **Write the merged state back to the canonical file**: take a fresh
-     `BackupService.makeBackup()` (which now reflects all merged
-     versions plus local pending edits), encode, and write to
-     `cadence-state.json` under `NSFileCoordinator`. Verify the write
-     succeeded (no coordinator error) before proceeding.
-  6. Only **after** the consolidated write succeeds, mark each
+     `NSFileVersion.unresolvedConflictVersionsOfItem(at: url)`. If the
+     returned array is empty, this is the regular read path; otherwise
+     enter the conflict path below.
+  2. **Close the write gate immediately** so no in-flight debounced
+     flush can push pre-merge state back to iCloud during resolution.
+  3. **Capture local pending state first**: synchronously drain the
+     debounce timer and take `local = BackupService.makeBackup()`. Do
+     not touch any version yet.
+  4. **Build one ordered candidate set**: collect, in memory:
+     - every conflicting `NSFileVersion` (read each via a coordinated
+       read of its `url`, decode with `BackupService.decode`), paired
+       with its `modificationDate`;
+     - the canonical file (`NSFileVersion.currentVersionOfItem(at: url)`),
+       also paired with its `modificationDate`;
+     - the captured `local` snapshot, paired with `Date()` (this Mac's
+       pending edits are by definition "newer than the canonical disk
+       state").
+     Sort the whole set by `modificationDate` ascending (oldest first).
+     Ties on `modificationDate` (rare; same-second writes from two
+     Macs): break by a deterministic key (`version.persistentIdentifier`
+     hash for `NSFileVersion`s; canonical and local get fixed sentinel
+     keys ordered below all version hashes) so results are stable
+     across runs.
+  5. **Merge in memory only** — do not mutate the stores yet. Walk the
+     sorted set oldest → newest, folding each snapshot into a running
+     `merged` value with the same precedence rules as the regular
+     read-path merge (same-`id` overwrite; tombstones authoritative;
+     focus-day `max()`; settings by `settingsUpdatedAt`). Because we go
+     oldest → newest, the newest snapshot's records win same-`id`
+     collisions deterministically. The captured `local` snapshot sits
+     at the very end of the sort (it has `Date()` as its timestamp),
+     so local pending edits always win against any older version they
+     conflict with.
+  6. **Apply `merged` to the stores** once (under
+     `transport.isApplyingRemote = true` so self-echo suppression
+     fires).
+  7. **Write `merged` back** as one coordinated write to
+     `cadence-state.json` and verify it succeeded.
+  8. Only **after** the consolidated write succeeds, mark each
      conflicting version `isResolved = true` and call
-     `NSFileVersion.removeOtherVersionsOfItem(at:)`.
-  Skipping step 3 is a real data-loss path: without an explicit
+     `NSFileVersion.removeOtherVersionsOfItem(at:)`. Then re-open the
+     write gate.
+  Skipping step 7 is a real data-loss path: without an explicit
   post-merge write, the merged state lives only in this Mac's local
   stores until the next user mutation. If the user closes the app first,
   the other Mac never sees the resolution, and its next sync push will
   overwrite the canonical file with one of the pre-merge versions —
   silently undoing the merge.
+  Skipping the "single ordered set" shape (e.g. merging the canonical
+  file in a separate pass after the version loop) leaves the canonical
+  file outside the timestamp policy, so its same-`id` records can win
+  collisions the policy says they should lose.
   Conflict copies do **not** appear as `cadence-state 2.json` files — that
   is a third-party-cloud-provider behaviour (Option 3), not iCloud
   ubiquity-container behaviour. Treating it as such would silently
@@ -571,13 +660,28 @@ users.
    3. The no-op Settings toggle persists correctly and the rest of the
       app (tasks, focus, settings) behaves identically to the
       un-sandboxed build.
-4. **Phase 2 — write side.** Debounced
-   `BackupService.makeBackup() → encode → coordinated write` on every
-   store change, running on a background queue with the idle-debounce +
-   max-dirty-age + on-resign-active discipline above. Also: enforce the
-   "if `decode` ever throws `unsupportedSchema`, suspend writes and
-   prompt the user to update" rule, even though the matching `decode`
-   path lives in Phase 3 — writes must respect the contract from day 1.
+4. **Phase 2 — model changes + write side.** Two pieces, sequenced
+   in this order so the on-disk format is right *before* anything
+   starts writing it:
+   1. **Model additions** (additive, all `decodeIfPresent`, no
+      `schemaVersion` bump):
+      - `deletedAt: Date?` on `CadenceTask` and `Folder`. `delete(_:)`
+        on each store flipped from array removal to setting the
+        timestamp. Every UI query filtered through an `isLive`
+        predicate. Retention sweep on launch (default 30 days) that
+        hard-purges stale tombstones. See "Delete propagation via
+        tombstones" above.
+      - `settingsUpdatedAt: Date?` on `BackupSettings`, bumped only
+        when a setting mutates. Used by the read-path merge for the
+        settings tiebreaker.
+   2. **Debounced writer.**
+      `BackupService.makeBackup() → encode → coordinated write` on
+      every store change, on a background queue with the idle-debounce
+      + max-dirty-age + on-resign-active discipline above. Enforce the
+      "if `decode` ever throws `unsupportedSchema`, suspend writes and
+      prompt the user to update" rule even though the matching
+      `decode` path lives in Phase 3 — writes must respect the
+      contract from day 1.
 5. **Phase 3 — read side.** `NSMetadataQuery` watcher →
    `startDownloadingUbiquitousItem(at:)` if status is not `.current` →
    coordinated read → `BackupService.apply()` in merge mode. Includes
