@@ -137,12 +137,17 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = .current
-        guard let num = formatter.number(from: customMinutes),
-              num.doubleValue > 0, num.doubleValue <= 999 else { return }
-        let mins = num.doubleValue
+        let trimmed = customMinutes.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // Accept dot-decimal ("0.5") regardless of locale, then fall back to
+        // locale-aware parsing so comma-decimal users ("0,5") still work.
+        let parsed: Double? = Double(trimmed) ?? {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.locale = .current
+            return formatter.number(from: trimmed)?.doubleValue
+        }()
+        guard let mins = parsed, mins > 0, mins <= 999 else { return }
         selectedPreset = presets.first(where: { Double($0.minutes) == mins })?.minutes
         timer.set(seconds: mins * 60)
     }
