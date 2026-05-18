@@ -39,10 +39,11 @@ Translated into requirements:
   - ⚠️ **Known limitation for continuous sync (settings):** "settings
     taken wholesale" is fine for a one-shot import but is a silent
     conflict sink when sync runs on every change. The
-    `settingsUpdatedAt: Date?` field added in Phase 2 (additive,
-    `decodeIfPresent`, no schema bump) makes settings merge with
-    "newest-wins-by-its-own-timestamp" — see the sign-out re-enable
-    flow for details.
+    `settingsUpdatedAt: Date?` field added in Phase 2 (one of three
+    fields landing together under a `schemaVersion: 2` bump — see
+    "Why these additions bump `schemaVersion`" below) makes settings
+    merge with "newest-wins-by-its-own-timestamp" — see the sign-out
+    re-enable flow for details.
   - ⚠️ **Known limitation for continuous sync (deletion):** the existing
     "local-only records are preserved" rule means **deletes do not
     propagate**. Concrete failure: Mac A deletes a task and writes the
@@ -57,8 +58,10 @@ Translated into requirements:
     and `Folder`, soft-delete records by setting that field rather
     than removing them from the array, hide tombstoned records from
     the UI, hard-purge tombstones older than a retention window (30
-    days) on launch. This is small, additive, and decodes cleanly on
-    old binaries via `decodeIfPresent`.
+    days) on launch. Ships under the `schemaVersion: 2` bump (see
+    "Why these additions bump `schemaVersion`" below) so v1 binaries
+    can't accidentally strip the field and resurrect deletes on
+    write.
   - ⚠️ **Known limitation for continuous sync (same-record edits):**
     same-`id` task/folder collisions in the existing `apply()`
     unconditionally overwrite the local record with the incoming
@@ -66,8 +69,9 @@ Translated into requirements:
     based on which Mac happens to sync last. **Fix landed in this
     plan (see "Per-record conflict resolution via `updatedAt`"
     section below):** add `updatedAt: Date` to `CadenceTask` and
-    `Folder` (additive, `decodeIfPresent`, no schema bump), bump on
-    every mutation, resolve same-`id` collisions by newer-wins.
+    `Folder` (ships under the same `schemaVersion: 2` bump as the
+    other two new fields), bump on every mutation, resolve same-`id`
+    collisions by newer-wins.
 - The stores (`TaskStore`, `FolderStore`, `FocusTimeStore`, `AppSettings`)
   expose `mergeIn` and `replaceAll`.
 
@@ -280,7 +284,9 @@ locally). To fix this:
 - Add `updatedAt: Date` to `CadenceTask` and `Folder`. Declare as
   `decodeIfPresent` with a fallback of `createdAt` for any record
   missing the field (legacy data written by binaries from before
-  Phase 2). No `schemaVersion` bump — additive only.
+  Phase 2). The struct-level decode is rollout-safe, but the **sync
+  semantics are not** — see "Why these additions bump
+  `schemaVersion`" below.
 - Every mutating method on `TaskStore` / `FolderStore` (`add`,
   `update`, `toggle`, `delete`) sets `updatedAt = Date()` on the
   affected record before saving. The retention sweep that purges
@@ -315,9 +321,11 @@ manual imports* (never lose work) but is wrong for continuous sync
 next read). We resolve this with **tombstones**, the standard answer:
 
 - Add `deletedAt: Date?` to `CadenceTask` and `Folder` (both
-  `decodeIfPresent`, so old binaries ignore it — no `schemaVersion`
-  bump). A `nil` value means "live"; a non-`nil` value means "deleted
-  at this timestamp."
+  `decodeIfPresent`-compatible at the decoder layer, but ships
+  under the `schemaVersion: 2` bump so older binaries don't
+  participate in sync and silently strip the field on write — see
+  "Why these additions bump `schemaVersion`" above). A `nil` value
+  means "live"; a non-`nil` value means "deleted at this timestamp."
 - `TaskStore.delete(_:)` and `FolderStore.delete(_:)` change from
   `removeAll(where:)` to setting `deletedAt = Date()`. The records
   stay in the array (and therefore in the snapshot) but are filtered
@@ -347,6 +355,42 @@ by diffing — is sound but adds a second piece of disk state that has
 its own race conditions (what if the lastApplied write succeeds but
 the cloud write fails?). Tombstones keep all the truth in the
 snapshot itself.
+
+**Why these additions bump `schemaVersion`.** All three new fields
+(`updatedAt`, `deletedAt`, `settingsUpdatedAt`) are additive on the
+*decoder* side — `decodeIfPresent` keeps the existing one-shot import
+path working unchanged on legacy files. But the *sync* contract is
+broken if an older binary participates after the fields ship:
+
+- An older binary's `Encodable` simply doesn't emit the new fields
+  on write. A v1-aware binary that picks up a v2 cloud file, decodes
+  it, edits something, and writes back, would strip `updatedAt`,
+  `deletedAt`, and `settingsUpdatedAt` from every record in the
+  snapshot. Tombstones would resurrect; updated records would look
+  stale; settings would silently last-writer-wins again.
+- A v1 binary reading a v2 file would still treat tombstoned records
+  as live and surface them in the UI. The user would see "deleted"
+  tasks reappear.
+
+Therefore Phase 2 **does bump `schemaVersion` from 1 to 2** even
+though the field additions are individually decode-compatible. The
+bump is the gate, not the field shape. Combined with the existing
+"if `decode` throws `unsupportedSchema`, suspend writes and prompt
+the user to update" transport rule, this gives correct mixed-version
+behaviour:
+
+- v2 binary writes v2 files. Other v2 binaries read them normally.
+- v1 binary attempts to read v2 file → `unsupportedSchema` → writes
+  suspended → user sees the "please update" banner. v1 keeps working
+  locally on its own UserDefaults state; no sync until upgrade.
+- v1 binary writes v1 files (it can't do otherwise) → its writes
+  never land in the v2 cloud snapshot because the transport on v1 is
+  already suspended.
+- Once every Mac is on v2, sync resumes normally.
+
+The user-facing cost is one "update Cadence to enable sync"
+notification on the lagging Mac during a staggered upgrade — small
+and well-understood, much better than silent data loss.
 
 **Write path.** Any mutating call on a store flips a "dirty" flag. A
 debounced writer takes a fresh `makeBackup()`, encodes it, and writes
@@ -480,9 +524,10 @@ single-user macOS setup).
      `merged` value with the same precedence rules as the regular
      read-path merge:
      - Same-`id` task/folder collisions resolve by per-record
-       `updatedAt` (newer wins; ties prefer the candidate already in
-       `merged`, which preserves the oldest→newest ordering as a
-       secondary signal but is otherwise unnecessary).
+       `updatedAt` (newer wins; ties prefer the `local` candidate
+       specifically — same rule as the regular read path and the
+       sign-in recovery flow, so all three merge paths agree on the
+       tie-break).
      - Tombstones authoritative; `deletedAt` precedence as above.
      - Focus-day collisions resolve by `max()`.
      - Settings resolve by `settingsUpdatedAt`.
@@ -556,17 +601,20 @@ single-user macOS setup).
     The `settingsUpdatedAt` rule referenced in step 4: pick the side
     with the newer `settingsUpdatedAt`. This field was added in Phase
     2 as a `Date?` declared `decodeIfPresent` on `BackupSettings`,
-    bumped only when a setting actually mutates. Because it is
-    additive-only, no `schemaVersion` bump is required and old binaries
-    that don't know about the field simply fall back to the original
-    "settings replaced wholesale" behaviour. (The `unsupportedSchema`
-    suspend-writes rule below applies only to *breaking* changes that
-    bump `schemaVersion`; optional fields decoded with `decodeIfPresent`
-    are not breaking and do not bump it. The two rules do not
-    conflict.) If `settingsUpdatedAt` is missing on both sides (e.g.
-    both binaries pre-date the field) the snapshot-level `exportedAt`
-    is the fallback tiebreaker — known to be unsound but never worse
-    than today's behaviour. A future "merge settings field-by-field
+    bumped only when a setting actually mutates. It ships together
+    with `updatedAt` and `deletedAt` under the **`schemaVersion: 2`
+    bump** — see "Why these additions bump `schemaVersion`" above for
+    why decode-compatible additive fields still need a version gate in
+    a sync context (older binaries would silently strip them on
+    write). The `unsupportedSchema` suspend-writes rule does the
+    gating: v1 binaries can't participate in the v2 cloud snapshot
+    until upgraded. If `settingsUpdatedAt` is missing on both sides of
+    a merge between two v2 binaries (e.g. settings hasn't been
+    touched since upgrade), the snapshot-level `exportedAt` is the
+    fallback tiebreaker — known to be unsound for settings, but
+    bounded to "settings hasn't been mutated since upgrade so the
+    blanket-overwrite outcome equals what either side would produce."
+    A future "merge settings field-by-field
     with per-field timestamps" is an option if option (a) proves
     insufficient.
 
@@ -799,12 +847,20 @@ users.
    > verified end-to-end across two Macs. The first user-facing
    > release of Option 1 is Phase 3 + Phase 4 landing together.
 
-   1. **Model additions** (additive, all `decodeIfPresent`, no
-      `schemaVersion` bump):
+   1. **Model additions + `schemaVersion: 2` bump** (all fields are
+      individually `decodeIfPresent`-compatible on the decoder side,
+      but the *bump itself* is what gates older binaries out of sync
+      so they can't silently strip the new fields on write; see "Why
+      these additions bump `schemaVersion`" above):
+      - **Bump `CadenceBackup.currentSchemaVersion` from 1 to 2.**
+        This is the gate. Without it, a v1 binary that happens to
+        decode a v2 file (via the existing tolerant decoder) would
+        re-emit a snapshot missing `updatedAt` / `deletedAt` /
+        `settingsUpdatedAt` and break every merge guarantee.
       - `updatedAt: Date` on `CadenceTask` and `Folder`. Bumped by
         every mutating method on `TaskStore` / `FolderStore` (`add`,
         `update`, `toggle`, plus the soft-delete `delete`). Fallback
-        for legacy records missing the field: decode via
+        for legacy v1 records missing the field: decode via
         `decodeIfPresent` and substitute `createdAt`. The retention
         sweep that purges tombstones does **not** bump `updatedAt`.
         Used by the read-path merge for the per-record `updatedAt`
@@ -819,6 +875,13 @@ users.
       - `settingsUpdatedAt: Date?` on `BackupSettings`, bumped only
         when a setting mutates. Used by the read-path merge for the
         settings tiebreaker.
+      - **User-facing upgrade path:** a Mac that hits a v2 cloud
+        snapshot while still on v1 shows the existing "please update
+        Cadence to enable sync" banner (triggered by the existing
+        `unsupportedSchema` suspend-writes rule). It keeps working
+        locally on its own UserDefaults state; no sync until upgrade.
+        This is the intentional cost of the bump and is the right
+        trade vs. silent data loss.
    2. **Debounced writer (behind feature flag).**
       `BackupService.makeBackup() → encode → coordinated write` on
       every store change, on a background queue with the idle-debounce
