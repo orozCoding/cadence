@@ -85,18 +85,24 @@ Files/Finder under iCloud Drive); putting our state there would clutter
 the user's iCloud Drive and is the wrong scope.
 macOS syncs the file across Macs signed into the same Apple ID for free.
 
-**Read path.** On launch and whenever `NSMetadataQuery` (scoped to
+**Read path (overview — full specification is "Critical read-path
+invariant" below).** Trigger: `NSMetadataQuery` (scoped to
 `NSMetadataQueryUbiquitousDataScope` — *not* `…DocumentsScope`, since
-the file lives outside `Documents/`; observing
-`NSMetadataQueryDidUpdateNotification`) reports the ubiquitous file
-changed, we:
+the file lives outside `Documents/`) reports the ubiquitous file
+changed via `NSMetadataQueryDidUpdateNotification`. From there:
 
 1. Inspect `NSMetadataUbiquitousItemDownloadingStatusKey` on the updated
    item. If it is not `NSMetadataUbiquitousItemDownloadingStatusCurrent`,
    call `FileManager.default.startDownloadingUbiquitousItem(at:)` and wait
    for the next metadata update that signals `.current` before reading.
-2. Open a coordinated read, `BackupService.decode` the file, and call
-   `BackupService.apply()` — the existing merge code does the rest.
+2. Run the in-memory three-way merge sequence — capture remote in
+   memory, capture local pending state, compute `merged` with the
+   precedence rules, apply once, write back. **The naive
+   "decode → BackupService.apply() directly" flow is unsafe** because
+   it silently overwrites dirty local edits; do not implement it. The
+   full sequence and its rationale are specified in "Critical read-path
+   invariant — fold local dirty state into the merge" below, and that
+   section is the single source of truth for the read path.
 
 A note on `NSFilePresenter` vs `NSMetadataQuery` — they are
 **complementary, not alternatives**:
@@ -129,8 +135,13 @@ when a remote update arrives, `BackupService.apply()` will overwrite
 same-`id` records with the cloud version — silently reverting the
 local edits before they were ever uploaded. The read path therefore
 must perform an explicit **in-memory three-way merge** rather than a
-naive apply. Concrete sequence, all under the
-`transport.isApplyingRemote` reentrancy flag described below:
+naive apply. Concrete sequence (the `transport.isApplyingRemote`
+reentrancy flag described under "Self-echo / ping-pong suppression"
+below is scoped narrowly — set **only** around the `apply(merged)`
+call in step 4, not around the whole sequence. The earlier steps
+either don't mutate the stores at all or are pure in-memory reads, so
+wrapping them in the flag would suppress legitimate user mutations
+during the merge window for no benefit):
 
 1. **Capture remote in memory.** Open a coordinated read of the
    just-arrived `cadence-state.json` and `BackupService.decode` it
