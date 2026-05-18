@@ -84,11 +84,25 @@ final class FocusTimeStore: ObservableObject {
         save()
     }
 
-    /// Replace every focus-time entry with the supplied map. Used by the
-    /// backup import flow. Non-positive values are filtered out to keep the
-    /// stored map sparse (matching `setDay` semantics).
+    /// Replace every focus-time entry with the supplied map. Used by
+    /// `restoreLastPreImport` so a rollback fully reverts to the snapshot
+    /// captured before the import. Non-positive values are filtered out to
+    /// keep the stored map sparse (matching `setDay` semantics).
     func replaceAll(_ daily: [String: Int]) {
         dailySeconds = daily.filter { $0.value > 0 }
+        ticksSinceSave = 0
+        save()
+    }
+
+    /// Overlay incoming day → seconds entries onto the current map. Days
+    /// present in the incoming map overwrite the local value for that day;
+    /// days only present locally are left untouched. Non-positive values
+    /// in the incoming map are ignored (no way to "import a deletion" —
+    /// matches the additive merge contract the rest of the import uses).
+    func mergeIn(_ incoming: [String: Int]) {
+        for (key, seconds) in incoming where seconds > 0 {
+            dailySeconds[key] = seconds
+        }
         ticksSinceSave = 0
         save()
     }

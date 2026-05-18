@@ -79,8 +79,16 @@ enum BackupService {
     /// silently corrupt the imported snapshot.
     static let dataWillBeReplacedNotification = Notification.Name("cadence.backup.dataWillBeReplaced")
 
-    /// Replace every store's contents with the snapshot. Caller is expected
-    /// to confirm with the user first since this overwrites all local data.
+    /// Merge a backup snapshot into the live stores. Same-ID records
+    /// (tasks, folders) are updated to the incoming version; same-key
+    /// focus-time days are overwritten; preferences are taken from the
+    /// file wholesale. Anything local that the file doesn't mention is
+    /// left alone — the destination device keeps work done since the
+    /// export. The active folder is intentionally not changed.
+    ///
+    /// Caller is expected to confirm with the user first because this is
+    /// still potentially destructive for records that share an ID with
+    /// the file (the file wins those collisions).
     ///
     /// The current state is stashed in UserDefaults under
     /// `preImportSnapshotKey` before any mutation, and an
@@ -100,7 +108,17 @@ enum BackupService {
             // remains the only documented way to request an immediate flush.
             UserDefaults.standard.synchronize()
         }
-        applyToStores(backup)
+        applyToStores(backup, mode: .merge)
+    }
+
+    /// Apply mode for `applyToStores`. `.merge` overlays incoming records
+    /// onto local state without removing local-only entries — the normal
+    /// import path. `.replace` wipes each store and writes the snapshot
+    /// verbatim — used by `restoreLastPreImport` so a rollback fully
+    /// reverts to the pre-import state.
+    private enum ApplyMode {
+        case merge
+        case replace
     }
 
     /// Performs the actual store mutations + interrupted-import flag
@@ -108,45 +126,65 @@ enum BackupService {
     /// pre-import snapshot without clobbering the very snapshot it just
     /// read — taking a fresh `makeBackup()` of the partial/bad state at the
     /// start of a restore would destroy the only known-good rollback.
-    private static func applyToStores(_ backup: CadenceBackup) {
+    private static func applyToStores(_ backup: CadenceBackup, mode: ApplyMode) {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: importInProgressKey)
         defaults.synchronize()  // ensure the in-progress flag is on disk before mutating
 
-        // Reset any in-flight pomodoro before we replace the focus map.
+        // Reset any in-flight pomodoro before we touch the focus map.
         // `prepareForDataReplacement` pauses (flushing any sub-second focus
-        // accumulator into the about-to-be-overwritten map, which is then
-        // discarded by `replaceAll`), then clears `remaining` so a later
-        // Resume can't tick seconds onto the freshly imported total — the
-        // imported snapshot is the source of truth from this point on.
+        // accumulator into the about-to-be-mutated map; merge mode keeps
+        // local days, so that flushed value lands on the local copy and is
+        // either kept or overwritten by the file's value for the same day)
+        // and clears `remaining` so a later Resume can't tick seconds onto
+        // the freshly imported total.
         PomodoroTimer.shared.prepareForDataReplacement()
 
         // Notify any open editor sheets to abandon pending writes before we
-        // overwrite their underlying store. Stale autosaves landing after
-        // this point would otherwise resurrect pre-import drafts (see
-        // TaskCreateView / TaskEditView onReceive handler).
+        // mutate the underlying store. Stale autosaves landing after this
+        // point would otherwise resurrect pre-import drafts or overwrite a
+        // record the file just changed (see TaskCreateView / TaskEditView
+        // / FocusDayRow onReceive handlers).
         NotificationCenter.default.post(name: dataWillBeReplacedNotification, object: nil)
 
-        // Make sure every task points to a folder that exists. Tasks whose
-        // `folderId` isn't represented in `backup.folders` would otherwise
-        // be invisible in the UI until the next launch (when FolderStore's
-        // init creates "Recovered" stubs). Re-running that recovery here
-        // keeps the in-memory state consistent immediately after import.
+        // Make sure every task in the file points to a folder that will
+        // exist after the merge. Tasks whose `folderId` is in neither the
+        // file's folders nor the local folders would otherwise be invisible
+        // in the UI until the next launch (FolderStore.init's stub
+        // recovery). Stub them here so the in-memory state is consistent
+        // immediately after the import.
         let backupFolderIDs = Set(backup.folders.map { $0.id })
+        let knownFolderIDs: Set<UUID>
+        switch mode {
+        case .merge:   knownFolderIDs = backupFolderIDs.union(FolderStore.shared.folders.map { $0.id })
+        case .replace: knownFolderIDs = backupFolderIDs
+        }
         let referencedFolderIDs = Set(backup.tasks.map { $0.folderId })
-        let missingFolderIDs = referencedFolderIDs.subtracting(backupFolderIDs)
+        let missingFolderIDs = referencedFolderIDs.subtracting(knownFolderIDs)
         var foldersToApply = backup.folders
         for orphanID in missingFolderIDs where orphanID != .generalFolderID {
             let shortID = orphanID.uuidString.prefix(8).uppercased()
             foldersToApply.append(Folder(id: orphanID, name: "Recovered (\(shortID))"))
         }
 
-        // Folders must be replaced first so tasks that reference custom
-        // folder IDs land in valid folders.
-        FolderStore.shared.replaceAll(folders: foldersToApply, activeFolderID: backup.activeFolderID)
-        TaskStore.shared.replaceAll(backup.tasks)
-        FocusTimeStore.shared.replaceAll(backup.focusDailySeconds)
-        AppSettings.shared.apply(backup.settings)
+        switch mode {
+        case .merge:
+            // Folders before tasks so any newly-imported folder exists
+            // before tasks reference it. Active folder is intentionally
+            // NOT changed — the destination device keeps its current
+            // context. Preferences come from the file wholesale because
+            // they are single-value settings without a merge concept.
+            FolderStore.shared.mergeIn(folders: foldersToApply)
+            TaskStore.shared.mergeIn(backup.tasks)
+            FocusTimeStore.shared.mergeIn(backup.focusDailySeconds)
+            AppSettings.shared.apply(backup.settings)
+
+        case .replace:
+            FolderStore.shared.replaceAll(folders: foldersToApply, activeFolderID: backup.activeFolderID)
+            TaskStore.shared.replaceAll(backup.tasks)
+            FocusTimeStore.shared.replaceAll(backup.focusDailySeconds)
+            AppSettings.shared.apply(backup.settings)
+        }
 
         defaults.removeObject(forKey: importInProgressKey)
     }
@@ -177,7 +215,11 @@ enum BackupService {
               let snapshot = try? decode(data) else {
             return false
         }
-        applyToStores(snapshot)
+        // Rollback uses replace, not merge: the user wants the exact
+        // pre-import state, including the disappearance of anything they
+        // added after the import. Merge here would leak post-import
+        // records back into the "restored" state.
+        applyToStores(snapshot, mode: .replace)
         return true
     }
 

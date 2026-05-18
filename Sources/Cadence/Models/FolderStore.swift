@@ -85,7 +85,9 @@ final class FolderStore: ObservableObject {
     }
 
     /// Replace the entire folder list (and optionally the active folder) in a
-    /// single atomic step. Used by the backup import flow.
+    /// single atomic step. Used by `restoreLastPreImport` so a rollback
+    /// fully reverts to the pre-import snapshot, even if the user added
+    /// folders afterwards.
     ///
     /// The General folder is always re-inserted at index 0 if missing so the
     /// app's invariant ("General always exists") is preserved even if the
@@ -104,6 +106,40 @@ final class FolderStore: ObservableObject {
         } else {
             setActive(merged[0])
         }
+    }
+
+    /// Overlay incoming folders onto the current list. Folders present in
+    /// both lists (same `id`) are updated to the incoming version (e.g. so
+    /// a rename on the source device propagates). Folders only in the
+    /// incoming list are appended. Local-only folders are left alone.
+    ///
+    /// The active folder is intentionally *not* changed — the destination
+    /// device keeps its current context. Use `setActive` separately if you
+    /// want the file's active to win.
+    func mergeIn(folders incoming: [Folder]) {
+        var incomingByID: [UUID: Folder] = [:]
+        for folder in incoming { incomingByID[folder.id] = folder }
+
+        var appliedIDs = Set<UUID>()
+        for i in folders.indices {
+            if let updated = incomingByID[folders[i].id] {
+                folders[i] = updated
+                appliedIDs.insert(updated.id)
+            }
+        }
+        for folder in incoming where !appliedIDs.contains(folder.id) {
+            folders.append(folder)
+            appliedIDs.insert(folder.id)
+        }
+
+        // Defensive: preserve the "General folder always exists" invariant
+        // even if both lists somehow lost it.
+        if !folders.contains(where: { $0.id == .generalFolderID }) {
+            folders.insert(Folder(id: .generalFolderID, name: "General"), at: 0)
+        }
+
+        dataIsReadable = true
+        saveFolders()
     }
 
     private func saveFolders() {
