@@ -225,6 +225,18 @@ atomicity — the flag is only for self-echo suppression):
      to a stale cloud day).
    - For settings, use the dedicated `settingsUpdatedAt` rule
      described under the sign-out flow.
+   - **For `activeFolderID`: local always wins; never overwrite from
+     remote.** Which folder is open on *this* Mac is a UI selection,
+     not user data — there's no reason for Mac B to take Mac A's
+     active folder over Mac B's own. (Matches the existing one-shot
+     `BackupService.apply()` which already leaves `activeFolderID`
+     alone with a "destination device keeps its current context"
+     comment.) Edge case: if the local `activeFolderID` points at a
+     folder that the merge result has tombstoned, fall back to
+     `.generalFolderID` — same fallback the codebase already uses on
+     missing folders. The cloud snapshot's `activeFolderID` field is
+     still written (the snapshot stays a complete representation)
+     but is never *read* into local state during sync.
 4. **Apply `merged` to the stores** via the existing
    `BackupService.apply()` merge path. Because `merged` already
    embodies the precedence rules above, the same-`id` overwrite inside
@@ -331,6 +343,32 @@ next read). We resolve this with **tombstones**, the standard answer:
   stay in the array (and therefore in the snapshot) but are filtered
   out of every UI query (`tasks(forDay:)`, `distinctDays(folderId:)`,
   etc.) by an `isLive` predicate.
+- **Folder-delete cascade explicit rule.** Today
+  `FolderStore.delete(_:)` calls `TaskStore.deleteAll(inFolder:)`
+  which hard-removes every task in the folder. Under tombstoning
+  that becomes: **each child task is individually tombstoned** by
+  the same call — `deletedAt = Date()` and `updatedAt = Date()` set
+  on every child task — and the folder itself is tombstoned with
+  the same timestamp. Three reasons each child gets its own
+  tombstone (rather than "live tasks under a tombstoned folder" or
+  "hard-delete children but tombstone folder"):
+  1. Other Macs only see what's in the snapshot. A live task whose
+     folder is tombstoned would still surface in the UI on a Mac
+     that hasn't yet swept the orphan-folder recovery path —
+     resurrecting the data the user just deleted.
+  2. Hard-removing children locally and tombstoning only the folder
+     breaks the rule that the other Mac learns about deletions
+     through tombstones; the child task would silently re-sync from
+     the other Mac's still-live copy on the next merge.
+  3. Cascade-tombstoning keeps the per-record `updatedAt` rule
+     coherent — a task that was both edited on Mac A and
+     cascade-deleted on Mac B at the same instant resolves through
+     the normal tombstone-precedence + `updatedAt` comparison,
+     instead of falling into an undefined "folder said delete but
+     task said keep" mode.
+  All cascade tombstones share the same `Date()` value (captured
+  once per cascade call) so the post-deletion snapshot has a
+  consistent timestamp shape.
 - The merge algorithm in the read path treats tombstones as
   authoritative: if either side has a record with `deletedAt != nil`,
   the merged version is tombstoned. The newer of the two
@@ -524,13 +562,26 @@ single-user macOS setup).
      `merged` value with the same precedence rules as the regular
      read-path merge:
      - Same-`id` task/folder collisions resolve by per-record
-       `updatedAt` (newer wins; ties prefer the `local` candidate
-       specifically — same rule as the regular read path and the
-       sign-in recovery flow, so all three merge paths agree on the
-       tie-break).
+       `updatedAt` (newer wins). On equal `updatedAt`:
+       1. If one of the colliding candidates is the captured `local`
+          snapshot, `local` wins — same rule as the regular read
+          path and the sign-in recovery flow, so all three merge
+          paths agree.
+       2. If both candidates are non-local (two different
+          `NSFileVersion`s or one version + the canonical file), use
+          the **candidate ordering already defined in step 4**: the
+          one that appears *later* in the oldest→newest sort wins
+          (higher `modificationDate`; ties on `modificationDate`
+          broken by `persistentIdentifier` hash with canonical/local
+          taking fixed sentinel keys). Reusing that ordering keeps
+          the resolver deterministic across runs and avoids
+          introducing a second ordering policy that could disagree
+          with the first.
      - Tombstones authoritative; `deletedAt` precedence as above.
      - Focus-day collisions resolve by `max()`.
      - Settings resolve by `settingsUpdatedAt`.
+     - `activeFolderID`: local always wins; never overwrite from any
+       version (same rule as the regular read path).
      The captured `local` snapshot sits at the end of the sort (its
      overall-snapshot timestamp is `Date()`), so it gets the last
      pass through the fold. But the per-record `updatedAt` rule
@@ -589,8 +640,10 @@ single-user macOS setup).
        `updatedAt` (newer wins; ties prefer local), **tombstone
        precedence** (newer `deletedAt` wins; tombstone on either side
        authoritative — so deletes made on the other Mac while this
-       one was signed out still propagate), focus-day `max()`, and
-       the dedicated `settingsUpdatedAt` rule.
+       one was signed out still propagate), focus-day `max()`, the
+       dedicated `settingsUpdatedAt` rule, and `activeFolderID`
+       local-always-wins (the local Mac keeps its current folder
+       selection regardless of what the cloud says).
     5. Apply `merged` to the stores once (under
        `transport.isApplyingRemote = true`).
     6. Take a fresh `makeBackup()` of the now-consolidated state and
@@ -615,7 +668,8 @@ single-user macOS setup).
     bounded to "settings hasn't been mutated since upgrade so the
     blanket-overwrite outcome equals what either side would produce."
     A future "merge settings field-by-field
-    with per-field timestamps" is an option if option (a) proves
+    with per-field timestamps" is the more invasive follow-on if the
+    snapshot-level `settingsUpdatedAt` approach above proves
     insufficient.
 
     This treats sign-out as a long offline period rather than as a
@@ -739,8 +793,13 @@ the `CadenceBackup` JSON there and watches it for external changes via:
 
 - Each provider has its own quirks:
   - Dropbox creates `cadence-state (conflicted copy 2026-05-18 ...).json`
-    on concurrent writes. We can scan for these and merge them in, same
-    as Option 1's conflict-file handling, but it's noisier.
+    on concurrent writes. We can scan for these sibling files and feed
+    them through the same merge logic Option 1 uses on `NSFileVersion`
+    candidates (in-memory three-way merge, per-record `updatedAt`,
+    tombstone precedence, etc.), then delete the duplicates once
+    merged. The merge *engine* is shared with Option 1; the *discovery*
+    mechanism — filesystem siblings vs `NSFileVersion` — is Option 3's
+    own and is noisier than Apple's coordinated-write contract.
   - Google Drive desktop is lazy — files may not be on disk until the
     user opens the folder in Finder; we'd need to handle "file present
     in listing but not yet downloaded".
