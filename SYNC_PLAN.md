@@ -59,6 +59,15 @@ Translated into requirements:
     the UI, hard-purge tombstones older than a retention window (30
     days) on launch. This is small, additive, and decodes cleanly on
     old binaries via `decodeIfPresent`.
+  - ⚠️ **Known limitation for continuous sync (same-record edits):**
+    same-`id` task/folder collisions in the existing `apply()`
+    unconditionally overwrite the local record with the incoming
+    copy. In a continuous-sync world that flips the loss direction
+    based on which Mac happens to sync last. **Fix landed in this
+    plan (see "Per-record conflict resolution via `updatedAt`"
+    section below):** add `updatedAt: Date` to `CadenceTask` and
+    `Folder` (additive, `decodeIfPresent`, no schema bump), bump on
+    every mutation, resolve same-`id` collisions by newer-wins.
 - The stores (`TaskStore`, `FolderStore`, `FocusTimeStore`, `AppSettings`)
   expose `mergeIn` and `replaceAll`.
 
@@ -182,20 +191,31 @@ atomicity — the flag is only for self-echo suppression):
    timer and take `local = BackupService.makeBackup()` — this is the
    in-memory state including any dirty edits made since the last
    successful write.
-3. **Merge in memory, local-pending wins same-`id` collisions, tombstones
-   are authoritative.** Compute `merged` by:
-   - Start from `remote` (so anything `local` doesn't know about — work
-     done on the other Mac — is preserved).
-   - For each record (task, folder) in `local`, overwrite the
-     same-`id` entry in `merged` (so this Mac's dirty edits beat the
-     remote's older copy of the same record). Append local-only `id`s.
+3. **Merge in memory using per-record timestamps. Newer `updatedAt`
+   wins same-`id` collisions; tombstones are authoritative.** Compute
+   `merged` by:
+   - Start from `remote` (so anything `local` doesn't know about —
+     work done on the other Mac — is preserved).
+   - For each `id` present in both `local` and `remote`, compare the
+     two records' `updatedAt` timestamps (see "Per-record conflict
+     resolution via `updatedAt`" below for the model change). Take
+     the side with the strictly-newer `updatedAt`. On equal
+     timestamps (no change since last sync, or rare same-second edit
+     on both sides), prefer `local` — this Mac's view is authoritative
+     for an unchanged record, and a same-instant double-edit is
+     resolved deterministically. **Do not blanket-prefer `local`** —
+     that would silently discard legitimate remote edits made
+     between this Mac's last sync and now.
+   - For each `id` in `local` only, append it to `merged`. (It is
+     either a record this Mac created since last sync, or one this
+     Mac never saw the remote-side delete for — the tombstone rule
+     below handles the latter.)
    - **Apply tombstone precedence**: for any record whose `deletedAt`
      field is non-`nil` on *either* side, set the merged record's
      `deletedAt` to the newer of the two timestamps. A tombstone on
      either side is authoritative — this is how deletes propagate
-     without being silently resurrected by the local-only-wins rule.
-     See "Delete propagation via tombstones" below for the model
-     change and retention policy.
+     without being silently resurrected. See "Delete propagation via
+     tombstones" below for the model change and retention policy.
    - For focus-day keys present in both, prefer the higher of the two
      second counts (focus time only grows; this avoids losing minutes
      to a stale cloud day).
@@ -205,7 +225,7 @@ atomicity — the flag is only for self-echo suppression):
    `BackupService.apply()` merge path. Because `merged` already
    embodies the precedence rules above, the same-`id` overwrite inside
    `apply()` is now safe — every same-`id` collision was already
-   resolved in step 3 with local-pending wins.
+   resolved in step 3 with the explicit `updatedAt` policy.
 5. **Write `merged` back to the cloud file** as one coordinated write,
    then clear the dirty flag and record the resulting blob as
    `last-written` (used by the self-echo suppression rule below). This
@@ -218,11 +238,13 @@ atomicity — the flag is only for self-echo suppression):
    flush. Better a delayed import than silent partial state.
 
 This sequence is what makes "same-id overwrite" safe in a continuous-sync
-context. Without the explicit local-pending-wins step, the merge
+context. Without the explicit per-record `updatedAt` step, the merge
 semantics that are fine for one-shot manual imports become a data-loss
-vector. With it, the only loss case is "two Macs edited the same
-record while disconnected from each other" — covered by the
-`NSFileVersion` conflict-resolution flow below.
+vector — either direction (`local` blanket-wins ⇒ remote edits silently
+lost; `remote` blanket-wins ⇒ local dirty edits silently lost). With it,
+the only loss case is "two Macs edited the same record while
+disconnected from each other and the later edit overrode the earlier" —
+that's `NSFileVersion` conflict territory, handled below.
 
 **Self-echo / ping-pong suppression.** Every `apply()` writes through
 the stores, which would normally re-flip the dirty flag and cause the
@@ -245,6 +267,43 @@ equality on the encoded blob) and skip the write entirely if they
 match — a final guard against scheduling redundant writes for any
 reason (e.g. a future code path that flips dirty without changing
 logical state).
+
+**Per-record conflict resolution via `updatedAt`.** Without a
+per-record mutation timestamp, the merge code cannot tell a "dirty
+local edit" from "old unchanged local record" — they look identical
+in `local = makeBackup()`. Blanket-preferring `local` for same-`id`
+collisions would silently discard any legitimate remote edit made
+between this Mac's last sync and now (e.g. Mac B edited task X 10
+minutes ago and uploaded it; Mac A still holds the older copy
+locally). To fix this:
+
+- Add `updatedAt: Date` to `CadenceTask` and `Folder`. Declare as
+  `decodeIfPresent` with a fallback of `createdAt` for any record
+  missing the field (legacy data written by binaries from before
+  Phase 2). No `schemaVersion` bump — additive only.
+- Every mutating method on `TaskStore` / `FolderStore` (`add`,
+  `update`, `toggle`, `delete`) sets `updatedAt = Date()` on the
+  affected record before saving. The retention sweep that purges
+  stale tombstones does **not** bump `updatedAt` — it is a local-only
+  hard-delete and shouldn't masquerade as a user edit.
+- Same-`id` merge across every path (regular read, `NSFileVersion`
+  resolver, sign-in recovery) compares `updatedAt`s and takes the
+  newer side. Ties (same instant on both Macs, or unchanged on both
+  sides since last sync) prefer `local` — deterministic and
+  appropriate because an unchanged record is the same regardless of
+  side.
+- Clock-skew caveat: `updatedAt` uses each Mac's local `Date()`. If
+  one Mac's clock is materially wrong, its edits can over-win or
+  under-win. We accept this — both Macs are the same user's
+  machines, both run macOS time sync against Apple's NTP servers,
+  and skew measured in seconds is unlikely to alter the outcome of
+  any merge in practice. CloudKit (Option 2) avoids this by
+  timestamping server-side; if clock skew ever proves to be a real
+  problem in the field, that is a reason to revisit Option 2 rather
+  than to add server timestamps to Option 1.
+
+This is the per-record analogue of `settingsUpdatedAt`; together they
+give every part of the synced state a defined conflict policy.
 
 **Delete propagation via tombstones.** Without a persisted base snapshot
 to diff against, "this record is in `local` but not in `remote`" is
@@ -419,13 +478,21 @@ single-user macOS setup).
   5. **Merge in memory only** — do not mutate the stores yet. Walk the
      sorted set oldest → newest, folding each snapshot into a running
      `merged` value with the same precedence rules as the regular
-     read-path merge (same-`id` overwrite; tombstones authoritative;
-     focus-day `max()`; settings by `settingsUpdatedAt`). Because we go
-     oldest → newest, the newest snapshot's records win same-`id`
-     collisions deterministically. The captured `local` snapshot sits
-     at the very end of the sort (it has `Date()` as its timestamp),
-     so local pending edits always win against any older version they
-     conflict with.
+     read-path merge:
+     - Same-`id` task/folder collisions resolve by per-record
+       `updatedAt` (newer wins; ties prefer the candidate already in
+       `merged`, which preserves the oldest→newest ordering as a
+       secondary signal but is otherwise unnecessary).
+     - Tombstones authoritative; `deletedAt` precedence as above.
+     - Focus-day collisions resolve by `max()`.
+     - Settings resolve by `settingsUpdatedAt`.
+     The captured `local` snapshot sits at the end of the sort (its
+     overall-snapshot timestamp is `Date()`), so it gets the last
+     pass through the fold. But the per-record `updatedAt` rule
+     means a record in `local` only wins same-`id` collisions if its
+     own `updatedAt` is genuinely newer — an unchanged old record in
+     `local` no longer over-wins a newer remote edit just because
+     its containing snapshot is "fresher."
   6. **Apply `merged` to the stores** once (under
      `transport.isApplyingRemote = true` so self-echo suppression
      fires).
@@ -473,11 +540,12 @@ single-user macOS setup).
        store contents (which include every offline edit made while
        signed out).
     4. Compute `merged` using the same rules as the regular read-path
-       merge: same-`id` overwrite with local-pending-wins,
-       **tombstone precedence** (newer `deletedAt` wins; tombstone on
-       either side authoritative — so deletes made on the other Mac
-       while this one was signed out still propagate), focus-day
-       `max()`, and the dedicated `settingsUpdatedAt` rule.
+       merge: same-`id` task/folder collisions resolved by per-record
+       `updatedAt` (newer wins; ties prefer local), **tombstone
+       precedence** (newer `deletedAt` wins; tombstone on either side
+       authoritative — so deletes made on the other Mac while this
+       one was signed out still propagate), focus-day `max()`, and
+       the dedicated `settingsUpdatedAt` rule.
     5. Apply `merged` to the stores once (under
        `transport.isApplyingRemote = true`).
     6. Take a fresh `makeBackup()` of the now-consolidated state and
@@ -733,12 +801,21 @@ users.
 
    1. **Model additions** (additive, all `decodeIfPresent`, no
       `schemaVersion` bump):
+      - `updatedAt: Date` on `CadenceTask` and `Folder`. Bumped by
+        every mutating method on `TaskStore` / `FolderStore` (`add`,
+        `update`, `toggle`, plus the soft-delete `delete`). Fallback
+        for legacy records missing the field: decode via
+        `decodeIfPresent` and substitute `createdAt`. The retention
+        sweep that purges tombstones does **not** bump `updatedAt`.
+        Used by the read-path merge for the per-record `updatedAt`
+        tiebreaker; see "Per-record conflict resolution via
+        `updatedAt`" above.
       - `deletedAt: Date?` on `CadenceTask` and `Folder`. `delete(_:)`
         on each store flipped from array removal to setting the
-        timestamp. Every UI query filtered through an `isLive`
-        predicate. Retention sweep on launch (default 30 days) that
-        hard-purges stale tombstones. See "Delete propagation via
-        tombstones" above.
+        timestamp (and bumping `updatedAt` in the same call). Every
+        UI query filtered through an `isLive` predicate. Retention
+        sweep on launch (default 30 days) that hard-purges stale
+        tombstones. See "Delete propagation via tombstones" above.
       - `settingsUpdatedAt: Date?` on `BackupSettings`, bumped only
         when a setting mutates. Used by the read-path merge for the
         settings tiebreaker.
@@ -761,9 +838,9 @@ users.
       `remote: CadenceBackup` in memory. Do not touch the stores.
    4. Synchronously drain the debounce timer and capture
       `local = BackupService.makeBackup()`.
-   5. Compute `merged` with the precedence rules (same-`id`
-      local-pending-wins, tombstone-authoritative, focus-day `max()`,
-      `settingsUpdatedAt` for settings).
+   5. Compute `merged` with the precedence rules (same-`id` resolved
+      by per-record `updatedAt`, tombstone-authoritative, focus-day
+      `max()`, `settingsUpdatedAt` for settings).
    6. Apply `merged` once under `transport.isApplyingRemote = true`.
    7. Coordinated write of `merged` back to `cadence-state.json`.
    Includes the **first-launch bootstrap gate** (see below — gate held
