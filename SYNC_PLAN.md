@@ -135,13 +135,44 @@ when a remote update arrives, `BackupService.apply()` will overwrite
 same-`id` records with the cloud version — silently reverting the
 local edits before they were ever uploaded. The read path therefore
 must perform an explicit **in-memory three-way merge** rather than a
-naive apply. Concrete sequence (the `transport.isApplyingRemote`
+naive apply.
+
+**Store-serialization invariant — capture, merge, and apply must run
+on the store's actor with no interleaving mutations.** All three
+stores (`TaskStore`, `FolderStore`, `FocusTimeStore`) are
+`@MainActor`-isolated today, which makes this almost free: the entire
+sequence below — *from* `capture local` *through* `apply(merged)` —
+runs as one main-actor turn. The transport must enforce this:
+
+- The merge entrypoint is a single `@MainActor` function (e.g.
+  `runMergeSequence(remoteData: Data)`). All steps below execute
+  inside that function, on the main actor, with no `await` that
+  releases control between capture and apply. The remote download
+  and coordinated read happen *before* the function runs, on a
+  background queue; the function receives the already-decoded bytes.
+- If background-queue work is needed mid-sequence (it shouldn't be —
+  the merge is pure in-memory computation), it must complete and
+  return its result before any store mutation, so the actor never
+  releases between capture and apply.
+- Same invariant applies to the conflict resolver and the sign-in
+  recovery flow — every merge path runs as one main-actor turn.
+
+Without this invariant, a same-`id` user edit landing between
+`capture` and `apply` is silently overwritten by the now-stale
+`merged` snapshot. With it, the actor's serialization guarantee makes
+that race impossible: the user mutation either lands *before* capture
+(and is part of `local`) or *after* apply (and re-dirties the
+transport normally).
+
+Concrete sequence (the `transport.isApplyingRemote`
 reentrancy flag described under "Self-echo / ping-pong suppression"
 below is scoped narrowly — set **only** around the `apply(merged)`
 call in step 4, not around the whole sequence. The earlier steps
 either don't mutate the stores at all or are pure in-memory reads, so
 wrapping them in the flag would suppress legitimate user mutations
-during the merge window for no benefit):
+that *should* re-dirty the transport for the next write cycle. The
+serialization invariant above is what protects capture/merge/apply
+atomicity — the flag is only for self-echo suppression):
 
 1. **Capture remote in memory.** Open a coordinated read of the
    just-arrived `cadence-state.json` and `BackupService.decode` it
@@ -685,7 +716,21 @@ users.
       un-sandboxed build.
 4. **Phase 2 — model changes + write side.** Two pieces, sequenced
    in this order so the on-disk format is right *before* anything
-   starts writing it:
+   starts writing it.
+
+   > ⚠️ **Shippability gate:** the build at the end of Phase 2 is
+   > **NOT shippable to users.** Shipping a writer without a reader
+   > and bootstrap gate is the exact empty-snapshot data-loss path
+   > the bootstrap section exists to prevent — a fresh or secondary
+   > device would write local-or-empty state to iCloud before ever
+   > reading the existing cloud snapshot. Phase 2 lands behind a
+   > **default-off feature flag** (`CADENCE_ICLOUD_SYNC=1` env var or
+   > equivalent debug-only switch) so it can be tested locally on one
+   > Mac, but the toggle in Settings stays hidden and the writer
+   > stays inert in release builds until Phase 3 is complete and
+   > verified end-to-end across two Macs. The first user-facing
+   > release of Option 1 is Phase 3 + Phase 4 landing together.
+
    1. **Model additions** (additive, all `decodeIfPresent`, no
       `schemaVersion` bump):
       - `deletedAt: Date?` on `CadenceTask` and `Folder`. `delete(_:)`
@@ -697,7 +742,7 @@ users.
       - `settingsUpdatedAt: Date?` on `BackupSettings`, bumped only
         when a setting mutates. Used by the read-path merge for the
         settings tiebreaker.
-   2. **Debounced writer.**
+   2. **Debounced writer (behind feature flag).**
       `BackupService.makeBackup() → encode → coordinated write` on
       every store change, on a background queue with the idle-debounce
       + max-dirty-age + on-resign-active discipline above. Enforce the
