@@ -107,6 +107,52 @@ inside the read path is a hang/data-loss risk whenever the Mac is low
 on disk and iCloud has evicted the file under "Optimise Mac Storage" —
 that part is unchanged.
 
+**Critical read-path invariant — flush local dirty state before applying.**
+A naive `metadata-update → apply()` flow has a silent data-loss path: if
+this Mac has uncommitted local edits sitting behind the debounce window
+when a remote update arrives, `BackupService.apply()` will overwrite
+same-`id` records with the cloud version — silently reverting the
+local edits before they were ever uploaded. The read path therefore
+must, before calling `apply()`:
+
+1. **Flush any pending local writes first** — synchronously drain the
+   debounce timer, take a `makeBackup()` of the current in-memory
+   state, encode + coordinated-write it to the cloud file, and only
+   then re-read the (now-merged-with-our-own-changes) cloud file and
+   apply.
+2. If for any reason a flush cannot complete (transient
+   `NSFileCoordinator` error, container missing), **defer the apply**
+   rather than dropping the local edits. The dirty flag stays set; the
+   apply re-runs on the next metadata update (when the flush has a
+   chance to succeed) or on the next mutation flush. Better a delayed
+   import than a silent overwrite of work.
+
+This rule is what makes "same-id wins" safe in a continuous-sync
+context. Without it, the merge semantics that work fine for one-shot
+manual imports become a data-loss vector.
+
+**Self-echo / ping-pong suppression.** Every `apply()` writes through
+the stores, which would normally re-flip the dirty flag and cause the
+debounced writer to push the just-imported snapshot back out — round-trip
+ping-pong on a single Mac (`apply` → `dirty` → `write` → `metadata
+update` → `apply` → ...), and cross-Mac thrash when two Macs are both
+online. The transport must distinguish:
+
+- **Local mutations** (UI / keyboard / user action) → mark dirty,
+  schedule debounced write.
+- **Inbound applies** (this `apply()` originated from our own read
+  path) → store mutations during this call **must not** re-dirty the
+  transport. Implementation: a `transport.isApplyingRemote` reentrancy
+  flag set around the `apply()` call; the store's "did mutate" hook
+  consults the flag before touching the dirty bit.
+
+Additionally, the writer should compare the about-to-write snapshot
+against the last-successfully-written snapshot (cheap hash or byte
+equality on the encoded blob) and skip the write entirely if they
+match — a final guard against scheduling redundant writes for any
+reason (e.g. a future code path that flips dirty without changing
+logical state).
+
 **Write path.** Any mutating call on a store flips a "dirty" flag. A
 debounced writer takes a fresh `makeBackup()`, encodes it, and writes
 the file under `NSFileCoordinator` so iCloud sees an atomic update.
@@ -546,6 +592,17 @@ If gathering finishes and **no** `cadence-state.json` exists at all
 (genuinely first-ever launch across all the user's Macs), the gate
 opens immediately — there is nothing to overwrite. This is the only
 path that opens the gate without a downloaded file.
+
+**The same gate also applies on mid-session toggle-on.** When the user
+flips "Sync via iCloud" on from Settings while the app is already
+running, the transport must run this *same* closed-write bootstrap
+sequence — enumerate metadata, wait for
+`NSMetadataQueryDidFinishGathering`, download and apply any existing
+cloud snapshot, then open the gate. A user with an existing cloud
+file (from another Mac) who enables sync mid-session must not have
+their cloud data overwritten by their newly-enabled-but-still-empty
+local sync state. Treat enable-while-running as identical to
+first-launch for gate-sequencing purposes.
 
 This is a data-safety invariant, not a polish item.
 
