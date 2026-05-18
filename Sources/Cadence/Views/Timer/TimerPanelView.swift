@@ -141,8 +141,14 @@ struct TimerPanelView: View {
         guard !trimmed.isEmpty else { return }
         // Restrict to digits and a decimal separator so Double() can't quietly
         // accept things like "1e2" (scientific notation → 100 min) that the
-        // user didn't intend to enter.
-        let allowed = CharacterSet(charactersIn: "0123456789.,")
+        // user didn't intend to enter. CharacterSet.decimalDigits covers all
+        // Unicode decimal-digit scripts; the separator string includes "." and
+        // "," plus the locale's own decimal separator (e.g. "٫" in ar locales).
+        var separators = ".,"
+        if let sep = Locale.current.decimalSeparator, !separators.contains(sep) {
+            separators += sep
+        }
+        let allowed = CharacterSet.decimalDigits.union(CharacterSet(charactersIn: separators))
         guard trimmed.unicodeScalars.allSatisfy(allowed.contains) else { return }
         // Accept dot-decimal ("0.5") regardless of locale, then fall back to
         // locale-aware parsing so comma-decimal users ("0,5") still work.
