@@ -112,6 +112,10 @@ final class PomodoroTimer: ObservableObject {
     func prepareForDataReplacement() {
         pause()
         remaining = total
+        // After this call the focus store is about to be overwritten by the
+        // import; clear our session credit watermarks so a subsequent start
+        // doesn't carry phantom credit forward into the imported data.
+        beginNewSession()
         isFinished = false
     }
 
@@ -120,20 +124,12 @@ final class PomodoroTimer: ObservableObject {
     /// the backup export path so a snapshot taken mid-tick reflects the
     /// same focus total a `pause()` would credit a moment later.
     ///
-    /// Mirrors the credit logic inside `tick()` and `pause()`. Sub-second
-    /// remainder stays in `focusAccumulator` and will be credited by the
-    /// next regular tick.
+    /// Idempotent: calling this back-to-back credits nothing on the second
+    /// call because `creditEarnedSeconds` advances `creditedSecondsThisSession`
+    /// to the floor of total earned. Sub-second remainder stays implicit in
+    /// the wall-clock and will be credited by the next regular tick.
     func creditInFlightFocusTime() {
-        if isRunning {
-            let now = Date()
-            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
-            let wholeSeconds = Int(focusAccumulator)
-            if wholeSeconds > 0 {
-                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
-                focusAccumulator -= TimeInterval(wholeSeconds)
-            }
-            lastTickDate = now
-        }
+        creditEarnedSeconds(now: Date())
         FocusTimeStore.shared.flushIfNeeded()
     }
 
