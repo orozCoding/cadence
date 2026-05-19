@@ -669,9 +669,20 @@ single-user macOS setup).
        described in the regular read path).
     5. Apply `merged` to the stores once (under
        `transport.isApplyingRemote = true`).
-    6. Take a fresh `makeBackup()` of the now-consolidated state and
-       write it back as the first post-recovery write under
-       `NSFileCoordinator`. Verify success.
+    6. Write the already-computed `merged` snapshot directly (the
+       same one passed to `apply()` in step 5) back to the cloud
+       file under `NSFileCoordinator`. **Do not call
+       `makeBackup()` here** — `apply()` intentionally leaves the
+       live `FolderStore.activeFolder` untouched, so a fresh
+       `makeBackup()` would re-serialise this Mac's *local*
+       `activeFolderID` and reintroduce the cross-Mac ping-pong the
+       split policy is designed to prevent. The pre-computed
+       `merged` already has the correct
+       `activeFolderID = remote.activeFolderID`; write that exact
+       value. (Same rule applies in the regular read path and the
+       `NSFileVersion` resolver — write `merged`, never a
+       post-apply `makeBackup()`.) Verify the coordinated write
+       succeeded before moving on.
     7. Only then open the write gate.
 
     The `settingsUpdatedAt` rule referenced in step 4: pick the side
