@@ -29,6 +29,12 @@ struct TaskEditView: View {
     // Guards against a second store.update() when onDisappear fires after goBack() already saved.
     @State private var didSaveOnBack = false
 
+    // Set when a full-data import / restore lands while this editor is open.
+    // Every save path early-returns when this is true, so the editor cannot
+    // overwrite an imported task with a stale in-memory copy. See
+    // onReceive of BackupService.dataWillBeReplacedNotification below.
+    @State private var dataWasReplaced = false
+
     @State private var bodyFocusTrigger = 0
 
     // Undo/redo history for title + body — immediate push on first burst keystroke,
@@ -140,9 +146,9 @@ struct TaskEditView: View {
                 .disabled(!canSave)
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             // Title — fixed height, always at top
             TextField("Task title", text: $editedTitle)
@@ -269,7 +275,17 @@ struct TaskEditView: View {
             // Skip if goBack() already saved to avoid a redundant store.update().
             autoSaveTask?.cancel()
             historySnapshotTask?.cancel()
-            if !didSaveOnBack { saveNow() }
+            if !didSaveOnBack && !dataWasReplaced { saveNow() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: BackupService.dataWillBeReplacedNotification)) { _ in
+            // A backup import or rollback is about to overwrite the task
+            // store. Cancel pending writes and exit without saving so the
+            // current in-memory copy of this task cannot land on top of
+            // the imported state.
+            dataWasReplaced = true
+            autoSaveTask?.cancel()
+            historySnapshotTask?.cancel()
+            onBack()
         }
     }
 
@@ -279,6 +295,7 @@ struct TaskEditView: View {
     // Skips deadline validation errors if the overdue deadline is unchanged.
     // Skips URL validation errors — invalid URLs are simply dropped on auto-save.
     private func saveNow() {
+        guard !dataWasReplaced else { return }
         let titleToSave = trimmedTitle.isEmpty ? currentTask.title : trimmedTitle
         let (newDay, newWeek, newMonth, newYear) = computeDeadlines()
         var errors = buildValidationErrors(day: newDay, week: newWeek, month: newMonth, year: newYear)
@@ -331,7 +348,7 @@ struct TaskEditView: View {
         updated.yearDeadline = newYear
         updated.urls         = normalizedUrls
         didSaveOnBack = true
-        store.update(updated)
+        if !dataWasReplaced { store.update(updated) }
         onBack()
     }
 

@@ -13,9 +13,9 @@ struct FocusTimeView: View {
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -157,6 +157,16 @@ struct FocusDayRow: View {
             // Store updated the value externally (e.g. timer tick) — drop optimistic override
             displaySeconds = nil
         }
+        .onReceive(NotificationCenter.default.publisher(for: BackupService.dataWillBeReplacedNotification)) { _ in
+            // A backup import/restore is about to overwrite the focus
+            // store. Abandon any in-flight edit so the user can't press
+            // Enter / the checkmark after import and write `editBuffer`
+            // on top of the freshly-imported value for this day.
+            isEditing = false
+            editBuffer = ""
+            editError = false
+            displaySeconds = nil
+        }
     }
 
     private func startEditing() {
@@ -166,6 +176,7 @@ struct FocusDayRow: View {
     }
 
     private func commitEdit() {
+        guard isEditing else { return }   // belt-and-suspenders against late commits
         guard let newSecs = Int(editBuffer), newSecs >= 0 else { editError = true; return }
         displaySeconds = newSecs  // show immediately; store update triggers re-render shortly after
         FocusTimeStore.shared.setDay(key: dayKey, seconds: newSecs)

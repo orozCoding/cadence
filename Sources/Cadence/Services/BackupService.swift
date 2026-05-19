@@ -1,0 +1,266 @@
+import Foundation
+
+/// Builds and applies `CadenceBackup` snapshots. Glue between the file
+/// (Codable JSON) and the live stores. Pure logic — no UI here so this layer
+/// stays testable and reusable from anywhere on the main actor.
+@MainActor
+enum BackupService {
+    /// JSON encoder used for export. Pretty-printed and key-sorted so the
+    /// resulting file is human-readable and produces stable diffs.
+    private static var encoder: JSONEncoder {
+        let e = JSONEncoder()
+        e.outputFormatting = [.prettyPrinted, .sortedKeys]
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }
+
+    private static var decoder: JSONDecoder {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }
+
+    /// Build a snapshot containing every piece of user state currently in
+    /// memory. Drains the pomodoro's in-flight focus accumulator (and the
+    /// elapsed fraction since the last tick) before reading so a snapshot
+    /// taken mid-tick reflects the same focus total a `pause()` would have
+    /// credited a moment later.
+    static func makeBackup() -> CadenceBackup {
+        PomodoroTimer.shared.creditInFlightFocusTime()
+        return CadenceBackup(
+            appVersion: appVersionString(),
+            tasks: TaskStore.shared.tasks,
+            folders: FolderStore.shared.folders,
+            activeFolderID: FolderStore.shared.activeFolder.id,
+            focusDailySeconds: FocusTimeStore.shared.dailySeconds,
+            settings: AppSettings.shared.snapshot()
+        )
+    }
+
+    /// Encode a snapshot to JSON bytes ready to be written to disk.
+    static func encode(_ backup: CadenceBackup) throws -> Data {
+        try encoder.encode(backup)
+    }
+
+    /// Decode JSON bytes back into a snapshot. Throws if the file is not a
+    /// valid Cadence backup or if its `schemaVersion` is newer than this
+    /// build understands.
+    ///
+    /// Decoding is two-staged: a tiny `BackupHeader` is read first to check
+    /// the magic marker and version. Only when those pass do we attempt the
+    /// full payload decode. This means a future schema-2 backup that
+    /// renames a core key will surface as `BackupError.unsupportedSchema`
+    /// rather than a generic "missing key" error.
+    static func decode(_ data: Data) throws -> CadenceBackup {
+        let header = try decoder.decode(BackupHeader.self, from: data)
+        guard header.format == CadenceBackup.formatIdentifier else {
+            throw BackupError.notACadenceBackup(format: header.format)
+        }
+        guard header.schemaVersion <= CadenceBackup.currentSchemaVersion else {
+            throw BackupError.unsupportedSchema(found: header.schemaVersion, supported: CadenceBackup.currentSchemaVersion)
+        }
+        return try decoder.decode(CadenceBackup.self, from: data)
+    }
+
+    /// UserDefaults key holding the most recent pre-import snapshot. Used as
+    /// a manual rollback path if an import turns out to have been a mistake
+    /// or was interrupted mid-write. Exposed for `restoreLastPreImport()`.
+    static let preImportSnapshotKey = "cadence_pre_import_snapshot"
+
+    /// UserDefaults flag set just before `apply` mutates anything and cleared
+    /// just after. If it's still set at next launch, an import was
+    /// interrupted and the user can be offered the rollback.
+    static let importInProgressKey = "cadence_import_in_progress"
+
+    /// Posted immediately before any store mutation so open editor sheets
+    /// can cancel pending autosaves and dismiss themselves. Otherwise a
+    /// TaskCreateView / TaskEditView left open in the main window while
+    /// Settings ran the import would auto-save stale state on dismiss and
+    /// silently corrupt the imported snapshot.
+    static let dataWillBeReplacedNotification = Notification.Name("cadence.backup.dataWillBeReplaced")
+
+    /// Merge a backup snapshot into the live stores. Same-ID records
+    /// (tasks, folders) are updated to the incoming version; same-key
+    /// focus-time days are overwritten; preferences are taken from the
+    /// file wholesale. Anything local that the file doesn't mention is
+    /// left alone — the destination device keeps work done since the
+    /// export. The active folder is intentionally not changed.
+    ///
+    /// Caller is expected to confirm with the user first because this is
+    /// still potentially destructive for records that share an ID with
+    /// the file (the file wins those collisions).
+    ///
+    /// The current state is stashed in UserDefaults under
+    /// `preImportSnapshotKey` before any mutation, and an
+    /// `importInProgressKey` marker is raised for the duration. UserDefaults
+    /// does not give us a true cross-key transaction, but together these
+    /// give the user a recovery path if anything goes wrong: at worst they
+    /// re-run the app and call `restoreLastPreImport()`.
+    static func apply(_ backup: CadenceBackup) {
+        // Stash the current snapshot so a bad import can be rolled back.
+        // Failure to encode here is logged but doesn't block import — the
+        // user already confirmed; refusing now would be more surprising.
+        if let preImportData = try? encode(makeBackup()) {
+            UserDefaults.standard.set(preImportData, forKey: preImportSnapshotKey)
+            // Force a write to disk so a process kill mid-import still
+            // leaves the rollback snapshot recoverable on next launch.
+            // `synchronize()` is officially redundant on modern macOS but
+            // remains the only documented way to request an immediate flush.
+            UserDefaults.standard.synchronize()
+        }
+        applyToStores(backup, mode: .merge)
+    }
+
+    /// Apply mode for `applyToStores`. `.merge` overlays incoming records
+    /// onto local state without removing local-only entries — the normal
+    /// import path. `.replace` wipes each store and writes the snapshot
+    /// verbatim — used by `restoreLastPreImport` so a rollback fully
+    /// reverts to the pre-import state.
+    private enum ApplyMode {
+        case merge
+        case replace
+    }
+
+    /// Performs the actual store mutations + interrupted-import flag
+    /// bookkeeping. Split out so `restoreLastPreImport()` can replay the
+    /// pre-import snapshot without clobbering the very snapshot it just
+    /// read — taking a fresh `makeBackup()` of the partial/bad state at the
+    /// start of a restore would destroy the only known-good rollback.
+    private static func applyToStores(_ backup: CadenceBackup, mode: ApplyMode) {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: importInProgressKey)
+        defaults.synchronize()  // ensure the in-progress flag is on disk before mutating
+
+        // Reset any in-flight pomodoro before we touch the focus map.
+        // `prepareForDataReplacement` pauses — which credits any wall-clock
+        // seconds owed for the current session to today's local entry — and
+        // clears `remaining` so a later Resume can't tick seconds onto the
+        // freshly imported total. In merge mode the file's value for any day
+        // it carries overwrites the local value for that day; if the file
+        // contains today, the seconds just credited locally are intentionally
+        // superseded by the file's number (that is the merge contract — file
+        // wins for present days). Those credits are still preserved in the
+        // rollback snapshot captured above at line 103, so a `restoreLastPreImport`
+        // recovers them.
+        PomodoroTimer.shared.prepareForDataReplacement()
+
+        // Notify any open editor sheets to abandon pending writes before we
+        // mutate the underlying store. Stale autosaves landing after this
+        // point would otherwise resurrect pre-import drafts or overwrite a
+        // record the file just changed (see TaskCreateView / TaskEditView
+        // / FocusDayRow onReceive handlers).
+        NotificationCenter.default.post(name: dataWillBeReplacedNotification, object: nil)
+
+        // Make sure every task in the file points to a folder that will
+        // exist after the merge. Tasks whose `folderId` is in neither the
+        // file's folders nor the local folders would otherwise be invisible
+        // in the UI until the next launch (FolderStore.init's stub
+        // recovery). Stub them here so the in-memory state is consistent
+        // immediately after the import.
+        let backupFolderIDs = Set(backup.folders.map { $0.id })
+        let knownFolderIDs: Set<UUID>
+        switch mode {
+        case .merge:   knownFolderIDs = backupFolderIDs.union(FolderStore.shared.folders.map { $0.id })
+        case .replace: knownFolderIDs = backupFolderIDs
+        }
+        let referencedFolderIDs = Set(backup.tasks.map { $0.folderId })
+        let missingFolderIDs = referencedFolderIDs.subtracting(knownFolderIDs)
+        var foldersToApply = backup.folders
+        for orphanID in missingFolderIDs where orphanID != .generalFolderID {
+            let shortID = orphanID.uuidString.prefix(8).uppercased()
+            foldersToApply.append(Folder(id: orphanID, name: "Recovered (\(shortID))"))
+        }
+
+        switch mode {
+        case .merge:
+            // Folders before tasks so any newly-imported folder exists
+            // before tasks reference it. Active folder is intentionally
+            // NOT changed — the destination device keeps its current
+            // context. Preferences come from the file wholesale because
+            // they are single-value settings without a merge concept.
+            FolderStore.shared.mergeIn(folders: foldersToApply)
+            TaskStore.shared.mergeIn(backup.tasks)
+            FocusTimeStore.shared.mergeIn(backup.focusDailySeconds)
+            AppSettings.shared.apply(backup.settings)
+
+        case .replace:
+            FolderStore.shared.replaceAll(folders: foldersToApply, activeFolderID: backup.activeFolderID)
+            TaskStore.shared.replaceAll(backup.tasks)
+            FocusTimeStore.shared.replaceAll(backup.focusDailySeconds)
+            AppSettings.shared.apply(backup.settings)
+        }
+
+        defaults.removeObject(forKey: importInProgressKey)
+    }
+
+    /// True if an import was started but never completed (the process was
+    /// killed between the marker being set and `apply` finishing). Callers
+    /// can surface a "your last import didn't finish — restore?" prompt.
+    static func hasInterruptedImport() -> Bool {
+        UserDefaults.standard.bool(forKey: importInProgressKey)
+    }
+
+    /// True if a pre-import snapshot is available to roll back to. Drives
+    /// whether the Settings UI shows the "Restore previous data" button.
+    static func hasPreImportSnapshot() -> Bool {
+        UserDefaults.standard.data(forKey: preImportSnapshotKey) != nil
+    }
+
+    /// Roll back to the snapshot captured just before the most recent
+    /// `apply` call. Returns false if no snapshot is available (e.g. the
+    /// user has never imported, or the snapshot was cleared).
+    ///
+    /// Restore writes directly via `applyToStores` so the existing
+    /// pre-import snapshot is preserved — if the restore itself is
+    /// interrupted, the user can run it again.
+    @discardableResult
+    static func restoreLastPreImport() -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: preImportSnapshotKey),
+              let snapshot = try? decode(data) else {
+            return false
+        }
+        // Rollback uses replace, not merge: the user wants the exact
+        // pre-import state, including the disappearance of anything they
+        // added after the import. Merge here would leak post-import
+        // records back into the "restored" state.
+        applyToStores(snapshot, mode: .replace)
+        return true
+    }
+
+    /// Forget the pre-import snapshot (e.g. once the user is confident the
+    /// import worked and they don't want the rollback to keep showing up).
+    ///
+    /// Also clears the interrupted-import flag, because without a snapshot
+    /// the recovery banner has nothing to offer — leaving it set would
+    /// advertise a "Restore previous data" button that can only fail.
+    static func clearPreImportSnapshot() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: preImportSnapshotKey)
+        defaults.removeObject(forKey: importInProgressKey)
+        defaults.synchronize()
+    }
+
+    /// Dismiss the interrupted-import banner without touching the rollback
+    /// snapshot. Used when the user has visually confirmed the imported
+    /// state looks correct but wants to keep the option to roll back.
+    static func dismissInterruptedImportFlag() {
+        UserDefaults.standard.removeObject(forKey: importInProgressKey)
+        UserDefaults.standard.synchronize()
+    }
+
+    /// Suggested filename for a fresh export, e.g. `cadence-backup-2026-05-15.json`.
+    static func suggestedFilename(now: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        return "cadence-backup-\(f.string(from: now)).json"
+    }
+
+    private static func appVersionString() -> String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "0.0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "\(version) (\(build))"
+    }
+}

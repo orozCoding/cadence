@@ -49,7 +49,7 @@ struct AllTasksView: View {
                 .font(.system(size: 12))
             }
 
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             if folderTaskCount == 0 {
                 EmptyStateView(message: "No tasks in \(folderStore.activeFolder.name).\nClick + to add your first task.")

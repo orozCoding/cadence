@@ -12,6 +12,10 @@ enum AppTheme {
     static let textSecondary = Color(hex: "#5A7A8C")
     static let textTertiary = Color(hex: "#8BAAB8")
     static let divider = Color(hex: "#C8DFF0")
+    // Lighter rule used only for the top divider that runs across the three
+    // column headers — keeps that line subtle without washing out other
+    // divider-colored fills (preset chips, timer ring track, task row pills).
+    static let headerDivider = Color(hex: "#DCEAF4")
     static let selectedItem = Color(hex: "#D0EAF8")
     static let hoveredItem = Color(hex: "#DCF0FC")
     static let doneText = Color(hex: "#8BAAB8")
@@ -23,6 +27,9 @@ enum AppTheme {
     static let timerPanelWidth: CGFloat = 260
     static let cornerRadius: CGFloat = 8
     static let rowHeight: CGFloat = 44
+    // Shared column-header height so the bottom divider lines up across the
+    // sidebar, center, and timer columns as one continuous line.
+    static let headerHeight: CGFloat = 50
 }
 
 extension Color {
