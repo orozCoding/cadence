@@ -15,6 +15,14 @@ struct JoggerTimerView: View {
     private static let trackY: CGFloat = 92          // runner foot Y inside the canvas
     private static let trackInset: CGFloat = 14      // left/right padding
     private static let figureSize: CGFloat = 32
+    private static let bobRate: CGFloat = 9          // rad/sec for the running cycle
+
+    // Bob phase anchoring — matches the GlassTimerCircle pause/resume pattern.
+    // When running: phase = phaseAtStart + (now - runStartDate) * bobRate.
+    // When paused:  phase is frozen at frozenBobPhase so the figure holds its pose.
+    @State private var frozenBobPhase: CGFloat = 0
+    @State private var runStartDate: Date = .now
+    @State private var phaseAtStart: CGFloat = 0
 
     private var trackLeft: CGFloat { Self.trackInset }
     private var trackRight: CGFloat { Self.canvasW - Self.trackInset }
@@ -77,6 +85,29 @@ struct JoggerTimerView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
+        .onAppear {
+            guard !isPreview else { return }
+            runStartDate = .now
+            phaseAtStart = frozenBobPhase
+        }
+        .onChange(of: isRunning) { _, running in
+            guard !isPreview else { return }
+            if running {
+                // Resume: re-anchor wall clock, keep accumulated phase.
+                runStartDate = .now
+                phaseAtStart = frozenBobPhase
+            } else {
+                // Pause: freeze the current phase so the figure holds its pose.
+                let elapsed = CGFloat(Date().timeIntervalSince(runStartDate))
+                frozenBobPhase = phaseAtStart + elapsed * Self.bobRate
+            }
+        }
+        .onChange(of: progress) { _, newProgress in
+            // Reset the bob anchor when the timer is fully reset (progress=0).
+            guard !isPreview, newProgress == 0 else { return }
+            frozenBobPhase = 0
+            phaseAtStart = 0
+        }
     }
 
     // MARK: - Runner
@@ -85,24 +116,26 @@ struct JoggerTimerView: View {
     private var runner: some View {
         if isRunning && !isPreview {
             TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                runnerFigure(bobPhase: CGFloat(t))
+                let elapsed = CGFloat(context.date.timeIntervalSince(runStartDate))
+                let phase = phaseAtStart + elapsed * Self.bobRate
+                runnerFigure(bobPhase: phase)
             }
         } else {
-            runnerFigure(bobPhase: 0)
+            // Paused / preview: hold the captured phase so the figure stays in
+            // place rather than snapping back to a neutral pose.
+            runnerFigure(bobPhase: isPreview ? 0 : frozenBobPhase)
         }
     }
 
     @ViewBuilder
     private func runnerFigure(bobPhase: CGFloat) -> some View {
-        // Bobbing: small vertical oscillation while running.
-        let bob = sin(bobPhase * 9) * 2.5
+        let bob = sin(bobPhase) * 2.5
         Image(systemName: "figure.run")
             .font(.system(size: Self.figureSize, weight: .semibold))
             .foregroundStyle(isFinished ? AppTheme.accent : AppTheme.accentDark)
             .scaleEffect(x: inverted ? -1 : 1, y: 1)
             .shadow(color: AppTheme.accent.opacity(0.25), radius: 3, x: 0, y: 1)
-            .offset(y: isRunning && !isPreview ? bob : 0)
+            .offset(y: bob)
             .animation(.linear(duration: 0.5), value: progress)
     }
 

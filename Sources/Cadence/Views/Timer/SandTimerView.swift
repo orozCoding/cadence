@@ -2,6 +2,10 @@ import SwiftUI
 
 /// Hourglass-style timer: grains drain from the top chamber, stream through the
 /// neck, and pile up in the bottom chamber as time elapses.
+///
+/// `inverted` swaps the direction of flow without rotating the view (so the
+/// time label stays upright): the top chamber fills while the bottom drains,
+/// and the grain stream flows upward.
 struct SandTimerView: View {
     let progress: CGFloat
     let isFinished: Bool
@@ -11,31 +15,32 @@ struct SandTimerView: View {
     var isPreview: Bool = false
 
     private static let size: CGFloat = 130
-    private static let bulbWidth: CGFloat = 78
-    private static let bulbHeight: CGFloat = 50    // half-height of each bulb
-    private static let neckRadius: CGFloat = 4
-    private static let frameWidth: CGFloat = 92    // exterior bounding box (caps + sides)
+    private static let frameWidth: CGFloat = 92
     private static let frameHeight: CGFloat = 116
     private static let capHeight: CGFloat = 6
+    private static let neckHalfWidth: CGFloat = 4
 
-    // Sand color
     private static let sandColor = Color(hex: "#E8B863")
     private static let sandShadow = Color(hex: "#B68637")
 
-    private var effectiveProgress: CGFloat {
-        // Inverted flips the orientation so sand piles in the top instead.
-        // Easiest way: just rotate the whole view 180° for inverted.
-        progress
+    /// Fraction of sand remaining in the top chamber. 1 = full, 0 = empty.
+    private var topFill: CGFloat {
+        inverted ? progress : (1 - progress)
+    }
+
+    /// Fraction of sand accumulated in the bottom chamber. 0 = empty, 1 = full.
+    private var bottomFill: CGFloat {
+        inverted ? (1 - progress) : progress
     }
 
     var body: some View {
         ZStack {
             // Glass body
-            HourglassOutline()
+            HourglassOutline(neckHalfWidth: Self.neckHalfWidth)
                 .stroke(AppTheme.textPrimary.opacity(0.55), lineWidth: 1.5)
                 .frame(width: Self.frameWidth, height: Self.frameHeight)
                 .background(
-                    HourglassOutline()
+                    HourglassOutline(neckHalfWidth: Self.neckHalfWidth)
                         .fill(Color.white.opacity(0.45))
                         .frame(width: Self.frameWidth, height: Self.frameHeight)
                 )
@@ -60,9 +65,9 @@ struct SandTimerView: View {
             }
             .frame(width: Self.frameWidth + 8, height: Self.frameHeight + 4)
 
-            // Time label
+            // Time label — anchored at the neck so it stays readable regardless
+            // of which chamber is filling.
             VStack(spacing: 2) {
-                Spacer().frame(height: 4)
                 Text(timeString)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -72,19 +77,15 @@ struct SandTimerView: View {
                     .background(
                         Capsule().fill(Color.white.opacity(0.85))
                     )
-                Spacer()
                 if isFinished {
                     Text("Done!")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                         .transition(.opacity.combined(with: .scale))
-                        .padding(.bottom, 4)
                 }
             }
-            .frame(height: Self.frameHeight)
         }
         .frame(width: Self.size, height: Self.size)
-        .rotationEffect(.degrees(inverted ? 180 : 0))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
@@ -94,12 +95,8 @@ struct SandTimerView: View {
 
     @ViewBuilder
     private var sandLayer: some View {
-        let p = max(0, min(1, effectiveProgress))
-        // Top chamber: sand level shrinks from full (1) to empty (0) as p goes 0→1.
-        // Bottom chamber: sand pile grows from empty (0) to full (1).
         ZStack {
-            // Top sand
-            TopSandShape(fillFraction: 1 - p)
+            TopSandShape(fillFraction: topFill, neckHalfWidth: Self.neckHalfWidth)
                 .fill(
                     LinearGradient(
                         colors: [Self.sandColor, Self.sandShadow],
@@ -107,8 +104,7 @@ struct SandTimerView: View {
                     )
                 )
 
-            // Bottom sand pile
-            BottomSandShape(fillFraction: p)
+            BottomSandShape(fillFraction: bottomFill, neckHalfWidth: Self.neckHalfWidth)
                 .fill(
                     LinearGradient(
                         colors: [Self.sandColor.opacity(0.95), Self.sandShadow],
@@ -116,15 +112,15 @@ struct SandTimerView: View {
                     )
                 )
         }
-        .clipShape(HourglassOutline())
-        .animation(.linear(duration: 0.5), value: p)
+        .clipShape(HourglassOutline(neckHalfWidth: Self.neckHalfWidth))
+        .animation(.linear(duration: 0.5), value: progress)
     }
 
     // MARK: - Falling grains
 
     @ViewBuilder
     private var grainsLayer: some View {
-        if isRunning && !isPreview && effectiveProgress > 0 && effectiveProgress < 1 && !isFinished {
+        if isRunning && !isPreview && progress > 0 && progress < 1 && !isFinished {
             TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
                 Canvas { ctx, size in
                     drawStream(ctx: ctx, size: size,
@@ -137,24 +133,35 @@ struct SandTimerView: View {
     }
 
     private func drawStream(ctx: GraphicsContext, size: CGSize, time: TimeInterval) {
-        // Vertical stream from the neck to the bottom pile.
         let centerX = size.width / 2
         let neckY = size.height / 2
-        let bottomY = size.height - 12 - (CGFloat(progress) * (size.height / 2 - 20))
-        guard bottomY > neckY else { return }
+
+        // Stream travels between the neck and the receiving pile's surface.
+        // Original: neck → bottom pile. Inverted: neck → top pile.
+        let pileSurfaceY: CGFloat
+        if inverted {
+            // Top pile: surface drops from minY (full) to neck (empty) as top fills.
+            pileSurfaceY = max(12, neckY - (neckY - 12) * topFill)
+        } else {
+            pileSurfaceY = min(size.height - 12, neckY + (neckY - 12) * bottomFill)
+        }
 
         // Stream line
-        let streamRect = CGRect(x: centerX - 0.6, y: neckY,
-                                width: 1.2, height: bottomY - neckY)
+        let yStart = min(neckY, pileSurfaceY)
+        let yEnd = max(neckY, pileSurfaceY)
+        guard yEnd - yStart > 1 else { return }
+        let streamRect = CGRect(x: centerX - 0.6, y: yStart,
+                                width: 1.2, height: yEnd - yStart)
         ctx.fill(Path(streamRect), with: .color(Self.sandColor.opacity(0.85)))
 
-        // Individual grains falling with a phase offset each
+        // Individual grains travel along the stream.
         let grainCount = 6
         for i in 0..<grainCount {
             let phase = Double(i) / Double(grainCount)
             let cycle = (time * 1.4 + phase).truncatingRemainder(dividingBy: 1.0)
-            let y = neckY + CGFloat(cycle) * (bottomY - neckY)
-            // Slight horizontal wobble for liveliness
+            // Inverted: cycle 0 → at pileSurface (top), 1 → at neck. Otherwise cycle goes neck → pile.
+            let along = inverted ? CGFloat(1 - cycle) : CGFloat(cycle)
+            let y = neckY + along * (pileSurfaceY - neckY)
             let wobble = sin(time * 6 + Double(i)) * 0.8
             let grain = CGRect(x: centerX - 1 + wobble, y: y - 1, width: 2, height: 2)
             ctx.fill(Path(ellipseIn: grain), with: .color(Self.sandShadow))
@@ -164,37 +171,35 @@ struct SandTimerView: View {
 
 /// Hourglass outline: two trapezoids meeting at a narrow neck.
 private struct HourglassOutline: Shape {
+    let neckHalfWidth: CGFloat
+
     func path(in rect: CGRect) -> Path {
-        let neckWidth: CGFloat = 8
         let neckHeight: CGFloat = 6
         let centerX = rect.midX
         let centerY = rect.midY
 
         var p = Path()
-        // Top-left corner
         p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        // Top edge
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        // Top-right down to neck-right (top)
-        p.addLine(to: CGPoint(x: centerX + neckWidth / 2, y: centerY - neckHeight / 2))
-        // Neck-right (bottom)
-        p.addLine(to: CGPoint(x: centerX + neckWidth / 2, y: centerY + neckHeight / 2))
-        // Bottom-right
+        p.addLine(to: CGPoint(x: centerX + neckHalfWidth, y: centerY - neckHeight / 2))
+        p.addLine(to: CGPoint(x: centerX + neckHalfWidth, y: centerY + neckHeight / 2))
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        // Bottom edge
         p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        // Bottom-left up to neck-left (bottom)
-        p.addLine(to: CGPoint(x: centerX - neckWidth / 2, y: centerY + neckHeight / 2))
-        // Neck-left (top)
-        p.addLine(to: CGPoint(x: centerX - neckWidth / 2, y: centerY - neckHeight / 2))
+        p.addLine(to: CGPoint(x: centerX - neckHalfWidth, y: centerY + neckHeight / 2))
+        p.addLine(to: CGPoint(x: centerX - neckHalfWidth, y: centerY - neckHeight / 2))
         p.closeSubpath()
         return p
     }
 }
 
-/// Filled sand region in the top chamber. `fillFraction` 1 = full, 0 = empty.
+/// Sand in the top chamber. `fillFraction` 1 = full, 0 = empty.
+///
+/// The filled region is the trapezoid between the sand surface (which rises
+/// from the neck at f=0 to the top edge at f=1) and the neck.
 private struct TopSandShape: Shape {
     var fillFraction: CGFloat
+    let neckHalfWidth: CGFloat
+
     var animatableData: CGFloat {
         get { fillFraction }
         set { fillFraction = newValue }
@@ -203,19 +208,26 @@ private struct TopSandShape: Shape {
     func path(in rect: CGRect) -> Path {
         let f = max(0, min(1, fillFraction))
         let centerY = rect.midY
-        // The sand surface drops from the top edge (full) to the neck (empty).
-        let surfaceY = rect.minY + (centerY - rect.minY) * (1 - f)
+        let chamberHeight = centerY - rect.minY
+        // Surface rises from centerY (empty) to rect.minY (full).
+        let surfaceY = centerY - chamberHeight * f
+        // Wall x positions are linearly interpolated between neck (centerY)
+        // and the top edge (rect.minY).
+        // tSurface: 0 at neck, 1 at top edge.
+        let tSurface = (centerY - surfaceY) / max(chamberHeight, 1)
+        let leftX = lerp(rect.midX - neckHalfWidth, rect.minX, t: tSurface)
+        let rightX = lerp(rect.midX + neckHalfWidth, rect.maxX, t: tSurface)
+
         var p = Path()
-        // Top-left to top-right (top edge of glass)
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        // Slide diagonally down the right wall until the surface line height
-        let rightX = lerp(rect.maxX, rect.midX, t: (surfaceY - rect.minY) / max(centerY - rect.minY, 1))
+        // Surface line (top of sand) — slight dip in the middle for a settled look.
+        p.move(to: CGPoint(x: leftX, y: surfaceY))
+        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY + 1.5))
         p.addLine(to: CGPoint(x: rightX, y: surfaceY))
-        // Slight dip in the middle for a settling-sand look
-        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY + 2))
-        let leftX = lerp(rect.minX, rect.midX, t: (surfaceY - rect.minY) / max(centerY - rect.minY, 1))
-        p.addLine(to: CGPoint(x: leftX, y: surfaceY))
+        // Down the right wall to the neck.
+        p.addLine(to: CGPoint(x: rect.midX + neckHalfWidth, y: centerY))
+        // Across the neck.
+        p.addLine(to: CGPoint(x: rect.midX - neckHalfWidth, y: centerY))
+        // Back up the left wall to the surface.
         p.closeSubpath()
         return p
     }
@@ -226,9 +238,14 @@ private struct TopSandShape: Shape {
     }
 }
 
-/// Filled sand region in the bottom chamber. `fillFraction` 0 = empty, 1 = full.
+/// Sand in the bottom chamber. `fillFraction` 0 = empty, 1 = full.
+///
+/// The filled region is the trapezoid between the pile surface (which rises
+/// from the floor at f=0 to the neck at f=1) and the floor.
 private struct BottomSandShape: Shape {
     var fillFraction: CGFloat
+    let neckHalfWidth: CGFloat
+
     var animatableData: CGFloat {
         get { fillFraction }
         set { fillFraction = newValue }
@@ -237,19 +254,24 @@ private struct BottomSandShape: Shape {
     func path(in rect: CGRect) -> Path {
         let f = max(0, min(1, fillFraction))
         let centerY = rect.midY
-        // The pile surface rises from the bottom edge (empty) to the neck (full).
-        let surfaceY = rect.maxY - (rect.maxY - centerY) * f
+        let chamberHeight = rect.maxY - centerY
+        // Surface rises from rect.maxY (empty) to centerY (full).
+        let surfaceY = rect.maxY - chamberHeight * f
+        // tSurface: 0 at floor, 1 at neck.
+        let tSurface = (rect.maxY - surfaceY) / max(chamberHeight, 1)
+        let leftX = lerp(rect.minX, rect.midX - neckHalfWidth, t: tSurface)
+        let rightX = lerp(rect.maxX, rect.midX + neckHalfWidth, t: tSurface)
+
         var p = Path()
-        // Bottom-left to bottom-right
-        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        // Up the right wall to the surface
-        let rightX = lerp(rect.maxX, rect.midX, t: (rect.maxY - surfaceY) / max(rect.maxY - centerY, 1))
-        p.addLine(to: CGPoint(x: rightX, y: surfaceY))
-        // Slight mound in the middle (sand pile)
+        // Surface line (top of pile) — small mound in the middle.
+        p.move(to: CGPoint(x: leftX, y: surfaceY))
         p.addLine(to: CGPoint(x: rect.midX, y: surfaceY - 3))
-        let leftX = lerp(rect.minX, rect.midX, t: (rect.maxY - surfaceY) / max(rect.maxY - centerY, 1))
-        p.addLine(to: CGPoint(x: leftX, y: surfaceY))
+        p.addLine(to: CGPoint(x: rightX, y: surfaceY))
+        // Down the right wall to the floor.
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        // Across the floor.
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        // Back up the left wall.
         p.closeSubpath()
         return p
     }
