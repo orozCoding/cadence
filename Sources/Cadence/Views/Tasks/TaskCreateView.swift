@@ -103,7 +103,7 @@ struct TaskCreateView: View {
                 .disabled(!canSave)
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
             Divider().background(AppTheme.divider)
 

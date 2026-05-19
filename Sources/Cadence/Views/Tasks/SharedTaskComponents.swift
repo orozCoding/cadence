@@ -34,7 +34,7 @@ struct TasksHeader<Trailing: View>: View {
             .help("New Task")
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .frame(height: AppTheme.headerHeight)
     }
 }
 

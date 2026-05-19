@@ -24,7 +24,7 @@ struct TimerPanelView: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
             Divider().background(AppTheme.divider)
 

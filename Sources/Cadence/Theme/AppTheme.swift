@@ -23,6 +23,9 @@ enum AppTheme {
     static let timerPanelWidth: CGFloat = 260
     static let cornerRadius: CGFloat = 8
     static let rowHeight: CGFloat = 44
+    // Shared column-header height so the bottom divider lines up across the
+    // sidebar, center, and timer columns as one continuous line.
+    static let headerHeight: CGFloat = 56
 }
 
 extension Color {

@@ -13,7 +13,7 @@ struct FocusTimeView: View {
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
             Divider().background(AppTheme.divider)
 
