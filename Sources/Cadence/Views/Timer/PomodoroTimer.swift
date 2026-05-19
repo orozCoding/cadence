@@ -15,9 +15,15 @@ final class PomodoroTimer: ObservableObject {
     private var cancellable: AnyCancellable?
     private var resumeDate: Date = .now
     private var remainingAtResume: TimeInterval = 25 * 60
-    private var lastTickDate: Date = .now
-    // Sub-second carry-over: prevents credit loss when ticks fire early (<1 s intervals)
-    private var focusAccumulator: TimeInterval = 0
+    // Wall-clock seconds the timer has actively run during this session
+    // (since the last set / reset / finished-restart). Carried across
+    // pause/resume so sub-second remainders are never discarded.
+    private var earnedSecondsThisSession: TimeInterval = 0
+    // Whole seconds already credited to FocusTimeStore for this session.
+    // Invariant while running: equals floor(earnedSecondsThisSession + (now - resumeDate, capped)).
+    // Single source of truth — derived from the same wall-clock measurement
+    // the countdown uses, so display and stat cannot drift.
+    private var creditedSecondsThisSession: Int = 0
 
     var progress: Double { total > 0 ? (1 - remaining / total) : 0 }
 
@@ -41,6 +47,7 @@ final class PomodoroTimer: ObservableObject {
         // display and tick boundaries stay aligned.
         total = max(1, seconds.rounded())
         remaining = total
+        beginNewSession()
         isFinished = false
         SoundManager.shared.playTimerSetOrReset()
     }
@@ -49,6 +56,7 @@ final class PomodoroTimer: ObservableObject {
         if isFinished {
             remaining = total
             isFinished = false
+            beginNewSession()
             start()
             return
         }
@@ -61,6 +69,12 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func start() {
+        // Guard against being called while already running. Without this, a
+        // double-start would reset resumeDate/remainingAtResume to the current
+        // instant while keeping `creditedSecondsThisSession` at its prior
+        // (advanced) value, stalling all credit until the new run accumulated
+        // enough wall-clock to catch up to the watermark.
+        guard !isRunning else { return }
         guard remaining > 0 else { return }
         // Request permission on first timer start so the prompt appears in context.
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
@@ -68,8 +82,6 @@ final class PomodoroTimer: ObservableObject {
         }
         resumeDate = .now
         remainingAtResume = remaining
-        lastTickDate = .now
-        focusAccumulator = 0
         isRunning = true
         isFinished = false
         SoundManager.shared.playTimerStart()
@@ -81,16 +93,11 @@ final class PomodoroTimer: ObservableObject {
     func pause() {
         if isRunning {
             let now = Date()
-            // Flush in-flight time since the last tick before discarding the accumulator
-            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
-            let wholeSeconds = Int(focusAccumulator)
-            if wholeSeconds > 0 {
-                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
-            }
-            let elapsed = now.timeIntervalSince(resumeDate)
-            remaining = max(0, remainingAtResume - elapsed)
+            creditEarnedSeconds(now: now)
+            let runEarned = currentRunEarned(now: now)
+            earnedSecondsThisSession += runEarned
+            remaining = max(0, remainingAtResume - runEarned)
         }
-        focusAccumulator = 0
         isRunning = false
         cancellable = nil
         FocusTimeStore.shared.flushIfNeeded()
@@ -99,6 +106,7 @@ final class PomodoroTimer: ObservableObject {
     func reset() {
         pause()
         remaining = total
+        beginNewSession()
         isFinished = false
         SoundManager.shared.playTimerSetOrReset()
     }
@@ -110,6 +118,10 @@ final class PomodoroTimer: ObservableObject {
     func prepareForDataReplacement() {
         pause()
         remaining = total
+        // After this call the focus store is about to be overwritten by the
+        // import; clear our session credit watermarks so a subsequent start
+        // doesn't carry phantom credit forward into the imported data.
+        beginNewSession()
         isFinished = false
     }
 
@@ -118,44 +130,54 @@ final class PomodoroTimer: ObservableObject {
     /// the backup export path so a snapshot taken mid-tick reflects the
     /// same focus total a `pause()` would credit a moment later.
     ///
-    /// Mirrors the credit logic inside `tick()` and `pause()`. Sub-second
-    /// remainder stays in `focusAccumulator` and will be credited by the
-    /// next regular tick.
+    /// Idempotent: calling this back-to-back credits nothing on the second
+    /// call because `creditEarnedSeconds` advances `creditedSecondsThisSession`
+    /// to the floor of total earned. Sub-second remainder stays implicit in
+    /// the wall-clock and will be credited by the next regular tick.
     func creditInFlightFocusTime() {
-        if isRunning {
-            let now = Date()
-            focusAccumulator += min(now.timeIntervalSince(lastTickDate), 2)
-            let wholeSeconds = Int(focusAccumulator)
-            if wholeSeconds > 0 {
-                for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
-                focusAccumulator -= TimeInterval(wholeSeconds)
-            }
-            lastTickDate = now
-        }
+        creditEarnedSeconds(now: Date())
         FocusTimeStore.shared.flushIfNeeded()
     }
 
     private func tick() {
         let now = Date()
-        let tickElapsed = now.timeIntervalSince(lastTickDate)
-        lastTickDate = now
-        // Accumulate elapsed time (capped at 2 s to ignore sleep gaps).
-        // Using an accumulator instead of Int truncation prevents credit loss when
-        // the publisher fires slightly early (< 1 s) — e.g. two 0.6 s ticks correctly
-        // credit 1 second rather than 0+0 = 0.
-        focusAccumulator += min(tickElapsed, 2)
-        let wholeSeconds = Int(focusAccumulator)
-        if wholeSeconds > 0 {
-            for _ in 0..<wholeSeconds { FocusTimeStore.shared.addSecond() }
-            focusAccumulator -= TimeInterval(wholeSeconds)
-        }
-        let elapsed = now.timeIntervalSince(resumeDate)
-        remaining = max(0, remainingAtResume - elapsed)
+        creditEarnedSeconds(now: now)
+        // Use the same capped measurement as `pause()` so the two paths share
+        // one formula. With the cap, a sleep-overrun resolves cleanly to
+        // remaining == 0 (and runEarned == remainingAtResume) instead of via
+        // a max(0, negative) saturation.
+        let runEarned = currentRunEarned(now: now)
+        remaining = max(0, remainingAtResume - runEarned)
         if remaining == 0 {
             isFinished = true   // set before pause() so no subscriber sees isRunning=false + isFinished=false
             pause()
             SoundManager.shared.playTimerFinished(sound: AppSettings.shared.timerFinishSound)
             sendTimerFinishedNotification()
+        }
+    }
+
+    private func beginNewSession() {
+        earnedSecondsThisSession = 0
+        creditedSecondsThisSession = 0
+    }
+
+    /// Wall-clock seconds elapsed in the current run, clamped to the planned
+    /// duration for this run. Clamping means a long sleep/wake gap or runloop
+    /// stall can never credit past what the timer was set to count.
+    private func currentRunEarned(now: Date) -> TimeInterval {
+        max(0, min(now.timeIntervalSince(resumeDate), remainingAtResume))
+    }
+
+    /// Credits any whole-second focus time owed as of `now`. Idempotent —
+    /// safe to call repeatedly within the same run (e.g. tick then pause).
+    private func creditEarnedSeconds(now: Date) {
+        guard isRunning else { return }
+        let totalEarned = earnedSecondsThisSession + currentRunEarned(now: now)
+        let earnedWhole = Int(totalEarned)  // floor; non-negative
+        let toCredit = earnedWhole - creditedSecondsThisSession
+        if toCredit > 0 {
+            for _ in 0..<toCredit { FocusTimeStore.shared.addSecond() }
+            creditedSecondsThisSession = earnedWhole
         }
     }
 
