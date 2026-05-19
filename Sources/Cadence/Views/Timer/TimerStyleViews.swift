@@ -184,8 +184,9 @@ struct GlassTimerCircle: View {
     @State private var waveStartDate: Date = .now
     @State private var phaseAtStart: CGFloat = 0
 
-    // Inverted: starts full (level=1) and drains to 0
-    private var effectiveLevel: CGFloat { inverted ? (1 - progress) : progress }
+    // Original: starts full (level=1) and drains to 0 as time elapses.
+    // Inverted: starts empty and fills up as time elapses.
+    private var effectiveLevel: CGFloat { inverted ? progress : (1 - progress) }
     // Text is white when liquid is above midpoint
     private var liquidAboveMid: Bool { effectiveLevel > 0.55 }
 
