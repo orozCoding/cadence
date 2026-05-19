@@ -571,11 +571,19 @@ single-user macOS setup).
      `NSFileVersion.unresolvedConflictVersionsOfItem(at: url)`. If the
      returned array is empty, this is the regular read path; otherwise
      enter the conflict path below.
-  2. **Close the write gate immediately** so no in-flight debounced
-     flush can push pre-merge state back to iCloud during resolution.
-  3. **Capture local pending state first**: synchronously drain the
-     debounce timer and take `local = BackupService.makeBackup()`. Do
-     not touch any version yet.
+  2. **Close the write gate and drain any in-flight background
+     writer.** Flip the gate to "closed" so no new debounced writes
+     can be dispatched, then `await` any *currently running*
+     background writer (one whose `coordinated write` is already in
+     progress) to finish and clear its busy flag. Same rule as the
+     regular read path — draining only the debounce timer is not
+     enough; a writer that was dispatched a moment earlier can be
+     mid-flight on a background queue and would land after the
+     merged write below, clobbering the resolved snapshot with stale
+     pre-merge state.
+  3. **Capture local pending state**: now that no writer can race
+     us, take `local = BackupService.makeBackup()`. Do not touch any
+     version yet.
   4. **Build one ordered candidate set**: collect, in memory:
      - every conflicting `NSFileVersion` (read each via a coordinated
        read of its `url`, decode with `BackupService.decode`), paired
@@ -645,6 +653,13 @@ single-user macOS setup).
      conflicting version `isResolved = true` and call
      `NSFileVersion.removeOtherVersionsOfItem(at:)`. Then re-open
      the write gate.
+  10. **Failure path: always reopen the write gate** before returning,
+     even if any step above threw (decode failure on a version,
+     coordinator error, etc.). Leaving the gate permanently closed
+     would silently disable sync forever. On failure, defer the
+     resolution (versions stay unresolved, will retry on the next
+     metadata update) and let the writer resume on the unchanged
+     local state. Same rule as the regular read path.
   Skipping step 7 is a real data-loss path: without an explicit
   post-merge write, the merged state lives only in this Mac's local
   stores until the next user mutation. If the user closes the app first,
@@ -664,7 +679,13 @@ single-user macOS setup).
   signs out of iCloud or revokes Drive access for the app. The transport
   must:
   - Observe `NSUbiquityIdentityDidChangeNotification` and immediately
-    disable sync if the token disappears.
+    **close the write gate, await any in-flight background writer to
+    finish (same drain rule as the regular read path), and then
+    disable sync** if the token disappears. Closing the gate before
+    awaiting prevents new writes from being dispatched after sign-out
+    is noticed; awaiting the in-flight writer ensures we don't return
+    to the user with a write still mid-flight that may target a
+    container that's about to disappear.
   - On sign-out, fall back to the local `UserDefaults` store (no crash,
     no data loss — data is already there). Surface a one-line banner in
     Settings explaining what happened.
@@ -718,6 +739,12 @@ single-user macOS setup).
        it) and overwrite the merged value we just wrote, undoing
        the recovery.
     8. Only then open the write gate.
+    9. **Failure path: always reopen the write gate** before
+       returning, even if any step above threw (download failed,
+       decode failed, coordinated write failed). Without this, a
+       transient error during recovery would leave sync silently
+       locked off forever. On failure, defer the recovery and let
+       the next `NSMetadataQuery` update retry from step 1.
 
     The `settingsUpdatedAt` rule referenced in step 4: pick the side
     with the newer `settingsUpdatedAt`. This field was added in Phase
