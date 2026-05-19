@@ -115,7 +115,7 @@ struct SandTimerView: View {
                 )
         }
         .clipShape(HourglassOutline(neckHalfWidth: Self.neckHalfWidth))
-        .animation(.linear(duration: 0.5), value: progress)
+        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: progress)
     }
 
     // MARK: - Falling grains
