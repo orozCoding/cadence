@@ -47,7 +47,7 @@ struct PeriodTasksView: View {
     var body: some View {
         VStack(spacing: 0) {
             TasksHeader(title: period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate), onNewTask: onNewTask)
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             if allTasks.isEmpty {
                 EmptyStateView(message: "No tasks for \(period.titleFor(weekStartsOn: settings.weekStartsOn, today: settings.currentDate)).\nClick + to add one.")

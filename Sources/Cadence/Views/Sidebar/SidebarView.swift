@@ -30,7 +30,7 @@ struct SidebarView: View {
             .padding(.horizontal, 16)
             .frame(height: AppTheme.headerHeight)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
