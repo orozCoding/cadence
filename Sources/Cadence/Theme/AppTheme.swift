@@ -25,7 +25,7 @@ enum AppTheme {
     static let rowHeight: CGFloat = 44
     // Shared column-header height so the bottom divider lines up across the
     // sidebar, center, and timer columns as one continuous line.
-    static let headerHeight: CGFloat = 56
+    static let headerHeight: CGFloat = 50
 }
 
 extension Color {
