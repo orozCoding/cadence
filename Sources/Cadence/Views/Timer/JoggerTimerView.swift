@@ -10,6 +10,8 @@ struct JoggerTimerView: View {
     var inverted: Bool = false
     var isPreview: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private static let canvasW: CGFloat = 130
     private static let canvasH: CGFloat = 130
     private static let trackY: CGFloat = 92          // runner foot Y inside the canvas
@@ -121,16 +123,18 @@ struct JoggerTimerView: View {
 
     @ViewBuilder
     private var runner: some View {
-        if isRunning && !isPreview {
+        if isRunning && !isPreview && !reduceMotion {
             TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
                 let elapsed = CGFloat(context.date.timeIntervalSince(runStartDate))
                 let phase = phaseAtStart + elapsed * Self.bobRate
                 runnerFigure(bobPhase: phase)
             }
         } else {
-            // Paused / preview: hold the captured phase so the figure stays in
-            // place rather than snapping back to a neutral pose.
-            runnerFigure(bobPhase: isPreview ? 0 : frozenBobPhase)
+            // Paused / preview / reduce-motion: hold a stable pose. Reduce
+            // Motion users still see the runner translate horizontally with
+            // progress — that's the actual timer indicator, not decoration —
+            // but the bob loop is suppressed.
+            runnerFigure(bobPhase: (isPreview || reduceMotion) ? 0 : frozenBobPhase)
         }
     }
 

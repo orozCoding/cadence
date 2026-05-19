@@ -14,6 +14,8 @@ struct SandTimerView: View {
     var inverted: Bool = false
     var isPreview: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private static let size: CGFloat = 130
     private static let frameWidth: CGFloat = 92
     private static let frameHeight: CGFloat = 116
@@ -120,7 +122,7 @@ struct SandTimerView: View {
 
     @ViewBuilder
     private var grainsLayer: some View {
-        if isRunning && !isPreview && progress > 0 && progress < 1 && !isFinished {
+        if isRunning && !isPreview && !reduceMotion && progress > 0 && progress < 1 && !isFinished {
             TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
                 Canvas { ctx, size in
                     drawStream(ctx: ctx, size: size,
@@ -128,6 +130,9 @@ struct SandTimerView: View {
                 }
             }
         } else {
+            // No grains / stream when paused, finished, in preview, or when
+            // Reduce Motion is on. Sand levels still animate via .animation()
+            // on the shape fill, which is implicit-only and not motion noise.
             Color.clear
         }
     }
@@ -162,7 +167,11 @@ struct SandTimerView: View {
         // Individual grains travel along the stream from neck → pile surface.
         // The directional reversal for inverted mode is already encoded in the
         // sign of (pileSurfaceY - neckY), so `cycle` works uniformly.
-        let grainCount = 6
+        // Scale grain count with stream length (~1 grain per 8pt of travel,
+        // clamped to [2, 8]) so density stays roughly constant as the chamber
+        // approaches full or empty.
+        let streamLength = abs(pileSurfaceY - neckY)
+        let grainCount = max(2, min(8, Int(streamLength / 8)))
         for i in 0..<grainCount {
             let phase = Double(i) / Double(grainCount)
             let cycle = (time * 1.4 + phase).truncatingRemainder(dividingBy: 1.0)

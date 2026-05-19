@@ -8,6 +8,8 @@ struct TetrisTimerView: View {
     let timeString: String
     var inverted: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     // 8 wide × 10 tall grid (80 cells)
     private static let gridW = 8
     private static let gridH = 10
@@ -122,7 +124,12 @@ struct TetrisTimerView: View {
 
     @ViewBuilder
     private var blocksCanvas: some View {
-        let filledCount = Int((effectiveProgress * CGFloat(Self.cellCount)).rounded())
+        // floor() so each cell lights up at its true boundary — `.rounded()`
+        // would flip the first cell on a half-interval early and fill the
+        // box visually before the timer actually reaches zero. The tiny
+        // epsilon protects against floating-point shaving at progress=1.0.
+        let raw = Double(effectiveProgress) * Double(Self.cellCount) + 1e-6
+        let filledCount = min(Self.cellCount, max(0, Int(raw.rounded(.down))))
         Canvas { ctx, size in
             let inset = Self.inset
             let gap = Self.cellGap
@@ -147,6 +154,6 @@ struct TetrisTimerView: View {
                 ctx.stroke(block, with: .color(Color.white.opacity(0.25)), lineWidth: 0.8)
             }
         }
-        .animation(.easeIn(duration: 0.4), value: filledCount)
+        .animation(reduceMotion ? nil : .easeIn(duration: 0.4), value: filledCount)
     }
 }
