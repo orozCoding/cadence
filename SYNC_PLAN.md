@@ -187,15 +187,28 @@ that *should* re-dirty the transport for the next write cycle. The
 serialization invariant above is what protects capture/merge/apply
 atomicity — the flag is only for self-echo suppression):
 
-1. **Capture remote in memory.** Open a coordinated read of the
+1. **Close the write gate and drain in-flight writers.** Before
+   anything else, flip the write gate to "closed" so no new
+   debounced writes can be dispatched. Then `await` any *currently
+   running* background writer (one whose `coordinated write` is
+   already in progress at the moment the gate closed) — wait for it
+   to finish its current coordinated write and clear its busy flag
+   before proceeding. Draining only the debounce *timer* (the
+   previous wording) is not enough: a write that was dispatched a
+   moment earlier and is now mid-flight on a background queue can
+   still land *after* the merged write below and clobber the
+   resolved cloud snapshot with stale pre-merge state. Same gate
+   discipline used by the `NSFileVersion` resolver and the sign-in
+   recovery flow.
+2. **Capture remote in memory.** Open a coordinated read of the
    just-arrived `cadence-state.json` and `BackupService.decode` it
    into a local `remote: CadenceBackup` value. Do **not** touch the
    stores yet.
-2. **Capture current local state.** Synchronously drain the debounce
-   timer and take `local = BackupService.makeBackup()` — this is the
-   in-memory state including any dirty edits made since the last
-   successful write.
-3. **Merge in memory using per-record timestamps. Newer `updatedAt`
+3. **Capture current local state.** Now that no writer can race us,
+   take `local = BackupService.makeBackup()` — this is the in-memory
+   state including any dirty edits made since the last successful
+   write.
+4. **Merge in memory using per-record timestamps. Newer `updatedAt`
    wins same-`id` collisions; tombstones are authoritative.** Compute
    `merged` by:
    - Start from `remote` (so anything `local` doesn't know about —
@@ -254,21 +267,25 @@ atomicity — the flag is only for self-echo suppression):
      falls back to `.generalFolderID` — same fallback the codebase
      already uses for missing folders. (This is a local-store
      transition, not a `merged` blob change.)
-4. **Apply `merged` to the stores** via the existing
+5. **Apply `merged` to the stores** via the existing
    `BackupService.apply()` merge path. Because `merged` already
    embodies the precedence rules above, the same-`id` overwrite inside
    `apply()` is now safe — every same-`id` collision was already
-   resolved in step 3 with the explicit `updatedAt` policy.
-5. **Write `merged` back to the cloud file** as one coordinated write,
-   then clear the dirty flag and record the resulting blob as
-   `last-written` (used by the self-echo suppression rule below). This
-   single consolidated write is what the other Mac sees as the
+   resolved in step 4 with the explicit `updatedAt` policy.
+6. **Write `merged` back to the cloud file** as one coordinated write.
+7. **Clear the dirty flag and record the `merged` blob as
+   `last-written`** (used by the self-echo suppression rule below).
+   This single consolidated write is what the other Mac sees as the
    resolved post-merge state.
-6. If any step fails (transient `NSFileCoordinator` error, container
+8. **Reopen the write gate** (closed at step 1) so the debounce
+   writer can resume normal operation.
+9. If any step fails (transient `NSFileCoordinator` error, container
    missing, decode failure on `remote`), **defer the entire sequence**
    rather than partially applying. The dirty flag stays set; the
    sequence re-runs on the next metadata update or the next mutation
-   flush. Better a delayed import than silent partial state.
+   flush. Better a delayed import than silent partial state. The
+   write gate **must** be reopened on the failure path too — leaving
+   it permanently closed would silently disable sync.
 
 This sequence is what makes "same-id overwrite" safe in a continuous-sync
 context. Without the explicit per-record `updatedAt` step, the merge
@@ -1007,15 +1024,22 @@ users.
       `NSMetadataQueryUbiquitousDataScope`) fires.
    2. If `NSMetadataUbiquitousItemDownloadingStatusKey` is not
       `.current`, call `startDownloadingUbiquitousItem(at:)` and wait.
-   3. Coordinated read of the file → `BackupService.decode` into a
+   3. **Close the write gate** and await any in-flight background
+      writer to finish (not just drain the timer — a writer that was
+      dispatched before the gate closed can be mid-coordinated-write
+      and would clobber the merged write below if not drained).
+   4. Coordinated read of the file → `BackupService.decode` into a
       `remote: CadenceBackup` in memory. Do not touch the stores.
-   4. Synchronously drain the debounce timer and capture
-      `local = BackupService.makeBackup()`.
-   5. Compute `merged` with the precedence rules (same-`id` resolved
+   5. Capture `local = BackupService.makeBackup()`.
+   6. Compute `merged` with the precedence rules (same-`id` resolved
       by per-record `updatedAt`, tombstone-authoritative, focus-day
-      `max()`, `settingsUpdatedAt` for settings).
-   6. Apply `merged` once under `transport.isApplyingRemote = true`.
-   7. Coordinated write of `merged` back to `cadence-state.json`.
+      `max()`, `settingsUpdatedAt` for settings, `activeFolderID =
+      remote.activeFolderID`).
+   7. Apply `merged` once under `transport.isApplyingRemote = true`.
+   8. Coordinated write of `merged` back to `cadence-state.json`.
+   9. Clear dirty flag; record `merged` as `last-written`; reopen
+      the write gate. (Gate reopen runs on both success and failure
+      paths so sync can't silently lock itself off.)
    Includes the **first-launch bootstrap gate** (see below — gate held
    closed from process start until `NSMetadataQueryDidFinishGathering`
    fires AND the download has completed) so a fresh Mac never wipes
