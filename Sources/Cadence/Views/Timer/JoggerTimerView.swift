@@ -87,8 +87,15 @@ struct JoggerTimerView: View {
         .accessibilityValue(isFinished ? "Done" : timeString)
         .onAppear {
             guard !isPreview else { return }
+            // Anchor the bob phase to the timer's actual elapsed time so that
+            // remounting (e.g. user toggled away to another style and back)
+            // resumes the runner's pose instead of snapping to neutral. This
+            // mirrors the trick GlassTimerCircle uses for its wave phase.
+            let elapsed = CGFloat(PomodoroTimer.shared.total - PomodoroTimer.shared.remaining)
+            let anchored = elapsed * Self.bobRate
+            frozenBobPhase = anchored
+            phaseAtStart = anchored
             runStartDate = .now
-            phaseAtStart = frozenBobPhase
         }
         .onChange(of: isRunning) { _, running in
             guard !isPreview else { return }

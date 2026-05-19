@@ -135,15 +135,20 @@ struct SandTimerView: View {
     private func drawStream(ctx: GraphicsContext, size: CGSize, time: TimeInterval) {
         let centerX = size.width / 2
         let neckY = size.height / 2
+        let margin: CGFloat = 12
 
-        // Stream travels between the neck and the receiving pile's surface.
-        // Original: neck → bottom pile. Inverted: neck → top pile.
+        // Stream reaches from the neck to the receiving pile's surface.
+        // As the receiving chamber fills, the pile surface approaches the neck,
+        // so the stream shrinks to zero length when full.
         let pileSurfaceY: CGFloat
         if inverted {
-            // Top pile: surface drops from minY (full) to neck (empty) as top fills.
-            pileSurfaceY = max(12, neckY - (neckY - 12) * topFill)
+            // Top chamber filling. Top pile surface rises from neckY (empty) toward
+            // the top edge (full): surfaceY ≈ neckY - (neckY - margin) * topFill.
+            pileSurfaceY = neckY - (neckY - margin) * topFill
         } else {
-            pileSurfaceY = min(size.height - 12, neckY + (neckY - 12) * bottomFill)
+            // Bottom chamber filling. Pile surface rises from near-floor (empty)
+            // toward the neck (full).
+            pileSurfaceY = neckY + (size.height - margin - neckY) * (1 - bottomFill)
         }
 
         // Stream line
@@ -154,14 +159,14 @@ struct SandTimerView: View {
                                 width: 1.2, height: yEnd - yStart)
         ctx.fill(Path(streamRect), with: .color(Self.sandColor.opacity(0.85)))
 
-        // Individual grains travel along the stream.
+        // Individual grains travel along the stream from neck → pile surface.
+        // The directional reversal for inverted mode is already encoded in the
+        // sign of (pileSurfaceY - neckY), so `cycle` works uniformly.
         let grainCount = 6
         for i in 0..<grainCount {
             let phase = Double(i) / Double(grainCount)
             let cycle = (time * 1.4 + phase).truncatingRemainder(dividingBy: 1.0)
-            // Inverted: cycle 0 → at pileSurface (top), 1 → at neck. Otherwise cycle goes neck → pile.
-            let along = inverted ? CGFloat(1 - cycle) : CGFloat(cycle)
-            let y = neckY + along * (pileSurfaceY - neckY)
+            let y = neckY + CGFloat(cycle) * (pileSurfaceY - neckY)
             let wobble = sin(time * 6 + Double(i)) * 0.8
             let grain = CGRect(x: centerX - 1 + wobble, y: y - 1, width: 2, height: 2)
             ctx.fill(Path(ellipseIn: grain), with: .color(Self.sandShadow))
@@ -218,16 +223,16 @@ private struct TopSandShape: Shape {
         let leftX = lerp(rect.midX - neckHalfWidth, rect.minX, t: tSurface)
         let rightX = lerp(rect.midX + neckHalfWidth, rect.maxX, t: tSurface)
 
+        // Suppress the surface "dip" decoration when the chamber is near-empty
+        // or near-full so the path collapses to a clean line at the extremes.
+        let dipAmount: CGFloat = (f > 0.04 && f < 0.96) ? 1.5 : 0
+
         var p = Path()
-        // Surface line (top of sand) — slight dip in the middle for a settled look.
         p.move(to: CGPoint(x: leftX, y: surfaceY))
-        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY + 1.5))
+        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY + dipAmount))
         p.addLine(to: CGPoint(x: rightX, y: surfaceY))
-        // Down the right wall to the neck.
         p.addLine(to: CGPoint(x: rect.midX + neckHalfWidth, y: centerY))
-        // Across the neck.
         p.addLine(to: CGPoint(x: rect.midX - neckHalfWidth, y: centerY))
-        // Back up the left wall to the surface.
         p.closeSubpath()
         return p
     }
@@ -262,16 +267,16 @@ private struct BottomSandShape: Shape {
         let leftX = lerp(rect.minX, rect.midX - neckHalfWidth, t: tSurface)
         let rightX = lerp(rect.maxX, rect.midX + neckHalfWidth, t: tSurface)
 
+        // Suppress the mound decoration when the chamber is near-empty or
+        // near-full so the path collapses to a clean line at the extremes.
+        let moundHeight: CGFloat = (f > 0.04 && f < 0.96) ? 3 : 0
+
         var p = Path()
-        // Surface line (top of pile) — small mound in the middle.
         p.move(to: CGPoint(x: leftX, y: surfaceY))
-        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY - 3))
+        p.addLine(to: CGPoint(x: rect.midX, y: surfaceY - moundHeight))
         p.addLine(to: CGPoint(x: rightX, y: surfaceY))
-        // Down the right wall to the floor.
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        // Across the floor.
         p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        // Back up the left wall.
         p.closeSubpath()
         return p
     }
