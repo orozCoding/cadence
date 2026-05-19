@@ -146,9 +146,9 @@ struct TaskEditView: View {
                 .disabled(!canSave)
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 14)
+            .frame(height: AppTheme.headerHeight)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(AppTheme.headerDivider)
 
             // Title — fixed height, always at top
             TextField("Task title", text: $editedTitle)

@@ -12,8 +12,8 @@ struct SettingsView: View {
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            Divider().background(AppTheme.divider)
+            .frame(height: AppTheme.headerHeight)
+            Divider().background(AppTheme.headerDivider)
 
             ScrollView {
             VStack(alignment: .leading, spacing: 24) {
