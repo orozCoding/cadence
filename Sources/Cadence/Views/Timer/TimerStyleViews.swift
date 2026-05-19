@@ -117,12 +117,12 @@ struct TimerButtonBG: View {
                 )
                 .frame(width: size, height: size)
         case .sand:
-            // Warm sandy gradient to echo the hourglass palette.
+            // Blue gradient to match the recolored hourglass sand.
             Circle()
                 .fill(
                     isAccent
                     ? LinearGradient(
-                        colors: [Color(hex: "#E8B863"), Color(hex: "#B68637")],
+                        colors: [AppTheme.accent, AppTheme.accentDark],
                         startPoint: .top, endPoint: .bottom
                     )
                     : LinearGradient(
