@@ -7,8 +7,15 @@ struct TetrisTimerView: View {
     let isFinished: Bool
     let timeString: String
     var inverted: Bool = false
+    var isPreview: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Per-cell drop start times. `nil` means the cell is currently unfilled.
+    /// When a cell becomes filled, the entry is set to the moment the drop
+    /// animation should start; cells already settled have entries far enough
+    /// in the past that elapsed > dropDuration.
+    @State private var cellFillTimes: [Date?] = Array(repeating: nil, count: TetrisTimerView.cellCount)
 
     // 8 wide × 10 tall grid (80 cells)
     private static let gridW = 8
@@ -20,6 +27,15 @@ struct TetrisTimerView: View {
     private static let outerCorner: CGFloat = 14
     private static let inset: CGFloat = 6
     private static let cellGap: CGFloat = 1
+
+    // Drop animation tuning
+    private static let dropDuration: TimeInterval = 0.45
+    /// How far above the cell's final position the block starts. Larger =
+    /// more dramatic fall.
+    private static let fallHeight: CGFloat = 140
+    /// Delay between simultaneous drops so a batch of newly-filled cells
+    /// cascades rather than all landing on the same frame.
+    private static let dropStagger: TimeInterval = 0.04
 
     private static let palette: [Color] = [
         Color(hex: "#2B8FD4"), // accent blue
@@ -72,9 +88,27 @@ struct TetrisTimerView: View {
         return rank
     }()
 
+    /// Inverse mapping: `cellAtRank[rank]` is the cellIndex that fills at that
+    /// position in the sequence. Used to find which cells just became filled
+    /// when `filledCount` increases.
+    private static let cellAtRank: [Int] = {
+        var result = Array(repeating: 0, count: cellCount)
+        for (cellIndex, rank) in rankForCell.enumerated() {
+            result[rank] = cellIndex
+        }
+        return result
+    }()
+
     private var effectiveProgress: CGFloat {
         // Inverted: visually start full and empty out as time elapses.
         inverted ? (1 - progress) : progress
+    }
+
+    private var filledCount: Int {
+        // floor() so each cell lights up at its true boundary. The tiny
+        // epsilon protects against floating-point shaving at progress=1.0.
+        let raw = Double(effectiveProgress) * Double(Self.cellCount) + 1e-6
+        return min(Self.cellCount, max(0, Int(raw.rounded(.down))))
     }
 
     var body: some View {
@@ -120,40 +154,89 @@ struct TetrisTimerView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Timer")
         .accessibilityValue(isFinished ? "Done" : timeString)
+        .onAppear {
+            // Snap to the current filled state without animating (e.g. when the
+            // user comes back to Tetris from another style mid-session).
+            syncFillTimes(animateNew: false)
+        }
+        .onChange(of: progress) { _, _ in
+            // New progress tick — animate freshly-revealed cells dropping in.
+            // Skip the drop animation in preview rows and under Reduce Motion.
+            syncFillTimes(animateNew: !reduceMotion && !isPreview)
+        }
+    }
+
+    /// Reconciles `cellFillTimes` against the current `filledCount`. Cells
+    /// crossing into the filled range get a (possibly future) drop start time;
+    /// cells leaving the filled range (timer reset) are cleared.
+    private func syncFillTimes(animateNew: Bool) {
+        let target = filledCount
+        let now = Date()
+        var next = cellFillTimes
+
+        // Clear cells that are no longer filled (timer reset / inverted swap).
+        for rank in target..<Self.cellCount {
+            let cellIdx = Self.cellAtRank[rank]
+            if next[cellIdx] != nil { next[cellIdx] = nil }
+        }
+        // Assign drop times to cells that just became filled, staggered so a
+        // batch landing in the same tick cascades rather than colliding.
+        var staggerSlot = 0
+        for rank in 0..<target {
+            let cellIdx = Self.cellAtRank[rank]
+            guard next[cellIdx] == nil else { continue }
+            if animateNew {
+                next[cellIdx] = now.addingTimeInterval(TimeInterval(staggerSlot) * Self.dropStagger)
+                staggerSlot += 1
+            } else {
+                // Settle instantly: push the start time far enough into the past
+                // that elapsed > dropDuration on the next frame.
+                next[cellIdx] = now.addingTimeInterval(-Self.dropDuration - 1)
+            }
+        }
+        cellFillTimes = next
     }
 
     @ViewBuilder
     private var blocksCanvas: some View {
-        // floor() so each cell lights up at its true boundary — `.rounded()`
-        // would flip the first cell on a half-interval early and fill the
-        // box visually before the timer actually reaches zero. The tiny
-        // epsilon protects against floating-point shaving at progress=1.0.
-        let raw = Double(effectiveProgress) * Double(Self.cellCount) + 1e-6
-        let filledCount = min(Self.cellCount, max(0, Int(raw.rounded(.down))))
-        Canvas { ctx, size in
-            let inset = Self.inset
-            let gap = Self.cellGap
-            let drawableW = size.width - inset * 2
-            let drawableH = size.height - inset * 2
-            let cellW = drawableW / CGFloat(Self.gridW)
-            let cellH = drawableH / CGFloat(Self.gridH)
-
-            for cellIndex in 0..<Self.cellCount {
-                guard Self.rankForCell[cellIndex] < filledCount else { continue }
-                let row = cellIndex / Self.gridW
-                let col = cellIndex % Self.gridW
-                let x = inset + CGFloat(col) * cellW + gap / 2
-                let y = inset + CGFloat(row) * cellH + gap / 2
-                let rect = CGRect(
-                    x: x, y: y,
-                    width: cellW - gap, height: cellH - gap
-                )
-                let block = Path(roundedRect: rect, cornerRadius: 2)
-                let color = isFinished ? AppTheme.accent : Self.colorForCell(cellIndex)
-                ctx.fill(block, with: .color(color))
-                ctx.stroke(block, with: .color(Color.white.opacity(0.25)), lineWidth: 0.8)
+        // TimelineView drives per-frame Canvas redraws so each cell can
+        // interpolate its Y offset during its drop. Paused under Reduce
+        // Motion and in preview rows — cells render at their settled
+        // positions in those cases.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || isPreview)) { context in
+            Canvas { ctx, size in
+                drawBlocks(ctx: ctx, size: size, now: context.date)
             }
         }
-        .animation(reduceMotion ? nil : .easeIn(duration: 0.4), value: filledCount)
+    }
+
+    private func drawBlocks(ctx: GraphicsContext, size: CGSize, now: Date) {
+        let inset = Self.inset
+        let gap = Self.cellGap
+        let drawableW = size.width - inset * 2
+        let drawableH = size.height - inset * 2
+        let cellW = drawableW / CGFloat(Self.gridW)
+        let cellH = drawableH / CGFloat(Self.gridH)
+
+        for cellIndex in 0..<Self.cellCount {
+            guard let fillTime = cellFillTimes[cellIndex] else { continue }
+            let elapsed = now.timeIntervalSince(fillTime)
+            // Staggered cells with a future start time are not yet falling.
+            if elapsed < 0 { continue }
+            let t = reduceMotion ? 1.0 : min(1.0, elapsed / Self.dropDuration)
+            // Ease-out (decelerating fall) — feels like landing under gravity.
+            let eased = 1 - pow(1 - t, 2)
+            let yOffset = (1 - eased) * -Self.fallHeight
+
+            let row = cellIndex / Self.gridW
+            let col = cellIndex % Self.gridW
+            let x = inset + CGFloat(col) * cellW + gap / 2
+            let y = inset + CGFloat(row) * cellH + gap / 2 + yOffset
+            let rect = CGRect(x: x, y: y, width: cellW - gap, height: cellH - gap)
+            let block = Path(roundedRect: rect, cornerRadius: 2)
+            let color = isFinished ? AppTheme.accent : Self.colorForCell(cellIndex)
+            ctx.fill(block, with: .color(color))
+            ctx.stroke(block, with: .color(Color.white.opacity(0.25)), lineWidth: 0.8)
+        }
     }
 }

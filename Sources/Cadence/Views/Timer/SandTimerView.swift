@@ -22,8 +22,10 @@ struct SandTimerView: View {
     private static let capHeight: CGFloat = 6
     private static let neckHalfWidth: CGFloat = 4
 
-    private static let sandColor = Color(hex: "#E8B863")
-    private static let sandShadow = Color(hex: "#B68637")
+    // Blue palette (matches AppTheme.accent / accentDark) — the "sand" is
+    // tinted to fit the app's overall blue look instead of literal beige.
+    private static let sandColor = AppTheme.accent
+    private static let sandShadow = AppTheme.accentDark
 
     /// Fraction of sand remaining in the top chamber. 1 = full, 0 = empty.
     private var topFill: CGFloat {
@@ -68,24 +70,17 @@ struct SandTimerView: View {
             .frame(width: Self.frameWidth + 8, height: Self.frameHeight + 4)
 
             // Time label — anchored at the neck so it stays readable regardless
-            // of which chamber is filling.
-            VStack(spacing: 2) {
-                Text(timeString)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .contentTransition(.numericText())
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule().fill(Color.white.opacity(0.85))
-                    )
-                if isFinished {
-                    Text("Done!")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                        .transition(.opacity.combined(with: .scale))
-                }
-            }
+            // of which chamber is filling. When finished we leave the numeric
+            // 00:00 in place rather than swapping in a "Done!" overlay.
+            Text(timeString)
+                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                .foregroundStyle(AppTheme.textPrimary)
+                .contentTransition(.numericText())
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(
+                    Capsule().fill(Color.white.opacity(0.85))
+                )
         }
         .frame(width: Self.size, height: Self.size)
         .accessibilityElement(children: .ignore)

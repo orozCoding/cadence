@@ -16,7 +16,7 @@ struct JoggerTimerView: View {
     private static let canvasH: CGFloat = 130
     private static let trackY: CGFloat = 92          // runner foot Y inside the canvas
     private static let trackInset: CGFloat = 14      // left/right padding
-    private static let figureSize: CGFloat = 32
+    private static let figureSize: CGFloat = 16      // halved per user feedback
     private static let bobRate: CGFloat = 9          // rad/sec for the running cycle
 
     // Bob phase anchoring — matches the GlassTimerCircle pause/resume pattern.
@@ -78,10 +78,12 @@ struct JoggerTimerView: View {
                 .offset(x: inverted ? trackLeft - 8 : trackRight - 8,
                         y: Self.trackY - 22)
 
-            // Runner figure
+            // Runner figure — lift above the track so the SF Symbol's foot
+            // pixels land near the line (the symbol has internal padding so
+            // its visible feet sit a couple pt above its bounding rect bottom).
             runner
                 .offset(x: runnerX - Self.figureSize / 2,
-                        y: Self.trackY - Self.figureSize + 4)
+                        y: Self.trackY - Self.figureSize - 2)
         }
         .frame(width: Self.canvasW, height: Self.canvasH)
         .accessibilityElement(children: .ignore)

@@ -41,7 +41,7 @@ struct TimerClockView: View {
         case .tetris:
             TetrisTimerView(
                 progress: progress, isFinished: isFinished,
-                timeString: timeString, inverted: inverted
+                timeString: timeString, inverted: inverted, isPreview: isPreview
             )
         case .jogger:
             JoggerTimerView(
