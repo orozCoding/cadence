@@ -137,12 +137,13 @@ struct TimerPanelView: View {
     }
 
     private func applyCustom() {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = .current
-        guard let num = formatter.number(from: customMinutes),
-              num.doubleValue > 0, num.doubleValue <= 999 else { return }
-        let mins = num.doubleValue
+        // Accept both "." and "," as decimal separators regardless of locale —
+        // normalize to "." and parse with Double so "0.1" and "0,1" both work.
+        let normalized = customMinutes
+            .replacingOccurrences(of: ",", with: ".")
+            .trimmingCharacters(in: .whitespaces)
+        guard let mins = Double(normalized),
+              mins > 0, mins <= 999 else { return }
         selectedPreset = presets.first(where: { Double($0.minutes) == mins })?.minutes
         timer.set(seconds: mins * 60)
     }
