@@ -615,10 +615,19 @@ single-user macOS setup).
      fires).
   7. **Write `merged` back** as one coordinated write to
      `cadence-state.json` and verify it succeeded.
-  8. Only **after** the consolidated write succeeds, mark each
+  8. **After the write succeeds, clear the dirty flag and record the
+     `merged` blob as `last-written`** — same bookkeeping the
+     regular read path does. Without this, the debounce writer can
+     fire immediately after step 9's gate reopen, take a fresh
+     `makeBackup()` (which re-serialises this Mac's local
+     `activeFolderID` because `apply()` doesn't touch it), and
+     overwrite the merged value we just wrote — re-introducing the
+     ping-pong.
+  9. Only **after** the consolidated write succeeds *and* the
+     dirty-flag/last-written bookkeeping is done, mark each
      conflicting version `isResolved = true` and call
-     `NSFileVersion.removeOtherVersionsOfItem(at:)`. Then re-open the
-     write gate.
+     `NSFileVersion.removeOtherVersionsOfItem(at:)`. Then re-open
+     the write gate.
   Skipping step 7 is a real data-loss path: without an explicit
   post-merge write, the merged state lives only in this Mac's local
   stores until the next user mutation. If the user closes the app first,
@@ -683,7 +692,15 @@ single-user macOS setup).
        `NSFileVersion` resolver — write `merged`, never a
        post-apply `makeBackup()`.) Verify the coordinated write
        succeeded before moving on.
-    7. Only then open the write gate.
+    7. **Clear the dirty flag and record the `merged` blob as
+       `last-written`** — same bookkeeping as the regular read path
+       and the `NSFileVersion` resolver. Without this, the moment
+       step 8 reopens the write gate, the debounce writer can fire
+       a fresh post-gate `makeBackup()` (which re-serialises this
+       Mac's local `activeFolderID` because `apply()` doesn't touch
+       it) and overwrite the merged value we just wrote, undoing
+       the recovery.
+    8. Only then open the write gate.
 
     The `settingsUpdatedAt` rule referenced in step 4: pick the side
     with the newer `settingsUpdatedAt`. This field was added in Phase
