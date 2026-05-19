@@ -6,6 +6,9 @@ enum TimerStyle: String, CaseIterable, Identifiable {
     case minimal = "minimal"
     case orbit   = "orbit"
     case neon    = "neon"
+    case tetris  = "tetris"
+    case jogger  = "jogger"
+    case sand    = "sand"
 
     var id: String { rawValue }
 
@@ -15,6 +18,9 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         case .minimal:  return "Minimal"
         case .orbit:    return "Orbit"
         case .neon:     return "Neon"
+        case .tetris:   return "Tetris"
+        case .jogger:   return "Jogger"
+        case .sand:     return "Sand"
         }
     }
 
@@ -24,6 +30,9 @@ enum TimerStyle: String, CaseIterable, Identifiable {
         case .minimal:  return "Clean arc stroke"
         case .orbit:    return "Comet orbiting outside the clock face"
         case .neon:     return "Electric plasma arc"
+        case .tetris:   return "Falling blocks stack to fill the box"
+        case .jogger:   return "A runner heading toward the finish line"
+        case .sand:     return "Hourglass with falling sand"
         }
     }
 }

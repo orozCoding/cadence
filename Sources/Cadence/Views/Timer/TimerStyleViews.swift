@@ -38,6 +38,23 @@ struct TimerClockView: View {
                 progress: progress, isFinished: isFinished,
                 timeString: timeString, inverted: inverted
             )
+        case .tetris:
+            TetrisTimerView(
+                progress: progress, isFinished: isFinished,
+                timeString: timeString, inverted: inverted
+            )
+        case .jogger:
+            JoggerTimerView(
+                progress: progress, isFinished: isFinished,
+                timeString: timeString, isRunning: isRunning,
+                inverted: inverted, isPreview: isPreview
+            )
+        case .sand:
+            SandTimerView(
+                progress: progress, isFinished: isFinished,
+                timeString: timeString, isRunning: isRunning,
+                inverted: inverted, isPreview: isPreview
+            )
         }
     }
 }
@@ -79,6 +96,44 @@ struct TimerButtonBG: View {
                 }
             }
             .frame(width: size, height: size)
+        case .tetris:
+            // Pixel-tile look: solid square with subtle inset highlight.
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isAccent ? AppTheme.accent : AppTheme.divider)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.white.opacity(isAccent ? 0.35 : 0.20), lineWidth: 1)
+                        .padding(1)
+                )
+                .frame(width: size, height: size)
+        case .jogger:
+            // Plain solid circle — keeps controls visually quiet so the runner
+            // stays the focus.
+            Circle()
+                .fill(isAccent ? AppTheme.accent : AppTheme.divider)
+                .overlay(
+                    Circle().stroke(AppTheme.textTertiary.opacity(isAccent ? 0 : 0.3),
+                                    lineWidth: 1)
+                )
+                .frame(width: size, height: size)
+        case .sand:
+            // Warm sandy gradient to echo the hourglass palette.
+            Circle()
+                .fill(
+                    isAccent
+                    ? LinearGradient(
+                        colors: [Color(hex: "#E8B863"), Color(hex: "#B68637")],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    : LinearGradient(
+                        colors: [AppTheme.divider, AppTheme.divider],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    Circle().stroke(Color.white.opacity(isAccent ? 0.35 : 0.0), lineWidth: 1)
+                )
+                .frame(width: size, height: size)
         }
     }
 }
