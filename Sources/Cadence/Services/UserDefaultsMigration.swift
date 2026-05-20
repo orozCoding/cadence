@@ -49,6 +49,15 @@ enum UserDefaultsMigration {
     /// normally; this flag becomes irrelevant.
     private static let suppressedDenialLogKey = "cadence_migration_denial_logged_v1"
 
+    /// Set immediately before the migration write loop and cleared
+    /// after `didMigrateKey` is set. Lets us distinguish an
+    /// interrupted in-progress migration from a completed one: if
+    /// the marker is present on launch but the sentinel is not, the
+    /// previous run was killed mid-write — bypass the pristine
+    /// bailout and re-run the migration. Writes are idempotent so
+    /// rewriting any already-applied key is harmless.
+    private static let migrationInProgressKey = "cadence_migration_in_progress_v1"
+
     /// Bundle id used to locate the legacy preferences file. Hard-coded
     /// rather than read from `Bundle.main.bundleIdentifier` so a future
     /// rename of the bundle id doesn't silently miss the migration.
@@ -170,24 +179,27 @@ enum UserDefaultsMigration {
         // has been using the app for a while (e.g. after a previous
         // launch hit sandbox-denial on the legacy read and the user
         // started accumulating new tasks/folders/focus-time anyway).
-        //
         // In either case, blindly writing legacy values from a now-
         // stale plist would overwrite real data — silently. We bail
         // out and mark `didMigrateKey` so we never try again.
         //
-        // Trade-off acknowledged: this re-introduces a narrow version
-        // of the partial-write concern (mid-loop process kill between
-        // writing key #N and setting the sentinel → next launch sees
-        // partial data → pristine = false → remaining keys lost).
-        // The window is microseconds of `UserDefaults.standard.set`
-        // calls; this is virtually impossible in practice and is
-        // an acceptable trade against silent data loss from a late
-        // retry overwriting accumulated post-upgrade activity.
-        let hasSandboxedData = knownKeys.contains { defaults.object(forKey: $0) != nil }
-        if hasSandboxedData {
-            log.info("Sandboxed defaults already populated — assuming system-level container migration handled it (or the user has been using the app). Skipping manual migration; marking done.")
-            defaults.set(true, forKey: didMigrateKey)
-            return
+        // EXCEPTION: if `migrationInProgressKey` is set, the previous
+        // run was killed *between* the first write and the sentinel
+        // flush. In that case the partial data we see is *from us*,
+        // not from the system or the user, and the safe move is to
+        // re-run the migration so the remaining keys land too.
+        // Writes are idempotent so rewriting already-applied keys
+        // does no harm.
+        let inProgressFromCrashedRun = defaults.bool(forKey: migrationInProgressKey)
+        if !inProgressFromCrashedRun {
+            let hasSandboxedData = knownKeys.contains { defaults.object(forKey: $0) != nil }
+            if hasSandboxedData {
+                log.info("Sandboxed defaults already populated — assuming system-level container migration handled it (or the user has been using the app). Skipping manual migration; marking done.")
+                defaults.set(true, forKey: didMigrateKey)
+                return
+            }
+        } else {
+            log.notice("Resuming migration after an interrupted previous run (migrationInProgressKey set, didMigrateKey unset). Re-reading legacy plist.")
         }
 
         // CRITICAL: do not use `FileManager.homeDirectoryForCurrentUser`
@@ -289,8 +301,9 @@ enum UserDefaultsMigration {
 
         // Case 4: success path. Collect all values, write in one batch,
         // then set the sentinel. If killed mid-batch the next launch
-        // re-runs from scratch (the sentinel is the only completion
-        // gate); writes are idempotent so no harm done.
+        // detects the in-progress marker and re-runs from scratch
+        // (writes are idempotent, so re-applying already-set keys is
+        // harmless).
         //
         // We do NOT copy unknown keys because:
         //   (a) System / framework noise like `NSWindow Frame …` is
@@ -301,11 +314,23 @@ enum UserDefaultsMigration {
             plist[key].map { (key, $0) }
         }
 
+        // Set the in-progress marker *before* the first write. If we
+        // get killed between this line and the sentinel below, the
+        // next launch sees the marker set + sentinel unset and re-
+        // runs the migration to completion.
+        defaults.set(true, forKey: migrationInProgressKey)
+
         for (key, value) in migratedPairs {
             defaults.set(value, forKey: key)
         }
 
         log.info("Migrated \(migratedPairs.count, privacy: .public) UserDefaults keys from legacy domain into sandboxed container.")
+
+        // Sentinel must be set BEFORE we clear the in-progress marker.
+        // If the order were reversed and we got killed between them,
+        // the next launch would see neither marker nor sentinel and
+        // re-run the migration; benign, but unnecessary work.
         defaults.set(true, forKey: didMigrateKey)
+        defaults.removeObject(forKey: migrationInProgressKey)
     }
 }
