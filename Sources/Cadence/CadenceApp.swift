@@ -9,6 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
+        // Probe the iCloud container so the build's signing + entitlements
+        // are validated on launch. Phase 1 only — does not touch any files.
+        // Migration ran in CadenceApp.init before any singleton was touched;
+        // this can safely come after.
+        iCloudContainerProbe.run()
         Task { @MainActor in DockIconController.shared.start() }
         // Space bar → toggle timer (only when no text field is focused)
         if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: handleKeyDown) {

@@ -92,17 +92,32 @@ To run Cadence as a standalone app (no Xcode open required), build a Release bin
 # cd to the project directory e.g.
 cd /Users/angelorozco/OrozCoding/repositories/cadence
 
+# one-time: set your Apple Developer team id for signing (see "Signing setup" below)
+export CADENCE_TEAM_ID=XXXXXXXXXX
+
 # build the app
-xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && ditto dist/Cadence.app /Applications/Cadence.app
+xcodebuild -project Cadence.xcodeproj -scheme Cadence -configuration Release \
+  DEVELOPMENT_TEAM="$CADENCE_TEAM_ID" \
+  CONFIGURATION_BUILD_DIR="$(pwd)/dist" build && ditto dist/Cadence.app /Applications/Cadence.app
 ```
 
 After that, open it from Spotlight, Launchpad, or Finder like any other macOS app. Run the same command whenever you want to update after pulling new changes.
+
+### Signing setup (one-time)
+
+The app is now sandboxed and entitled for iCloud Documents (preparation for the upcoming sync feature), which means **builds must be signed with your Apple Developer team**.
+
+1. Sign in to Xcode with your Apple ID (Xcode → Settings → Accounts).
+2. Open `Cadence.xcodeproj`, select the `Cadence` target → Signing & Capabilities, and pick your team in the **Team** dropdown. Xcode writes the team id into your local user state (`xcuserdata/`), which is git-ignored — nothing committed.
+3. Find your team id at <https://developer.apple.com/account> → Membership. Use it for `CADENCE_TEAM_ID` above. (Or just build inside Xcode after step 2 and skip `xcodebuild` entirely.)
+
+If you see `error: No Account for Team` from `xcodebuild`, the `DEVELOPMENT_TEAM` env var is missing or the Apple ID isn't logged in to Xcode.
 
 ---
 
 ## Data Storage
 
-All tasks are saved locally to `UserDefaults`. No cloud sync, no account required.
+Tasks, folders, focus history, and preferences are saved locally to the app's `UserDefaults` container (now under `~/Library/Containers/com.orozcoding.cadence/` because the app is sandboxed). On first launch after upgrading from a pre-sandbox build, a one-shot migration copies the legacy preferences across — no manual step required. No cloud sync yet (in progress; the "Sync via iCloud" toggle in Settings is currently a no-op placeholder).
 
 ---
 

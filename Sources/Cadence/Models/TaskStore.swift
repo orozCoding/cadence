@@ -13,6 +13,7 @@ final class TaskStore: ObservableObject {
     private let backupKey  = "cadence_tasks_backup"
 
     private init() {
+        UserDefaultsMigration.ensureMigrated()
         load()
     }
 

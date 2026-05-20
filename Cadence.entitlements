@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox: required for the iCloud Documents capability to work
+	     under notarised distribution. Cadence has always been a sandbox-
+	     compatible app (no shell-out, no /tmp scribbling); turning this on
+	     mainly restricts UserDefaults to the per-app container at
+	     ~/Library/Containers/com.orozcoding.cadence/. The one-shot
+	     migration in UserDefaultsMigration.swift copies legacy preferences
+	     across on first sandboxed launch so no data is lost. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- iCloud Documents capability. CloudDocuments is the service id that
+	     actually turns on access to ubiquity containers; the container id
+	     below is inert without it. Phase 2+3+4 will use this. -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudDocuments</string>
+	</array>
+
+	<!-- The exact container the app reads from / writes to. Written here
+	     without the Team ID prefix; Xcode prepends <TEAMID>. at sign time,
+	     and FileManager.url(forUbiquityContainerIdentifier:) accepts the
+	     same un-prefixed string at runtime. -->
+	<key>com.apple.developer.ubiquity-container-identifiers</key>
+	<array>
+		<string>iCloud.com.orozcoding.cadence</string>
+	</array>
+
+	<!-- Existing backup feature surfaces NSOpenPanel / NSSavePanel via
+	     DataBackupSection. Under sandbox, persisting access to a user-
+	     selected file requires this entitlement; without it the user's
+	     selection works for the current session only and breaks on the
+	     next launch with no error. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

@@ -210,6 +210,9 @@ struct SettingsView: View {
                     }
                 }
 
+                // iCloud Sync section (Phase 1 — no-op toggle).
+                iCloudSyncSection()
+
                 // Data (Export / Import) section
                 DataBackupSection()
             }

@@ -50,6 +50,9 @@
 		B0000098 /* ShareAnchorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000099 /* ShareAnchorButton.swift */; };
 		B000009A /* BackupHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009B /* BackupHeader.swift */; };
 		B000009C /* BackupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B000009D /* BackupError.swift */; };
+		B0000100 /* UserDefaultsMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000101 /* UserDefaultsMigration.swift */; };
+		B0000102 /* iCloudContainerProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000103 /* iCloudContainerProbe.swift */; };
+		B0000104 /* iCloudSyncSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000105 /* iCloudSyncSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,6 +100,10 @@
 		B0000099 /* ShareAnchorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnchorButton.swift; sourceTree = "<group>"; };
 		B000009B /* BackupHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHeader.swift; sourceTree = "<group>"; };
 		B000009D /* BackupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupError.swift; sourceTree = "<group>"; };
+		B0000101 /* UserDefaultsMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaultsMigration.swift; sourceTree = "<group>"; };
+		B0000103 /* iCloudContainerProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudContainerProbe.swift; sourceTree = "<group>"; };
+		B0000105 /* iCloudSyncSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncSection.swift; sourceTree = "<group>"; };
+		B0000107 /* Cadence.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Cadence.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -113,6 +120,7 @@
 		B0000005 = {
 			isa = PBXGroup;
 			children = (
+				B0000107 /* Cadence.entitlements */,
 				B0000010 /* Cadence */,
 				B0000006 /* Products */,
 			);
@@ -169,7 +177,9 @@
 			children = (
 				B000009D /* BackupError.swift */,
 				B0000095 /* BackupService.swift */,
+				B0000103 /* iCloudContainerProbe.swift */,
 				B0000066 /* SoundManager.swift */,
+				B0000101 /* UserDefaultsMigration.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -224,6 +234,7 @@
 			isa = PBXGroup;
 			children = (
 				B0000097 /* DataBackupSection.swift */,
+				B0000105 /* iCloudSyncSection.swift */,
 				B0000027 /* SettingsView.swift */,
 				B0000099 /* ShareAnchorButton.swift */,
 			);
@@ -376,6 +387,9 @@
 				B0000098 /* ShareAnchorButton.swift in Sources */,
 				B000009A /* BackupHeader.swift in Sources */,
 				B000009C /* BackupError.swift in Sources */,
+				B0000100 /* UserDefaultsMigration.swift in Sources */,
+				B0000102 /* iCloudContainerProbe.swift in Sources */,
+				B0000104 /* iCloudSyncSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -502,6 +516,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Cadence.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -527,6 +542,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Cadence.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;

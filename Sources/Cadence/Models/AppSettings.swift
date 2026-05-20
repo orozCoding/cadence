@@ -91,11 +91,23 @@ final class AppSettings: ObservableObject {
     @Published var animateDockIcon: Bool {
         didSet { save() }
     }
+    /// Phase 1 no-op toggle. The Settings UI exposes it so the user can
+    /// flip it on once the full sync (Phase 2+3+4) lands, but reads/writes
+    /// in this PR do not act on it — the transport doesn't exist yet.
+    /// Persisted normally so the user's choice survives the upgrade.
+    @Published var iCloudSyncEnabled: Bool {
+        didSet { save() }
+    }
     @Published var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
+        // Must run before any UserDefaults read in any singleton — see
+        // UserDefaultsMigration.ensureMigrated for why. Idempotent after
+        // first run.
+        UserDefaultsMigration.ensureMigrated()
+
         let raw = UserDefaults.standard.integer(forKey: "weekStartsOn")
         weekStartsOn = Weekday(rawValue: raw) ?? .monday
 
@@ -109,6 +121,10 @@ final class AppSettings: ObservableObject {
         timerDirection = TimerDirection(rawValue: directionRaw) ?? .original
 
         animateDockIcon = UserDefaults.standard.object(forKey: "animateDockIcon") as? Bool ?? true
+
+        // Phase 1: persisted but inert. Default off so a user who never
+        // touches the toggle is identical to today's behaviour.
+        iCloudSyncEnabled = UserDefaults.standard.object(forKey: "iCloudSyncEnabled") as? Bool ?? false
 
         let refreshDate: (Notification) -> Void = { [weak self] _ in
             self?.currentDate = Calendar.current.startOfDay(for: Date())
@@ -127,6 +143,7 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(timerStyle.rawValue, forKey: "timerStyle")
         UserDefaults.standard.set(timerDirection.rawValue, forKey: "timerDirection")
         UserDefaults.standard.set(animateDockIcon, forKey: "animateDockIcon")
+        UserDefaults.standard.set(iCloudSyncEnabled, forKey: "iCloudSyncEnabled")
     }
 
     /// Apply a settings snapshot from a backup file. Unknown raw values fall
