@@ -163,6 +163,33 @@ enum UserDefaultsMigration {
             return
         }
 
+        // Pristine-state check: if any known key already has a value
+        // in the sandboxed defaults, the migration window has passed.
+        // Either macOS's container manager auto-migrated the legacy
+        // plist into the container before our code ran, *or* the user
+        // has been using the app for a while (e.g. after a previous
+        // launch hit sandbox-denial on the legacy read and the user
+        // started accumulating new tasks/folders/focus-time anyway).
+        //
+        // In either case, blindly writing legacy values from a now-
+        // stale plist would overwrite real data — silently. We bail
+        // out and mark `didMigrateKey` so we never try again.
+        //
+        // Trade-off acknowledged: this re-introduces a narrow version
+        // of the partial-write concern (mid-loop process kill between
+        // writing key #N and setting the sentinel → next launch sees
+        // partial data → pristine = false → remaining keys lost).
+        // The window is microseconds of `UserDefaults.standard.set`
+        // calls; this is virtually impossible in practice and is
+        // an acceptable trade against silent data loss from a late
+        // retry overwriting accumulated post-upgrade activity.
+        let hasSandboxedData = knownKeys.contains { defaults.object(forKey: $0) != nil }
+        if hasSandboxedData {
+            log.info("Sandboxed defaults already populated — assuming system-level container migration handled it (or the user has been using the app). Skipping manual migration; marking done.")
+            defaults.set(true, forKey: didMigrateKey)
+            return
+        }
+
         // CRITICAL: do not use `FileManager.homeDirectoryForCurrentUser`
         // here — under `com.apple.security.app-sandbox` it returns the
         // *container* path (`/Users/<user>/Library/Containers/com.orozcoding.cadence/Data/`),
