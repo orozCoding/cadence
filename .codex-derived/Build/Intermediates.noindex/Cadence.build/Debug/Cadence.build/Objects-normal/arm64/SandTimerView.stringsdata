@@ -1,0 +1,16 @@
+{
+  "source": "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/SandTimerView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Timer",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 87
+        }
+      }
+    ]
+  },
+  "version": 1
+}

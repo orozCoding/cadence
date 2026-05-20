@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import os
 
 /// One-shot migration that copies preferences from the pre-sandbox
@@ -71,6 +72,31 @@ enum UserDefaultsMigration {
 
     private static let log = Logger(subsystem: legacyBundleID, category: "userdefaults-migration")
 
+    /// Resolves the user's *real* home directory (`/Users/<user>/`),
+    /// bypassing the sandbox path redirection that
+    /// `FileManager.homeDirectoryForCurrentUser` is subject to.
+    /// Returns `nil` only if the passwd database is unreadable — a
+    /// pathological condition we treat as "retry next launch".
+    private static func realHomeDirectoryURL() -> URL? {
+        // _SC_GETPW_R_SIZE_MAX may return -1 on some systems; fall back
+        // to a generous 4096 buffer in that case.
+        let suggested = sysconf(_SC_GETPW_R_SIZE_MAX)
+        let bufferSize = suggested > 0 ? Int(suggested) : 4096
+
+        var pw = passwd()
+        var pwResult: UnsafeMutablePointer<passwd>? = nil
+        var buffer = [CChar](repeating: 0, count: bufferSize)
+
+        // `getpwuid_r` is the reentrant variant; the non-reentrant
+        // `getpwuid` shares a static buffer and is unsafe across
+        // threads / concurrent calls.
+        let rc = getpwuid_r(getuid(), &pw, &buffer, buffer.count, &pwResult)
+        guard rc == 0, pwResult != nil, let dirPtr = pw.pw_dir else {
+            return nil
+        }
+        return URL(fileURLWithPath: String(cString: dirPtr))
+    }
+
     /// Runs the migration if it hasn't run yet. Idempotent: safe to
     /// call multiple times. After the first run sets `didMigrateKey`,
     /// subsequent calls return immediately after a single bool read.
@@ -94,8 +120,24 @@ enum UserDefaultsMigration {
             return
         }
 
-        let homeURL = FileManager.default.homeDirectoryForCurrentUser
-        let legacyURL = homeURL
+        // CRITICAL: do not use `FileManager.homeDirectoryForCurrentUser`
+        // here — under `com.apple.security.app-sandbox` it returns the
+        // *container* path (`/Users/<user>/Library/Containers/com.orozcoding.cadence/Data/`),
+        // not the real home. Asking for legacy preferences relative to
+        // that path resolves to the sandboxed plist inside the
+        // container, which is exactly the file we're trying to populate.
+        //
+        // `getpwuid_r(getuid(), …)` reads from the system passwd database
+        // and is *not* subject to sandbox path redirection — it returns
+        // the user's actual home directory (`/Users/<user>/`).
+        guard let realHome = realHomeDirectoryURL() else {
+            // Can't resolve real home — pathologically rare (would mean
+            // the passwd database is unreadable). Leave sentinel unset
+            // and retry next launch.
+            log.error("Could not resolve real home directory via getpwuid_r; cannot locate legacy preferences. Will retry on next launch.")
+            return
+        }
+        let legacyURL = realHome
             .appendingPathComponent("Library/Preferences/\(legacyBundleID).plist")
 
         // We deliberately do NOT pre-check with
@@ -119,17 +161,26 @@ enum UserDefaultsMigration {
                 // sentinel.
                 log.info("No legacy preferences file at \(legacyURL.path, privacy: .public); fresh install or system-level container migration already handled. Marking migration done.")
                 defaults.set(true, forKey: didMigrateKey)
+            case (NSCocoaErrorDomain, NSFileReadNoPermissionError):
+                // Permanent sandbox denial: the legacy file probably
+                // exists at the real path, but our entitlements don't
+                // grant us access to read it. macOS's container manager
+                // should have auto-migrated the preferences into the
+                // sandboxed defaults during first-launch bootstrap, so
+                // `UserDefaults.standard` already reflects the user's
+                // data — our manual migration is moot.
+                //
+                // We mark the sentinel here to avoid logging this error
+                // on every single launch forever. If the auto-migration
+                // also failed (rare), the documented recovery is
+                // Settings → Data → Import from a backup of the
+                // un-sandboxed build.
+                log.notice("Sandbox denies reading legacy preferences at \(legacyURL.path, privacy: .public). Relying on macOS container manager's auto-migration; manual fallback is Settings → Data → Import. Marking migration done.")
+                defaults.set(true, forKey: didMigrateKey)
             default:
-                // Anything else — `NSFileReadNoPermissionError` (sandbox
-                // denial), `NSFileReadUnknownError`, transient I/O — we
-                // don't know whether legacy data exists. Leave the
-                // sentinel unset; the next launch retries. Harmless:
-                // one log line, no UserDefaults writes. Far better than
-                // marking done and losing the migration window forever.
-                // If the failure is permanent (e.g. sandbox policy
-                // blocking us on this macOS version), the recovery is
-                // the existing Settings → Data → Import flow from a
-                // backup of the un-sandboxed build.
+                // Other errors — `NSFileReadUnknownError`, transient
+                // I/O, disk going away mid-read. Leave the sentinel
+                // unset; the next launch retries.
                 log.error("Could not read legacy preferences at \(legacyURL.path, privacy: .public): \(error, privacy: .public) (code \(error.code, privacy: .public)). Will retry on next launch.")
             }
             return

@@ -1,0 +1,32 @@
+{
+  "source": "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Tasks/TaskRowView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Mark as To Do",
+        "location": {
+          "startingColumn": 51,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Mark as Done",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld/%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 135
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,128 @@
+{
+  "source": "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Tasks/TaskEditView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Task title",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 154
+        }
+      },
+      {
+        "comment": "",
+        "key": "Back",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Mark as To Do",
+        "location": {
+          "startingColumn": 51,
+          "startingLine": 98
+        }
+      },
+      {
+        "comment": "",
+        "key": "Mark as Done",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 98
+        }
+      },
+      {
+        "comment": "",
+        "key": "Undo",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 116
+        }
+      },
+      {
+        "comment": "",
+        "key": "Redo",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 127
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 137
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add content… type [] for a checklist item",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 166
+        }
+      },
+      {
+        "comment": "",
+        "key": "Deadlines",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 196
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day deadline",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 202
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day deadline",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 204
+        }
+      },
+      {
+        "comment": "",
+        "key": "Week deadline",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 211
+        }
+      },
+      {
+        "comment": "",
+        "key": "Month deadline",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 221
+        }
+      },
+      {
+        "comment": "",
+        "key": "Year deadline",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 231
+        }
+      },
+      {
+        "comment": "",
+        "key": "Year deadline",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 237
+        }
+      }
+    ]
+  },
+  "version": 1
+}

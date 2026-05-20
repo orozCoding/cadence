@@ -1,0 +1,112 @@
+{
+  "source": "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/TimerPanelView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Today  %@",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 75
+        }
+      },
+      {
+        "comment": "",
+        "key": "No focus time today",
+        "location": {
+          "startingColumn": 75,
+          "startingLine": 75
+        }
+      },
+      {
+        "comment": "",
+        "key": "Focus Timer",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 21
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reset timer",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 57
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pause timer",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start new session",
+        "location": {
+          "startingColumn": 91,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start timer",
+        "location": {
+          "startingColumn": 113,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Presets",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 86
+        }
+      },
+      {
+        "comment": "",
+        "key": "Custom",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 105
+        }
+      },
+      {
+        "comment": "",
+        "key": "min",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 119
+        }
+      },
+      {
+        "comment": "",
+        "key": "min",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 109
+        }
+      },
+      {
+        "comment": "",
+        "key": "Custom duration in minutes",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 118
+        }
+      },
+      {
+        "comment": "",
+        "key": "Set",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 122
+        }
+      }
+    ]
+  },
+  "version": 1
+}

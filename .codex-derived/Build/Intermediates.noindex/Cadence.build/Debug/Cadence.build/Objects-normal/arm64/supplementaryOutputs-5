@@ -1,0 +1,30 @@
+{
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/JoggerTimerView.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/JoggerTimerView.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/JoggerTimerView.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/JoggerTimerView.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/JoggerTimerView.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/JoggerTimerView.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/SandTimerView.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SandTimerView.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SandTimerView.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SandTimerView.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SandTimerView.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SandTimerView.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/TetrisTimerView.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TetrisTimerView.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TetrisTimerView.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TetrisTimerView.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TetrisTimerView.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TetrisTimerView.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/TimerStyleViews.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TimerStyleViews.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TimerStyleViews.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TimerStyleViews.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TimerStyleViews.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TimerStyleViews.swiftdeps"
+  }
+}

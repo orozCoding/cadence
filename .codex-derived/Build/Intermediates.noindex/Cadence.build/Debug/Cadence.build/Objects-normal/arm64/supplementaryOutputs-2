@@ -1,0 +1,30 @@
+{
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Models/TaskStore.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TaskStore.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TaskStore.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TaskStore.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TaskStore.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/TaskStore.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Theme/AppTheme.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/AppTheme.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/AppTheme.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/AppTheme.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/AppTheme.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/AppTheme.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/ContentView.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/ContentView.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/ContentView.swiftdeps"
+  },
+  "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Settings/SettingsView.swift" : {
+    "const-values" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SettingsView.dia",
+    "object" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/.codex-derived/Build/Intermediates.noindex/Cadence.build/Debug/Cadence.build/Objects-normal/arm64/SettingsView.swiftdeps"
+  }
+}

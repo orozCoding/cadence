@@ -1,0 +1,24 @@
+{
+  "source": "/Users/angelorozco/OrozCoding/repositories/cadence/.claude/worktrees/icloud-sync-phase-1/Sources/Cadence/Views/Timer/JoggerTimerView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Timer",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 90
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done!",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 49
+        }
+      }
+    ]
+  },
+  "version": 1
+}
