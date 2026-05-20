@@ -19,7 +19,10 @@ final class FocusTimeStore: ObservableObject {
     private var ticksSinceSave = 0
     private let saveInterval = 10
 
-    private init() { load() }
+    private init() {
+        UserDefaultsMigration.ensureMigrated()
+        load()
+    }
 
     // MARK: - Timer
 

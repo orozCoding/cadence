@@ -18,6 +18,8 @@ final class FolderStore: ObservableObject {
     private var dataIsReadable = true
 
     private init() {
+        UserDefaultsMigration.ensureMigrated()
+
         var loaded: [Folder] = []
 
         if let data = UserDefaults.standard.data(forKey: "cadence_folders") {
