@@ -953,7 +953,29 @@ users.
 
 ## Suggested phased delivery (if Option 1 is approved)
 
-1. **Phase 0 (this PR).** Agreement on direction. Nothing built.
+> **PR sequencing decided 2026-05-19 (single-user project).** Because
+> this is a sole-user project (no other Cadence users to protect from
+> half-built sync), the implementation work is bundled into **two
+> code PRs** instead of four:
+>
+> - **PR 1 — Phase 1 only.** Entitlements + container plumbing +
+>   no-op Settings toggle. Lands the ADP signing setup and confirms
+>   the iCloud container actually resolves on a signed build, before
+>   any sync code is written. Mergeable to `dev` on its own. ~half a
+>   day.
+> - **PR 2 — Phases 2 + 3 + 4.** Model additions with
+>   `schemaVersion: 2` bump, writer, NSMetadataQuery watcher,
+>   in-memory three-way merge, NSFileVersion conflict resolver,
+>   sign-in / sign-out / storage-full handlers. End-to-end working
+>   sync. Larger diff, single Codex review loop. ~1–2 weeks.
+>
+> The feature-flag and "Phase 2 not shippable without Phase 3"
+> gating in the phase descriptions below was written assuming a
+> multi-user product where shipping interim state to others would
+> be dangerous; for a sole-user project it is moot but the
+> guidance is preserved verbatim in case the user base grows.
+
+1. **Phase 0 (planning PR #24).** Agreement on direction. Nothing built.
 2. **Phase 0.5 (optional bridge).** Ship Option 3 as a "Sync folder"
    picker the user can point at any cloud-synced directory. Zero
    gating — works in unsigned dev builds today. Buys us real sync
