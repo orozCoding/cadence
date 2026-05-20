@@ -32,10 +32,22 @@ import os
 @MainActor
 enum UserDefaultsMigration {
     /// Set after a confirmed-complete migration so subsequent launches
-    /// no-op. *Never* set on an access/permission error — that would
+    /// no-op. *Never* set on any access/permission error — that would
     /// turn a transient or misconfigured failure into a permanent
-    /// silent fresh-install.
+    /// silent fresh-install, and would close the door on future
+    /// automatic recovery (e.g. if a later macOS update lifts the
+    /// sandbox restriction, or the user grants additional entitlements).
     static let didMigrateKey = "cadence_did_migrate_from_unsandboxed_v1"
+
+    /// Separate flag used only to dampen log spam when we hit a
+    /// sandbox-denial path that's expected to recur every launch
+    /// indefinitely. Setting this does NOT mark the migration
+    /// complete — `ensureMigrated()` still re-tries the legacy read
+    /// on every launch — it just downgrades subsequent denial logs
+    /// from `error` to `debug` so the user's Console isn't flooded.
+    /// If a denial ever turns into a success, we set `didMigrateKey`
+    /// normally; this flag becomes irrelevant.
+    private static let suppressedDenialLogKey = "cadence_migration_denial_logged_v1"
 
     /// Bundle id used to locate the legacy preferences file. Hard-coded
     /// rather than read from `Bundle.main.bundleIdentifier` so a future
@@ -75,26 +87,57 @@ enum UserDefaultsMigration {
     /// Resolves the user's *real* home directory (`/Users/<user>/`),
     /// bypassing the sandbox path redirection that
     /// `FileManager.homeDirectoryForCurrentUser` is subject to.
-    /// Returns `nil` only if the passwd database is unreadable — a
-    /// pathological condition we treat as "retry next launch".
+    /// Returns `nil` only if the passwd database is genuinely
+    /// unreadable after exhausting our retry budget — a pathological
+    /// condition we treat as "retry on next launch".
     private static func realHomeDirectoryURL() -> URL? {
-        // _SC_GETPW_R_SIZE_MAX may return -1 on some systems; fall back
-        // to a generous 4096 buffer in that case.
-        let suggested = sysconf(_SC_GETPW_R_SIZE_MAX)
-        let bufferSize = suggested > 0 ? Int(suggested) : 4096
+        // Start at the system's suggested size, fall back to 4096 if
+        // _SC_GETPW_R_SIZE_MAX returns -1 or 0 (Darwin sometimes does).
+        var bufferSize: Int = {
+            let suggested = sysconf(_SC_GETPW_R_SIZE_MAX)
+            return suggested > 0 ? Int(suggested) : 4096
+        }()
 
-        var pw = passwd()
-        var pwResult: UnsafeMutablePointer<passwd>? = nil
-        var buffer = [CChar](repeating: 0, count: bufferSize)
+        // Grow the buffer on ERANGE up to a sane cap. 1 MiB is far
+        // larger than any realistic passwd entry; if we hit it the
+        // database is corrupt and the right answer is to give up
+        // and retry next launch rather than allocate unbounded.
+        let maxBufferSize = 1 << 20
 
-        // `getpwuid_r` is the reentrant variant; the non-reentrant
-        // `getpwuid` shares a static buffer and is unsafe across
-        // threads / concurrent calls.
-        let rc = getpwuid_r(getuid(), &pw, &buffer, buffer.count, &pwResult)
-        guard rc == 0, pwResult != nil, let dirPtr = pw.pw_dir else {
+        while bufferSize <= maxBufferSize {
+            var pw = passwd()
+            var pwResult: UnsafeMutablePointer<passwd>? = nil
+            var buffer = [CChar](repeating: 0, count: bufferSize)
+
+            // `getpwuid_r` is the reentrant variant; the non-reentrant
+            // `getpwuid` shares a static buffer and is unsafe across
+            // threads / concurrent calls.
+            let rc = getpwuid_r(getuid(), &pw, &buffer, buffer.count, &pwResult)
+
+            if rc == 0 {
+                guard pwResult != nil, let dirPtr = pw.pw_dir else {
+                    // No matching entry for our uid. Pathological;
+                    // give up.
+                    log.error("getpwuid_r returned 0 with no matching passwd entry for uid \(getuid(), privacy: .public).")
+                    return nil
+                }
+                return URL(fileURLWithPath: String(cString: dirPtr))
+            }
+
+            if rc == ERANGE {
+                // Buffer too small — double and retry.
+                bufferSize *= 2
+                continue
+            }
+
+            // Any other errno: log and give up. Caller treats `nil`
+            // as "leave sentinel unset, retry next launch".
+            log.error("getpwuid_r failed with errno \(rc, privacy: .public) (uid \(getuid(), privacy: .public)).")
             return nil
         }
-        return URL(fileURLWithPath: String(cString: dirPtr))
+
+        log.error("getpwuid_r kept returning ERANGE up to \(maxBufferSize, privacy: .public)-byte buffer; giving up.")
+        return nil
     }
 
     /// Runs the migration if it hasn't run yet. Idempotent: safe to
@@ -162,21 +205,31 @@ enum UserDefaultsMigration {
                 log.info("No legacy preferences file at \(legacyURL.path, privacy: .public); fresh install or system-level container migration already handled. Marking migration done.")
                 defaults.set(true, forKey: didMigrateKey)
             case (NSCocoaErrorDomain, NSFileReadNoPermissionError):
-                // Permanent sandbox denial: the legacy file probably
-                // exists at the real path, but our entitlements don't
-                // grant us access to read it. macOS's container manager
-                // should have auto-migrated the preferences into the
+                // Sandbox denial: the legacy file probably exists at
+                // the real path, but our entitlements don't grant us
+                // access to read it. macOS's container manager should
+                // have auto-migrated the preferences into the
                 // sandboxed defaults during first-launch bootstrap, so
-                // `UserDefaults.standard` already reflects the user's
-                // data — our manual migration is moot.
+                // `UserDefaults.standard` typically already reflects
+                // the user's data — our manual migration is moot in
+                // the common case.
                 //
-                // We mark the sentinel here to avoid logging this error
-                // on every single launch forever. If the auto-migration
-                // also failed (rare), the documented recovery is
-                // Settings → Data → Import from a backup of the
-                // un-sandboxed build.
-                log.notice("Sandbox denies reading legacy preferences at \(legacyURL.path, privacy: .public). Relying on macOS container manager's auto-migration; manual fallback is Settings → Data → Import. Marking migration done.")
-                defaults.set(true, forKey: didMigrateKey)
+                // We do **not** mark `didMigrateKey` here, because
+                // doing so would close the recovery door: if both
+                // auto-migration and this read failed, a future macOS
+                // version that lifts the restriction (or a user
+                // granting Full Disk Access / a temporary-exception
+                // entitlement) could let migration succeed on a later
+                // launch — but only if we keep retrying. Instead, we
+                // suppress the log noise via a separate flag the next
+                // time around.
+                let firstTime = !defaults.bool(forKey: suppressedDenialLogKey)
+                if firstTime {
+                    log.notice("Sandbox denies reading legacy preferences at \(legacyURL.path, privacy: .public). Relying on macOS container manager's auto-migration; manual fallback is Settings → Data → Import. Future launches will silently retry; this notice is logged once.")
+                    defaults.set(true, forKey: suppressedDenialLogKey)
+                } else {
+                    log.debug("Sandbox still denies reading legacy preferences at \(legacyURL.path, privacy: .public). Will retry on next launch in case macOS policy or entitlements change.")
+                }
             default:
                 // Other errors — `NSFileReadUnknownError`, transient
                 // I/O, disk going away mid-read. Leave the sentinel
