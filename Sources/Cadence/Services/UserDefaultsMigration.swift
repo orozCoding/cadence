@@ -191,11 +191,34 @@ enum UserDefaultsMigration {
         // Writes are idempotent so rewriting already-applied keys
         // does no harm.
         let inProgressFromCrashedRun = defaults.bool(forKey: migrationInProgressKey)
+
+        // Closure used at every non-success exit path during a
+        // resume attempt: accepts the partial state already on disk
+        // as the final state. Without this, an in-progress marker
+        // could leak indefinitely — bypassing the pristine-state
+        // check on every future launch and letting a far-future
+        // successful retry silently overwrite legitimate
+        // post-crash user activity (re-introducing the pass-5 p0).
+        //
+        // Recovery for whatever didn't make it through the partial
+        // migration is the existing Settings → Data → Import flow
+        // from a backup of the un-sandboxed build.
+        let finalizePartialResume: (String) -> Void = { reason in
+            log.warning("Resume attempt could not complete (\(reason, privacy: .public)). Accepting partial state as final; Settings → Data → Import can recover anything missing.")
+            defaults.set(true, forKey: didMigrateKey)
+            defaults.removeObject(forKey: migrationInProgressKey)
+            // Force the marker-clear + sentinel-set to disk
+            // immediately. `synchronize()` is deprecated but is the
+            // documented escape hatch for "I really need this on
+            // disk before I return" in CFPreferences/UserDefaults.
+            defaults.synchronize()
+        }
         if !inProgressFromCrashedRun {
             let hasSandboxedData = knownKeys.contains { defaults.object(forKey: $0) != nil }
             if hasSandboxedData {
                 log.info("Sandboxed defaults already populated — assuming system-level container migration handled it (or the user has been using the app). Skipping manual migration; marking done.")
                 defaults.set(true, forKey: didMigrateKey)
+                defaults.synchronize()
                 return
             }
         } else {
@@ -215,8 +238,14 @@ enum UserDefaultsMigration {
         guard let realHome = realHomeDirectoryURL() else {
             // Can't resolve real home — pathologically rare (would mean
             // the passwd database is unreadable). Leave sentinel unset
-            // and retry next launch.
-            log.error("Could not resolve real home directory via getpwuid_r; cannot locate legacy preferences. Will retry on next launch.")
+            // and retry next launch — unless we're already in a resume,
+            // in which case we have to accept the partial state on disk
+            // as final, otherwise the marker leaks indefinitely.
+            if inProgressFromCrashedRun {
+                finalizePartialResume("could not resolve real home directory during resume")
+            } else {
+                log.error("Could not resolve real home directory via getpwuid_r; cannot locate legacy preferences. Will retry on next launch.")
+            }
             return
         }
         let legacyURL = realHome
@@ -243,6 +272,10 @@ enum UserDefaultsMigration {
                 // sentinel.
                 log.info("No legacy preferences file at \(legacyURL.path, privacy: .public); fresh install or system-level container migration already handled. Marking migration done.")
                 defaults.set(true, forKey: didMigrateKey)
+                if inProgressFromCrashedRun {
+                    defaults.removeObject(forKey: migrationInProgressKey)
+                }
+                defaults.synchronize()
             case (NSCocoaErrorDomain, NSFileReadNoPermissionError):
                 // Sandbox denial: the legacy file probably exists at
                 // the real path, but our entitlements don't grant us
@@ -253,27 +286,42 @@ enum UserDefaultsMigration {
                 // the user's data — our manual migration is moot in
                 // the common case.
                 //
-                // We do **not** mark `didMigrateKey` here, because
-                // doing so would close the recovery door: if both
-                // auto-migration and this read failed, a future macOS
-                // version that lifts the restriction (or a user
-                // granting Full Disk Access / a temporary-exception
-                // entitlement) could let migration succeed on a later
-                // launch — but only if we keep retrying. Instead, we
-                // suppress the log noise via a separate flag the next
-                // time around.
-                let firstTime = !defaults.bool(forKey: suppressedDenialLogKey)
-                if firstTime {
-                    log.notice("Sandbox denies reading legacy preferences at \(legacyURL.path, privacy: .public). Relying on macOS container manager's auto-migration; manual fallback is Settings → Data → Import. Future launches will silently retry; this notice is logged once.")
-                    defaults.set(true, forKey: suppressedDenialLogKey)
+                // First-run case: we do **not** mark `didMigrateKey`
+                // here, because doing so would close the recovery
+                // door: if both auto-migration and this read failed,
+                // a future macOS version that lifts the restriction
+                // (or a user granting Full Disk Access / a
+                // temporary-exception entitlement) could let
+                // migration succeed on a later launch — but only if
+                // we keep retrying. Instead, we suppress the log
+                // noise via a separate flag the next time around.
+                //
+                // Resume case: we MUST mark done. The previous run
+                // already wrote some keys; leaving the marker set
+                // forever would mean a much-later successful retry
+                // could overwrite legitimate user activity (the
+                // exact silent-data-loss bug pass 5 caught).
+                if inProgressFromCrashedRun {
+                    finalizePartialResume("sandbox denial during resume")
                 } else {
-                    log.debug("Sandbox still denies reading legacy preferences at \(legacyURL.path, privacy: .public). Will retry on next launch in case macOS policy or entitlements change.")
+                    let firstTime = !defaults.bool(forKey: suppressedDenialLogKey)
+                    if firstTime {
+                        log.notice("Sandbox denies reading legacy preferences at \(legacyURL.path, privacy: .public). Relying on macOS container manager's auto-migration; manual fallback is Settings → Data → Import. Future launches will silently retry; this notice is logged once.")
+                        defaults.set(true, forKey: suppressedDenialLogKey)
+                    } else {
+                        log.debug("Sandbox still denies reading legacy preferences at \(legacyURL.path, privacy: .public). Will retry on next launch in case macOS policy or entitlements change.")
+                    }
                 }
             default:
                 // Other errors — `NSFileReadUnknownError`, transient
-                // I/O, disk going away mid-read. Leave the sentinel
-                // unset; the next launch retries.
-                log.error("Could not read legacy preferences at \(legacyURL.path, privacy: .public): \(error, privacy: .public) (code \(error.code, privacy: .public)). Will retry on next launch.")
+                // I/O, disk going away mid-read.
+                if inProgressFromCrashedRun {
+                    finalizePartialResume("transient I/O error during resume (\(error.code))")
+                } else {
+                    // First-run case: leave the sentinel unset, retry
+                    // next launch.
+                    log.error("Could not read legacy preferences at \(legacyURL.path, privacy: .public): \(error, privacy: .public) (code \(error.code, privacy: .public)). Will retry on next launch.")
+                }
             }
             return
         }
@@ -287,6 +335,10 @@ enum UserDefaultsMigration {
             guard let dict = parsed as? [String: Any] else {
                 log.error("Legacy preferences plist at \(legacyURL.path, privacy: .public) is not a top-level dictionary; marking migration done — there's nothing recoverable.")
                 defaults.set(true, forKey: didMigrateKey)
+                if inProgressFromCrashedRun {
+                    defaults.removeObject(forKey: migrationInProgressKey)
+                }
+                defaults.synchronize()
                 return
             }
             plist = dict
@@ -296,6 +348,10 @@ enum UserDefaultsMigration {
             // we can recover from an unparseable file.
             log.error("Legacy preferences plist at \(legacyURL.path, privacy: .public) failed to parse: \(error, privacy: .public). Marking migration done.")
             defaults.set(true, forKey: didMigrateKey)
+            if inProgressFromCrashedRun {
+                defaults.removeObject(forKey: migrationInProgressKey)
+            }
+            defaults.synchronize()
             return
         }
 
@@ -314,11 +370,18 @@ enum UserDefaultsMigration {
             plist[key].map { (key, $0) }
         }
 
-        // Set the in-progress marker *before* the first write. If we
-        // get killed between this line and the sentinel below, the
-        // next launch sees the marker set + sentinel unset and re-
-        // runs the migration to completion.
+        // Set the in-progress marker *before* the first write, and
+        // flush it to disk synchronously. If we get killed between
+        // the flush and the sentinel below, the next launch sees the
+        // marker set + sentinel unset and re-runs the migration to
+        // completion. The `synchronize()` here is what makes the
+        // marker visibly durable BEFORE we start writing migrated
+        // keys: without it, a crash could persist some migrated keys
+        // without persisting the marker, and the next launch's
+        // pristine check would treat those keys as user data and
+        // bail out — losing the rest of the migration.
         defaults.set(true, forKey: migrationInProgressKey)
+        defaults.synchronize()
 
         for (key, value) in migratedPairs {
             defaults.set(value, forKey: key)
@@ -326,11 +389,15 @@ enum UserDefaultsMigration {
 
         log.info("Migrated \(migratedPairs.count, privacy: .public) UserDefaults keys from legacy domain into sandboxed container.")
 
-        // Sentinel must be set BEFORE we clear the in-progress marker.
-        // If the order were reversed and we got killed between them,
-        // the next launch would see neither marker nor sentinel and
-        // re-run the migration; benign, but unnecessary work.
+        // Sentinel must be set BEFORE we clear the in-progress
+        // marker. If the order were reversed and we got killed
+        // between them, the next launch would see neither marker
+        // nor sentinel and re-run the migration; benign, but
+        // unnecessary work. `synchronize()` at the end forces the
+        // sentinel + marker-clear to disk together so the next
+        // launch sees a consistent "done" state.
         defaults.set(true, forKey: didMigrateKey)
         defaults.removeObject(forKey: migrationInProgressKey)
+        defaults.synchronize()
     }
 }
