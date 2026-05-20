@@ -98,37 +98,40 @@ enum UserDefaultsMigration {
         let legacyURL = homeURL
             .appendingPathComponent("Library/Preferences/\(legacyBundleID).plist")
 
-        // Case 1: no legacy file exists.
-        //
-        // Either (a) genuinely fresh install — set sentinel and exit, or
-        // (b) the legacy file does exist on disk but is inaccessible
-        // because the sandbox blocks our path. We treat these the same:
-        // mark migrated. The reasoning is that on macOS Sonoma+ the
-        // system's container manager auto-migrates the preferences plist
-        // into the sandbox container as part of the first-launch
-        // bootstrap *before* this code ever runs. So if we can't see
-        // the legacy file, the live `UserDefaults.standard` already
-        // reflects the migrated state (case b == case a from our view).
-        //
-        // If that assumption is wrong on the user's specific macOS
-        // version, the recovery path is the existing Settings → Data →
-        // Import flow from a backup of the un-sandboxed build.
-        guard FileManager.default.fileExists(atPath: legacyURL.path) else {
-            log.info("No accessible legacy preferences file at \(legacyURL.path, privacy: .public); assuming fresh install or system-level container migration already handled it.")
-            defaults.set(true, forKey: didMigrateKey)
-            return
-        }
-
-        // Case 2: legacy file exists and we can see it. Try to read.
-        guard let data = try? Data(contentsOf: legacyURL) else {
-            // Permission error or transient I/O failure. Do NOT set the
-            // sentinel — we may succeed on a later launch (e.g. after
-            // the user grants Full Disk Access in System Settings, or
-            // simply on the next run when whatever transient state
-            // clears). The retry is harmless: one log line, no data
-            // touched. Far better than silently marking done and losing
-            // the migration window forever.
-            log.error("Legacy preferences file exists at \(legacyURL.path, privacy: .public) but is unreadable. Will retry on next launch.")
+        // We deliberately do NOT pre-check with
+        // `FileManager.fileExists(atPath:)`: it returns `false` for both
+        // "file is genuinely absent" and "file exists but the sandbox
+        // denies us access", which conflates two situations that need
+        // different responses. Letting `Data(contentsOf:)` throw and
+        // then inspecting the NSError code distinguishes them.
+        let data: Data
+        do {
+            data = try Data(contentsOf: legacyURL)
+        } catch let error as NSError {
+            switch (error.domain, error.code) {
+            case (NSCocoaErrorDomain, NSFileReadNoSuchFileError):
+                // Genuinely no legacy file. Either a true fresh install,
+                // or the system's container manager already auto-migrated
+                // the preferences plist into the sandbox container as
+                // part of first-launch bootstrap — both equivalent from
+                // our perspective (the live `UserDefaults.standard`
+                // reflects the right state either way). Safe to set the
+                // sentinel.
+                log.info("No legacy preferences file at \(legacyURL.path, privacy: .public); fresh install or system-level container migration already handled. Marking migration done.")
+                defaults.set(true, forKey: didMigrateKey)
+            default:
+                // Anything else — `NSFileReadNoPermissionError` (sandbox
+                // denial), `NSFileReadUnknownError`, transient I/O — we
+                // don't know whether legacy data exists. Leave the
+                // sentinel unset; the next launch retries. Harmless:
+                // one log line, no UserDefaults writes. Far better than
+                // marking done and losing the migration window forever.
+                // If the failure is permanent (e.g. sandbox policy
+                // blocking us on this macOS version), the recovery is
+                // the existing Settings → Data → Import flow from a
+                // backup of the un-sandboxed build.
+                log.error("Could not read legacy preferences at \(legacyURL.path, privacy: .public): \(error, privacy: .public) (code \(error.code, privacy: .public)). Will retry on next launch.")
+            }
             return
         }
 
