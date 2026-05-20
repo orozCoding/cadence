@@ -155,6 +155,7 @@ final class AppSettings: ObservableObject {
         timerStyle        = TimerStyle(rawValue: backup.timerStyle) ?? timerStyle
         timerDirection    = TimerDirection(rawValue: backup.timerDirection) ?? timerDirection
         animateDockIcon   = backup.animateDockIcon
+        iCloudSyncEnabled = backup.iCloudSyncEnabled
     }
 
     /// Capture the current preferences as a portable snapshot.
@@ -164,7 +165,8 @@ final class AppSettings: ObservableObject {
             timerFinishSound: timerFinishSound.rawValue,
             timerStyle: timerStyle.rawValue,
             timerDirection: timerDirection.rawValue,
-            animateDockIcon: animateDockIcon
+            animateDockIcon: animateDockIcon,
+            iCloudSyncEnabled: iCloudSyncEnabled
         )
     }
 }
